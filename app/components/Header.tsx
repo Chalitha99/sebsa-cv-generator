@@ -1,0 +1,98 @@
+'use client';
+
+import React, { useState } from 'react';
+import { useData } from '../context/DataContext';
+import { Search, Bell, ChevronDown } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+
+interface HeaderProps {
+  placeholder?: string;
+  onSearchChange?: (val: string) => void;
+  searchValue?: string;
+}
+
+export const Header: React.FC<HeaderProps> = ({
+  placeholder = 'Search employees, skills, or departments...',
+  onSearchChange,
+  searchValue = '',
+}) => {
+  const { currentUser, activities } = useData();
+  const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
+  const router = useRouter();
+
+  return (
+    <header className="fixed top-0 right-0 w-[calc(100%-260px)] h-16 bg-white/80 backdrop-blur-md border-b border-slate-200/80 flex items-center justify-between px-8 z-40">
+      {/* Search Bar */}
+      <div className="flex-1 max-w-md">
+        <div className="relative w-full group">
+          <Search className="w-4 h-4 text-slate-400 absolute left-4.5 top-1/2 -translate-y-1/2 group-focus-within:text-slate-600 transition-colors" />
+          <input
+            type="text"
+            placeholder={placeholder}
+            value={searchValue}
+            onChange={(e) => onSearchChange?.(e.target.value)}
+            className="w-full bg-slate-100/90 hover:bg-slate-200/50 border border-slate-200/50 rounded-full py-2 pl-11 pr-4 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-500/10 focus:border-slate-400 transition-all duration-300 placeholder:text-slate-400 font-sans text-slate-700"
+          />
+        </div>
+      </div>
+
+      {/* Action Utilities */}
+      <div className="flex items-center gap-5">
+        {/* Notifications Icon */}
+        <div className="relative">
+          <button
+            onClick={() => setShowNotificationDropdown(!showNotificationDropdown)}
+            className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-full transition-all duration-300 relative"
+          >
+            <Bell className="w-5 h-5" />
+            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full border-2 border-white"></span>
+          </button>
+
+          {/* Quick Notifications Dropdown */}
+          {showNotificationDropdown && (
+            <div className="absolute right-0 mt-2.5 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl shadow-slate-200/50 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                <span className="text-xs font-black text-slate-800 uppercase tracking-wider">Recent System Alerts</span>
+                <button
+                  onClick={() => router.push('/dashboard')}
+                  className="text-[11px] font-bold text-sky-600 hover:underline"
+                >
+                  View Dashboard
+                </button>
+              </div>
+              <div className="max-h-64 overflow-y-auto divide-y divide-slate-100">
+                {activities.slice(0, 4).map((act) => (
+                  <div key={act.id} className="p-3.5 hover:bg-slate-50 transition-colors">
+                    <p className="text-xs font-black text-slate-800 leading-snug">{act.title}</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-2 leading-relaxed">{act.desc}</p>
+                    <p className="text-[10px] text-slate-400 mt-1 font-semibold">{act.time}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="h-6 w-px bg-slate-200"></div>
+
+        {/* User Profile Info */}
+        <div className="flex items-center gap-3">
+          <div className="text-right hidden sm:block">
+            <p className="font-sans text-xs font-black text-slate-800 leading-tight">
+              {currentUser.name}
+            </p>
+            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider leading-none mt-0.5">
+              {currentUser.role}
+            </p>
+          </div>
+          <div
+            onClick={() => router.push('/settings')}
+            className="w-10 h-10 rounded-full border-2 border-slate-200 overflow-hidden shadow-sm cursor-pointer hover:border-slate-400 transition-colors duration-300"
+          >
+            <img src={currentUser.avatar} alt={currentUser.name} className="w-full h-full object-cover" />
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+};
