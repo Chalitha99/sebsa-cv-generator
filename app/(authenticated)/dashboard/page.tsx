@@ -178,24 +178,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* AI Talent Insight */}
-          <div className="bg-gradient-to-br from-sky-600 to-indigo-700 text-white p-6 rounded-2xl relative overflow-hidden shadow-lg shadow-sky-600/10">
-            <div className="relative z-10">
-              <h4 className="font-sans text-xs font-black uppercase tracking-widest text-sky-200 mb-2">
-                AI Talent Insight
-              </h4>
-              <p className="text-sm font-medium leading-relaxed opacity-90 mb-6">
-                Based on current search trends, there is an automated 15% increase in "Cloud Architect" and "Kubernetes" searches this week.
-              </p>
-              <button
-                onClick={() => router.push('/repository')}
-                className="bg-white hover:bg-sky-50 text-indigo-950 text-xs font-black uppercase tracking-wider px-5 py-2.5 rounded-full transition-transform active:scale-95 shadow-md"
-              >
-                View Repository
-              </button>
-            </div>
-            <div className="absolute -right-6 -bottom-6 w-36 h-32 bg-white/10 rounded-full blur-2xl"></div>
-          </div>
+          
         </div>
 
         {/* Right Bento: Recent Activity (Span 8) */}

@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
+import Image from "next/image";
 import { useRouter } from 'next/navigation';
 import { PageWrapper } from '../components/PageWrapper';
+import LightRays from '../components/LightRays';
 import { Mail, Eye, EyeOff, LogIn, CheckCircle, ShieldCheck, TrendingUp, Sparkles, BrainCircuit } from 'lucide-react';
 
 export default function LoginPage() {
@@ -26,7 +28,25 @@ export default function LoginPage() {
   return (
     <PageWrapper className="min-h-screen w-full flex flex-col md:flex-row bg-[#fbf9fb]">
       {/* Left Column: Premium HR AI Graphics & Trust indicators */}
-      <section className="hidden md:flex md:w-1/2 bg-gradient-to-br from-slate-900 via-slate-850 to-indigo-950 relative overflow-hidden items-center justify-center p-12">
+     <section className="hidden md:flex md:w-1/2 bg-gradient-to-br from-black/90 to-blue-900  relative overflow-hidden items-center justify-center p-12">
+        {/* Particle Background */}
+        <div className="absolute inset-0 z-0">
+          <LightRays
+              raysOrigin="top-center"
+              raysColor="#2ffafa"
+              raysSpeed={0.9}
+              lightSpread={0.6}
+              rayLength={3}
+              followMouse={true}
+              mouseInfluence={0.1}
+              noiseAmount={0}
+              distortion={0}
+              className="custom-rays"
+              pulsating={false}
+              fadeDistance={2}
+              saturation={2}
+          />
+        </div>
         {/* Subtle radial glows */}
         <div className="absolute inset-0 overflow-hidden opacity-30 pointer-events-none">
           <div className="absolute top-[-20%] left-[-20%] w-[80%] h-[80%] rounded-full bg-sky-500/10 blur-[150px]"></div>
@@ -35,40 +55,34 @@ export default function LoginPage() {
 
         {/* Content Box */}
         <div className="relative z-10 max-w-lg text-white text-center flex flex-col items-center">
-          {/* Main Visual Representation */}
-          <div className="mb-10 group relative rounded-2xl overflow-hidden shadow-2xl border border-slate-700/50 bg-slate-900/40 p-1 backdrop-blur-sm transition-transform duration-700 hover:scale-[1.02]">
-            <img
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDepJ0od0oinEZhFL88a6GH2RaeIpf5gkE0-_YU9lg5NaXOu8SVpi-yJk_p0dMOuDAzmrZfSB_zt_mGHvV_HyviFIgGQ22KIKW4K4iBv1lMJzM09erQ_CEUor10uLVOqisX179PRD0GRtAKVQvmBG1rfohXv_mX6Qp49Tj9IdTnJFF7p2aKB9C6FfXEsJC-fq5hztRjrcxrjeRhrMTsyZgLdp5RcI3qcD0qDI3r2Fhe5jXcaRXjDAJQflN9JCgXqYRC0QbNhvw9t44"
-              alt="Intelligent HR dashboard mockup"
-              className="w-full h-auto rounded-xl object-cover"
-            />
-            {/* Absolute element overlays */}
-            <div className="absolute top-4 left-4 bg-slate-900/80 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-slate-700/50 flex items-center gap-2">
-              <Sparkles className="w-3.5 h-3.5 text-sky-400 fill-sky-400/20" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-sky-300">AI Intelligence Mode</span>
-            </div>
-          </div>
-
+          <div className="mb-6">
+          <Image
+            src="/images/seb-logo-1.png"
+            alt="AI CV Generator"
+            width={180}
+            height={180}            
+          />
+        </div>
           <h1 className="text-3xl font-black tracking-tight mb-4 text-slate-100 font-sans leading-tight">
-            Revolutionize Human Capital with Intelligence.
+            Smarter Resumes <br></br> Better Opportunities
           </h1>
           <p className="text-sm text-slate-300 font-medium leading-relaxed max-w-md opacity-90 mb-10">
-            Empower your recruitment and management workflow with the most advanced AI-driven HR analytics system available.
+            Transform your career profile into a professional resume with AI-driven content recommendations and customizable templates designed to help you succeed.
           </p>
 
           {/* Trust Indicators */}
           <div className="flex flex-wrap justify-center gap-6 text-slate-300 font-sans">
             <div className="flex items-center gap-2 bg-slate-800/40 border border-slate-700/30 px-3.5 py-2 rounded-xl backdrop-blur-sm">
               <CheckCircle className="w-4 h-4 text-sky-400" />
-              <span className="text-xs font-bold uppercase tracking-wider">Enterprise Ready</span>
+              <span className="text-xs font-bold uppercase tracking-wider">AI Content Enhancement</span>
             </div>
             <div className="flex items-center gap-2 bg-slate-800/40 border border-slate-700/30 px-3.5 py-2 rounded-xl backdrop-blur-sm">
               <ShieldCheck className="w-4 h-4 text-sky-400" />
-              <span className="text-xs font-bold uppercase tracking-wider">GDPR Compliant</span>
+              <span className="text-xs font-bold uppercase tracking-wider">Customizable Templates</span>
             </div>
             <div className="flex items-center gap-2 bg-slate-800/40 border border-slate-700/30 px-3.5 py-2 rounded-xl backdrop-blur-sm">
               <TrendingUp className="w-4 h-4 text-sky-400" />
-              <span className="text-xs font-bold uppercase tracking-wider">Predictive Analytics</span>
+              <span className="text-xs font-bold uppercase tracking-wider">Export-Ready CVs</span>
             </div>
           </div>
         </div>
@@ -79,14 +93,20 @@ export default function LoginPage() {
         <div className="w-full max-w-[400px]">
           {/* Header Brand */}
           <div className="flex flex-col items-center text-center mb-10">
-            <div className="w-16 h-16 bg-gradient-to-tr from-sky-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-xl shadow-sky-500/15 mb-4 hover:scale-105 transition-transform duration-300">
-              <BrainCircuit className="w-9 h-9 text-white" />
+           <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4 hover:scale-105 transition-transform duration-300">
+              <Image
+                src="/images/seb-logo-2.png"
+                alt="Sebsa CV Generator Logo"
+                width={36}
+                height={36}
+                className="object-contain"
+              />
             </div>
             <h2 className="text-3xl font-black tracking-tight text-slate-900 leading-none">
-              CV-AI
+              SEBSA-CV
             </h2>
             <p className="text-sm font-bold text-slate-500 uppercase tracking-widest mt-2 leading-none">
-              HR Intelligence Login
+              Internal User Login
             </p>
           </div>
 
@@ -148,7 +168,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full h-14 bg-gradient-to-r from-sky-600 to-indigo-700 hover:from-sky-500 hover:to-indigo-600 text-white rounded-xl font-sans text-sm font-black shadow-lg shadow-sky-600/10 active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
+              className="w-full h-14 bg-gradient-to-r from-blue-900 to-blue-950 hover:from-indigo-600 hover:to-blue-850 text-white rounded-xl font-sans text-sm font-black shadow-lg shadow-sky-600/10 active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
             >
               <span>{isLoading ? 'Verifying Profile...' : 'Login to Portal'}</span>
               {!isLoading && <LogIn className="w-4 h-4" />}
@@ -156,29 +176,7 @@ export default function LoginPage() {
 
             {/* SSO Divider */}
             <div className="relative py-4 flex items-center">
-              <div className="flex-grow border-t border-slate-200/80"></div>
-              <span className="flex-shrink mx-4 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-white px-2">
-                Or continue with SSO
-              </span>
-              <div className="flex-grow border-t border-slate-200/80"></div>
-            </div>
-
-            {/* SSO buttons */}
-            <div className="grid grid-cols-2 gap-4">
-              <button
-                type="button"
-                onClick={() => router.push('/dashboard')}
-                className="flex items-center justify-center h-12 border border-slate-200/80 hover:border-slate-300 rounded-xl hover:bg-slate-50 text-xs font-bold text-slate-700 transition-all active:scale-[0.97]"
-              >
-                <span>Azure AD</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => router.push('/dashboard')}
-                className="flex items-center justify-center h-12 border border-slate-200/80 hover:border-slate-300 rounded-xl hover:bg-slate-50 text-xs font-bold text-slate-700 transition-all active:scale-[0.97]"
-              >
-                <span>Google Workspace</span>
-              </button>
+              <div className="flex-grow border-t border-slate-200/90"></div>
             </div>
           </form>
 

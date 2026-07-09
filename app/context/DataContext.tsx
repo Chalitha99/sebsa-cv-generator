@@ -224,7 +224,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ]);
 
   const [currentUser] = useState({
-    name: 'Sarah Mitchell',
+    name: 'Chalitha Mallawaarachchi',
     role: 'Talent Acquisition',
     avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=120',
   });
