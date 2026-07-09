@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageWrapper } from '../components/PageWrapper';
+import { createClient } from '@/lib/supabase/client';
 import { Mail, Eye, EyeOff, LogIn, CheckCircle, ShieldCheck, TrendingUp, Sparkles, BrainCircuit } from 'lucide-react';
 
 export default function LoginPage() {
@@ -12,15 +13,24 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     setIsLoading(true);
-    // Simulate short network delay
-    setTimeout(() => {
+
+    const supabase = createClient();
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+
+    if (signInError) {
       setIsLoading(false);
-      router.push('/dashboard');
-    }, 1200);
+      setError(signInError.message);
+      return;
+    }
+
+    router.push('/dashboard');
+    router.refresh();
   };
 
   return (
@@ -144,6 +154,13 @@ export default function LoginPage() {
               </a>
             </div>
 
+            {/* Auth error */}
+            {error && (
+              <p className="text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200/60 rounded-lg px-3 py-2">
+                {error}
+              </p>
+            )}
+
             {/* Submit Action */}
             <button
               type="submit"
@@ -163,19 +180,21 @@ export default function LoginPage() {
               <div className="flex-grow border-t border-slate-200/80"></div>
             </div>
 
-            {/* SSO buttons */}
+            {/* SSO buttons — not wired up yet, see docs/01-spec-alignment.md §2 */}
             <div className="grid grid-cols-2 gap-4">
               <button
                 type="button"
-                onClick={() => router.push('/dashboard')}
-                className="flex items-center justify-center h-12 border border-slate-200/80 hover:border-slate-300 rounded-xl hover:bg-slate-50 text-xs font-bold text-slate-700 transition-all active:scale-[0.97]"
+                disabled
+                title="Coming soon"
+                className="flex items-center justify-center h-12 border border-slate-200/80 rounded-xl text-xs font-bold text-slate-400 cursor-not-allowed opacity-60"
               >
                 <span>Azure AD</span>
               </button>
               <button
                 type="button"
-                onClick={() => router.push('/dashboard')}
-                className="flex items-center justify-center h-12 border border-slate-200/80 hover:border-slate-300 rounded-xl hover:bg-slate-50 text-xs font-bold text-slate-700 transition-all active:scale-[0.97]"
+                disabled
+                title="Coming soon"
+                className="flex items-center justify-center h-12 border border-slate-200/80 rounded-xl text-xs font-bold text-slate-400 cursor-not-allowed opacity-60"
               >
                 <span>Google Workspace</span>
               </button>

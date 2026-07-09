@@ -12,6 +12,7 @@ coverage/
 # environment variables
 .env*
 !.env.example
+!.env.local.example
 
 # logs
 *.log
