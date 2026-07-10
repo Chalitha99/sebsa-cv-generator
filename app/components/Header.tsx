@@ -2,21 +2,24 @@
 
 import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
+import type { CurrentUser } from '@/lib/auth';
 import { Search, Bell, ChevronDown } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 interface HeaderProps {
+  user: CurrentUser;
   placeholder?: string;
   onSearchChange?: (val: string) => void;
   searchValue?: string;
 }
 
 export const Header: React.FC<HeaderProps> = ({
+  user,
   placeholder = 'Search employees, skills, or departments...',
   onSearchChange,
   searchValue = '',
 }) => {
-  const { currentUser, activities } = useData();
+  const { activities } = useData();
   const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
   const router = useRouter();
 
@@ -79,17 +82,17 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex items-center gap-3">
           <div className="text-right hidden sm:block">
             <p className="font-sans text-xs font-black text-slate-800 leading-tight">
-              {currentUser.name}
+              {user.fullName}
             </p>
             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider leading-none mt-0.5">
-              {currentUser.role}
+              {user.role}
             </p>
           </div>
           <div
             onClick={() => router.push('/settings')}
             className="w-10 h-10 rounded-full border-2 border-slate-200 overflow-hidden shadow-sm cursor-pointer hover:border-slate-400 transition-colors duration-300"
           >
-            <img src={currentUser.avatar} alt={currentUser.name} className="w-full h-full object-cover" />
+            <img src={user.avatarUrl} alt={user.fullName} className="w-full h-full object-cover" />
           </div>
         </div>
       </div>

@@ -5,6 +5,8 @@ node_modules/
 .next/
 build/
 dist/
+next-env.d.ts
+*.tsbuildinfo
 
 # test coverage
 coverage/
@@ -12,6 +14,7 @@ coverage/
 # environment variables
 .env*
 !.env.example
+!.env.local.example
 
 # logs
 *.log

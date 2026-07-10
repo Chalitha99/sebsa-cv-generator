@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Image from "next/image";
 import { useRouter } from 'next/navigation';
 import { PageWrapper } from '../components/PageWrapper';
+import { createClient } from '@/lib/supabase/client';
 import LightRays from '../components/LightRays';
 import { Mail, Eye, EyeOff, LogIn, CheckCircle, ShieldCheck, TrendingUp, Sparkles, BrainCircuit } from 'lucide-react';
 
@@ -14,15 +15,24 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     setIsLoading(true);
-    // Simulate short network delay
-    setTimeout(() => {
+
+    const supabase = createClient();
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+
+    if (signInError) {
       setIsLoading(false);
-      router.push('/dashboard');
-    }, 1200);
+      setError(signInError.message);
+      return;
+    }
+
+    router.push('/dashboard');
+    router.refresh();
   };
 
   return (
@@ -163,6 +173,13 @@ export default function LoginPage() {
                 Forgot password?
               </a>
             </div>
+
+            {/* Auth error */}
+            {error && (
+              <p className="text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200/60 rounded-lg px-3 py-2">
+                {error}
+              </p>
+            )}
 
             {/* Submit Action */}
             <button

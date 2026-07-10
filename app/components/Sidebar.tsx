@@ -2,9 +2,10 @@
 
 import React from 'react';
 import Link from 'next/link';
-import Image from "next/image";
-import { usePathname } from 'next/navigation';
-import { useData } from '../context/DataContext';
+import Image from 'next/image';
+import { usePathname, useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
+import type { CurrentUser } from '@/lib/auth';
 import {
   LayoutDashboard,
   FolderOpen,
@@ -13,12 +14,24 @@ import {
   FileSpreadsheet,
   Settings,
   Sparkles,
-  Users
+  Users,
+  LogOut
 } from 'lucide-react';
 
-export const Sidebar: React.FC = () => {
+interface SidebarProps {
+  user: CurrentUser;
+}
+
+export const Sidebar: React.FC<SidebarProps> = ({ user }) => {
   const pathname = usePathname() || '';
-  const { currentUser } = useData();
+  const router = useRouter();
+
+  const handleSignOut = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push('/login');
+    router.refresh();
+  };
 
   const navItems = [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
@@ -100,20 +113,27 @@ export const Sidebar: React.FC = () => {
       <div className="flex items-center gap-3 mt-4 pt-4 border-t border-slate-800/80">
         <div className="relative">
           <img
-            src={currentUser.avatar}
-            alt={currentUser.name}
+            src={user.avatarUrl}
+            alt={user.fullName}
             className="w-10 h-10 rounded-full border border-slate-700 object-cover"
           />
           <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 rounded-full border border-slate-950"></span>
         </div>
-        <div className="truncate">
+        <div className="truncate flex-1">
           <p className="font-sans text-xs font-black text-slate-200 truncate leading-tight">
-            {currentUser.name}
+            {user.fullName}
           </p>
           <p className="text-[10px] text-slate-400 truncate mt-0.5 font-semibold uppercase tracking-wider">
-            {currentUser.role}
+            {user.role}
           </p>
         </div>
+        <button
+          onClick={handleSignOut}
+          title="Sign out"
+          className="p-2 text-slate-400 hover:text-rose-400 hover:bg-slate-800/60 rounded-lg transition-colors shrink-0"
+        >
+          <LogOut className="w-4 h-4" />
+        </button>
       </div>
     </aside>
   );

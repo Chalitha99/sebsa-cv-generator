@@ -2,8 +2,8 @@
 
 import React, { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { useData, Employee } from '../../context/DataContext';
 import { PageWrapper } from '../../components/PageWrapper';
+import { createEmployeeAction } from './actions';
 import {
   CloudUpload,
   FileText,
@@ -18,13 +18,14 @@ import {
 
 export default function UploadPage() {
   const router = useRouter();
-  const { addEmployee } = useData();
 
   // Simulated upload state
   const [isDragActive, setIsDragActive] = useState(false);
   const [file, setFile] = useState<{ name: string; size: string } | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [status, setStatus] = useState<'idle' | 'uploading' | 'processing' | 'done'>('idle');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Pre-filled form state upon completed AI parsing
   const [formData, setFormData] = useState({
@@ -94,8 +95,10 @@ export default function UploadPage() {
     fileInputRef.current?.click();
   };
 
-  const handleImport = (e: React.FormEvent) => {
+  const handleImport = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitError(null);
+    setIsSubmitting(true);
 
     // Split skills string into trimmed array
     const skillList = formData.skills
@@ -103,23 +106,19 @@ export default function UploadPage() {
       .map((s) => s.trim())
       .filter((s) => s.length > 0);
 
-    const newEmp: Employee = {
-      id: `#EMP-00${Math.floor(100 + Math.random() * 900)}`,
-      name: formData.name,
-      email: formData.email,
-      role: formData.role,
-      department: formData.department,
-      skills: skillList,
-      lastUpdated: new Date().toLocaleDateString('en-US', {
-        month: 'short',
-        day: '2-digit',
-        year: 'numeric',
-      }),
-      avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=120',
-    };
-
-    addEmployee(newEmp);
-    router.push('/repository');
+    try {
+      await createEmployeeAction({
+        name: formData.name,
+        email: formData.email,
+        role: formData.role,
+        department: formData.department,
+        skills: skillList,
+      });
+      router.push('/repository');
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : 'Failed to import employee.');
+      setIsSubmitting(false);
+    }
   };
 
   const handleDiscard = () => {
@@ -354,25 +353,32 @@ export default function UploadPage() {
             </div>
 
             {/* Actions button strip at bottom */}
-            <div className="mt-8 pt-4 border-t border-slate-100 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={handleDiscard}
-                disabled={status === 'idle'}
-                className="flex items-center gap-1.5 px-5 py-3 border border-slate-200 hover:border-slate-300 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-500 hover:text-slate-700 transition-all cursor-pointer disabled:opacity-40"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span>Discard Draft</span>
-              </button>
+            <div className="mt-8 pt-4 border-t border-slate-100">
+              {submitError && (
+                <p className="mb-4 text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200/60 rounded-lg px-3 py-2">
+                  {submitError}
+                </p>
+              )}
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={handleDiscard}
+                  disabled={status === 'idle'}
+                  className="flex items-center gap-1.5 px-5 py-3 border border-slate-200 hover:border-slate-300 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-500 hover:text-slate-700 transition-all cursor-pointer disabled:opacity-40"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Discard Draft</span>
+                </button>
 
-              <button
-                type="submit"
-                disabled={status !== 'done'}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white font-sans text-xs font-black uppercase tracking-wider px-6 py-3.5 rounded-xl shadow-md active:scale-95 transition-transform flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <span>Import to Repository</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
+                <button
+                  type="submit"
+                  disabled={status !== 'done' || isSubmitting}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-sans text-xs font-black uppercase tracking-wider px-6 py-3.5 rounded-xl shadow-md active:scale-95 transition-transform flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <span>{isSubmitting ? 'Importing...' : 'Import to Repository'}</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </form>
         </div>
