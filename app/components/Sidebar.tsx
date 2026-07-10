@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import type { CurrentUser } from '@/lib/auth';
@@ -44,15 +45,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ user }) => {
     <aside className="fixed left-0 top-0 h-full w-[260px] bg-slate-900 text-slate-100 flex flex-col p-5 border-r border-slate-800 z-50">
       {/* Brand Header */}
       <div className="flex items-center gap-3 mb-8 px-2">
-        <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-sky-500/10">
-          <BrainCircuit className="w-6 h-6 text-white" />
+        <div className="w-10 h-10 rounded-2xl flex items-center justify-center mb-4 hover:scale-105 transition-transform duration-300">
+          <Image
+            src="/images/seb-logo-2.png"
+            alt="Sebsa CV Generator Logo"
+            width={36}
+            height={36}
+            className="object-contain"
+          />
         </div>
         <div>
           <h1 className="font-sans text-xl font-black tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
-            CV-AI
+            SEBSA-CV
           </h1>
           <p className="text-[11px] font-semibold text-sky-400 uppercase tracking-widest leading-none mt-0.5">
-            HR Intelligence
+            CV Generation
           </p>
         </div>
       </div>
@@ -101,20 +108,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ user }) => {
           <span className="font-sans text-sm tracking-wide">Settings</span>
         </Link>
       </nav>
-
-      {/* AI Assistant Pro Card */}
-      <div className="bg-gradient-to-br from-slate-800/90 to-indigo-950/40 p-4 rounded-2xl border border-slate-700/60 shadow-lg mt-auto">
-        <div className="flex items-center gap-2 mb-1.5 text-sky-300">
-          <Sparkles className="w-4 h-4 text-sky-400 fill-sky-400/20" />
-          <p className="font-sans text-xs font-black tracking-wide uppercase">AI Assistant Pro</p>
-        </div>
-        <p className="text-[11px] leading-relaxed text-slate-300/90 mb-3">
-          Unlock skills mapping and autonomous candidate fit intelligence profiles.
-        </p>
-        <button className="w-full py-2 bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-sans text-xs font-bold rounded-xl shadow-md active:scale-95 transition-transform duration-300">
-          Upgrade Now
-        </button>
-      </div>
 
       {/* User Footer Profile */}
       <div className="flex items-center gap-3 mt-4 pt-4 border-t border-slate-800/80">

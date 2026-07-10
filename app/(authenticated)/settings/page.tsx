@@ -90,97 +90,6 @@ export default function SettingsPage() {
       <div className="grid grid-cols-12 gap-8">
         {/* Left Column: Company & Template settings (Span 7) */}
         <div className="col-span-12 lg:col-span-7 flex flex-col gap-6">
-          {/* Company details card */}
-          <form
-            onSubmit={handleSaveCompany}
-            className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col gap-5"
-          >
-            <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-              <Building2 className="w-5 h-5 text-indigo-600" />
-              <h4 className="font-sans text-xs font-black uppercase tracking-widest text-slate-400">
-                Company & Brand Configuration
-              </h4>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">
-                  Enterprise Name
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={compName}
-                  onChange={(e) => setCompName(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200/80 rounded-xl px-4 py-3 text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-500/10 focus:border-slate-400 transition-all text-slate-700"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">
-                  Industry Verticals
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={compIndustry}
-                  onChange={(e) => setCompIndustry(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200/80 rounded-xl px-4 py-3 text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-500/10 focus:border-slate-400 transition-all text-slate-700"
-                />
-              </div>
-            </div>
-
-            {/* Brand primary colors selection mockup */}
-            <div className="space-y-2 pt-2">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1">
-                <Palette className="w-4 h-4 text-slate-400" />
-                <span>Primary Brand Color Palette</span>
-              </label>
-              <div className="flex items-center gap-3">
-                {[
-                  { hex: '#405169', name: 'Muted Slate Blue' },
-                  { hex: '#003d9b', name: 'Nexus Sapphire' },
-                  { hex: '#704444', name: 'Cosmic Coral' },
-                  { hex: '#111827', name: 'Obsidian Slate' },
-                  { hex: '#059669', name: 'Forest Emerald' },
-                ].map((col) => (
-                  <button
-                    key={col.hex}
-                    type="button"
-                    onClick={() => setPrimaryColor(col.hex)}
-                    className={`w-9 h-9 rounded-full border transition-all hover:scale-110 flex items-center justify-center cursor-pointer`}
-                    style={{ backgroundColor: col.hex, borderColor: primaryColor === col.hex ? '#1b1b1d' : 'transparent' }}
-                    title={col.name}
-                  >
-                    {primaryColor === col.hex && (
-                      <span className="w-2.5 h-2.5 bg-white rounded-full"></span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Actions segment */}
-            <div className="pt-4 border-t border-slate-100 flex justify-end">
-              <button
-                type="submit"
-                className="bg-indigo-600 hover:bg-indigo-700 text-white font-sans text-xs font-black uppercase tracking-wider px-6 py-3.5 rounded-xl shadow-md active:scale-95 transition-transform flex items-center gap-2 cursor-pointer"
-              >
-                {isSaved ? (
-                  <>
-                    <CheckCircle2 className="w-4.5 h-4.5 text-emerald-300" />
-                    <span>Settings Saved</span>
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-4.5 h-4.5" />
-                    <span>Save Company Changes</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </form>
-
           {/* Template Management card */}
           <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col gap-4">
             <div className="flex items-center gap-2 pb-1.5 border-b border-slate-100">
@@ -237,28 +146,7 @@ export default function SettingsPage() {
             </div>
 
             {/* Switch rows */}
-            <div className="space-y-4">
-              {/* Row 1 */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <h5 className="text-xs font-black text-slate-800">Email Digests</h5>
-                  <p className="text-[10px] text-slate-400 mt-0.5 max-w-[200px]">
-                    Receive customized weekly digests of active candidate matching metrics.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleToggleNotif('email')}
-                  className="text-slate-600 hover:text-indigo-600 transition-colors cursor-pointer"
-                >
-                  {notifEmails ? (
-                    <ToggleRight className="w-9 h-9 text-indigo-600" />
-                  ) : (
-                    <ToggleLeft className="w-9 h-9 text-slate-400" />
-                  )}
-                </button>
-              </div>
-
+            <div className="space-y-4">  
               {/* Row 2 */}
               <div className="flex items-center justify-between">
                 <div>
