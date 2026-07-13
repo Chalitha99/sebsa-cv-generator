@@ -1,11 +1,15 @@
 'use client';
 
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useCallback } from 'react';
+import type { CvProfile } from '@/lib/cvTypes';
 
 /**
  * UI-only state (per docs/02-architecture.md §4). Employee/CV business data now comes from
- * Server Components + Supabase — see services/employee-service.ts and repositories/. Activities
- * and settings are still here temporarily; they migrate to Supabase in Phases 10 and 11.
+ * Server Components + Supabase — see services/employee-service.ts and repositories/.
+ * Activities and settings are still here temporarily; they migrate to Supabase in Phases 10 and 11.
+ *
+ * addEmployee() is exposed here so the upload page client component can trigger the server action
+ * via a thin wrapper without importing server-only modules.
  */
 
 export interface CompanySettings {
@@ -35,6 +39,18 @@ export interface Activity {
   };
 }
 
+/** The data passed to addEmployee from the upload form */
+export interface NewEmployeePayload {
+  /** Flat fields required for the Supabase profiles row */
+  name: string;
+  email: string;
+  role: string;
+  department: string;
+  skills: string[];
+  /** Structured CV data extracted by Gemini */
+  cvProfile: CvProfile;
+}
+
 interface DataContextType {
   companySettings: CompanySettings;
   notificationSettings: NotificationSettings;
@@ -42,6 +58,11 @@ interface DataContextType {
   updateCompanySettings: (settings: Partial<CompanySettings>) => void;
   updateNotificationSettings: (settings: Partial<NotificationSettings>) => void;
   addActivity: (activity: Omit<Activity, 'id' | 'time'>) => void;
+  /**
+   * Persists a new employee to Supabase via the upload/actions.ts server action.
+   * Returns the new profile's row ID.
+   */
+  addEmployee: (payload: NewEmployeePayload) => Promise<string>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -120,6 +141,46 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setActivities((prev) => [newAct, ...prev]);
   };
 
+  /**
+   * Calls the server action to persist the new employee. Dynamically imported to avoid bundling
+   * server-only modules in the client bundle.
+   */
+  const addEmployee = useCallback(async (payload: NewEmployeePayload): Promise<string> => {
+    // Dynamically import the server action to avoid bundling 'use server' code in the client chunk
+    const { createEmployeeAction } = await import('@/app/(authenticated)/upload/actions');
+
+    const skillsFromExperience = payload.cvProfile.experience
+      .flatMap((e) => e.tasks)
+      .slice(0, 0); // tasks are not skills; keep skills list from form
+
+    const rowId = await createEmployeeAction({
+      name: payload.name,
+      email: payload.email,
+      role: payload.role,
+      department: payload.department,
+      skills: payload.skills.length > 0 ? payload.skills : skillsFromExperience,
+      currentPosition: payload.cvProfile.currentPosition,
+      cvExperience: payload.cvProfile.experience,
+      cvAcademic: payload.cvProfile.academic,
+      specialProjects: payload.cvProfile.specialProjects,
+      cvCertifications: payload.cvProfile.certifications,
+    });
+
+    // Log to activity feed
+    addActivity({
+      type: 'upload',
+      title: 'CV Parsed & Imported',
+      desc: `AI parsed and imported ${payload.name}'s CV into the repository.`,
+      status: 'SUCCESS',
+      user: {
+        name: payload.name,
+        avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=120',
+      },
+    });
+
+    return rowId;
+  }, []);
+
   return (
     <DataContext.Provider
       value={{
@@ -129,6 +190,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateCompanySettings,
         updateNotificationSettings,
         addActivity,
+        addEmployee,
       }}
     >
       {children}

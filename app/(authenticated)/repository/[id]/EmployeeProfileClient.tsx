@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageWrapper } from '../../../components/PageWrapper';
 import type { Employee } from '@/types/domain';
+import type { CvExperienceEntry } from '@/lib/cvTypes';
 import {
   ArrowLeft,
   Mail,
@@ -34,7 +35,12 @@ export default function EmployeeProfileClient({ employee }: EmployeeProfileClien
     router.push('/repository');
   };
 
-  // Safe fallback properties for generic employees
+  // ── Prefer structured CV fields; fall back to legacy or demo data ─────────
+
+  // Structured experience (from Gemini parsing pipeline)
+  const cvExperience: CvExperienceEntry[] = employee.cvExperience ?? [];
+
+  // Legacy experience fallback
   const experience = employee.experience || [
     {
       role: employee.role,
@@ -52,6 +58,10 @@ export default function EmployeeProfileClient({ employee }: EmployeeProfileClien
     },
   ];
 
+  // Special projects (structured)
+  const specialProjects = employee.specialProjects ?? [];
+
+  // Legacy projects fallback
   const projects = employee.projects || [
     {
       name: 'Project Delta-Prime',
@@ -65,11 +75,16 @@ export default function EmployeeProfileClient({ employee }: EmployeeProfileClien
     },
   ];
 
+  // Structured certifications
+  const cvCertifications = employee.cvCertifications ?? [];
+
   const certs = employee.certs || [
     'Certified Specialist (Standard Consortium • Exp. 2026)',
     'Advanced Professional Practitioner (Tech Guild • 2021)',
   ];
 
+  // Structured academic entries
+  const cvAcademic = employee.cvAcademic ?? [];
   const education = employee.education || 'B.Sc. Software Engineering (State University • 2016)';
 
   return (
@@ -174,95 +189,139 @@ export default function EmployeeProfileClient({ employee }: EmployeeProfileClien
             <div className="p-6 flex-1">
               {activeTab === 'experience' && (
                 <div className="relative border-l border-slate-200 pl-6 ml-3 space-y-8">
-                  {experience.map((exp, i) => (
-                    <div key={i} className="relative group">
-                      {/* Timeline Dot icon */}
-                      <span className="absolute -left-[31px] top-1 w-4 h-4 bg-white border-2 border-indigo-600 rounded-full group-hover:scale-125 transition-transform"></span>
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2">
-                        <div>
-                          <h4 className="text-sm font-black text-slate-800 leading-snug">
-                            {exp.role}
-                          </h4>
-                          <p className="text-xs font-bold text-slate-500 mt-0.5">
-                            {exp.company} • <span className="text-slate-400 font-medium">{exp.type}</span>
-                          </p>
+                  {/* Prefer structured Gemini-parsed experience with point-wise tasks */}
+                  {cvExperience.length > 0
+                    ? cvExperience.map((exp, i) => (
+                        <div key={i} className="relative group">
+                          <span className="absolute -left-[31px] top-1 w-4 h-4 bg-white border-2 border-indigo-600 rounded-full group-hover:scale-125 transition-transform"></span>
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2">
+                            <div>
+                              <h4 className="text-sm font-black text-slate-800 leading-snug">{exp.position}</h4>
+                              <p className="text-xs font-bold text-slate-500 mt-0.5">{exp.company}</p>
+                            </div>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 bg-slate-100 border border-slate-200/50 px-2.5 py-1 rounded-full self-start sm:self-auto mt-2 sm:mt-0">
+                              {exp.period}
+                            </span>
+                          </div>
+                          {exp.tasks.length > 0 && (
+                            <ul className="mt-2 space-y-1.5">
+                              {exp.tasks.map((task, ti) => (
+                                <li key={ti} className="flex items-start gap-2 text-xs text-slate-600 leading-relaxed">
+                                  <span className="text-indigo-400 mt-0.5 shrink-0">▸</span>
+                                  <span>{task}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
                         </div>
-                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 bg-slate-100 border border-slate-200/50 px-2.5 py-1 rounded-full self-start sm:self-auto mt-2 sm:mt-0">
-                          {exp.period}
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-600 leading-relaxed max-w-2xl">
-                        {exp.desc}
-                      </p>
-                    </div>
-                  ))}
+                      ))
+                    : experience.map((exp, i) => (
+                        <div key={i} className="relative group">
+                          <span className="absolute -left-[31px] top-1 w-4 h-4 bg-white border-2 border-indigo-600 rounded-full group-hover:scale-125 transition-transform"></span>
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2">
+                            <div>
+                              <h4 className="text-sm font-black text-slate-800 leading-snug">{exp.role}</h4>
+                              <p className="text-xs font-bold text-slate-500 mt-0.5">
+                                {exp.company} • <span className="text-slate-400 font-medium">{exp.type}</span>
+                              </p>
+                            </div>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 bg-slate-100 border border-slate-200/50 px-2.5 py-1 rounded-full self-start sm:self-auto mt-2 sm:mt-0">
+                              {exp.period}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-600 leading-relaxed max-w-2xl">{exp.desc}</p>
+                        </div>
+                      ))}
                 </div>
               )}
 
               {activeTab === 'projects' && (
                 <div className="space-y-6">
-                  {/* Projects block */}
+                  {/* Special Projects — prefer structured, fall back to legacy */}
                   <div>
                     <h4 className="text-xs font-black uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-1.5">
                       <Code2 className="w-4 h-4 text-slate-500" />
                       <span>Key Portfolios & Projects</span>
                     </h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {projects.map((proj, i) => (
+                      {(specialProjects.length > 0 ? specialProjects : projects.map((p) => ({ title: p.name, brief: p.desc }))).map((proj, i) => (
                         <div
                           key={i}
                           className="p-4 border border-slate-200/60 rounded-xl bg-slate-50/50 hover:bg-slate-50 transition-colors"
                         >
                           <h5 className="text-xs font-black text-slate-800 flex items-center gap-1.5">
-                            {proj.name}
+                            {proj.title}
                             <ExternalLink className="w-3 h-3 text-slate-400" />
                           </h5>
                           <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
-                            {proj.desc}
+                            {proj.brief}
                           </p>
-                          <div className="flex flex-wrap gap-1.5 mt-3">
-                            {proj.tags.map((tag, j) => (
-                              <span
-                                key={j}
-                                className="px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-500 text-[8px] font-bold uppercase tracking-wider"
-                              >
-                                {tag}
-                              </span>
-                            ))}
-                          </div>
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  {/* Certifications block */}
+                  {/* Certifications — prefer structured */}
                   <div className="pt-6 border-t border-slate-100">
                     <h4 className="text-xs font-black uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-1.5">
                       <Award className="w-4 h-4 text-slate-500" />
                       <span>Professional Certifications</span>
                     </h4>
                     <div className="space-y-2.5">
-                      {certs.map((cert, i) => (
-                        <div
-                          key={i}
-                          className="flex items-center gap-3 p-3 border border-slate-150 rounded-xl bg-indigo-50/20"
-                        >
-                          <BadgeCheck className="w-4.5 h-4.5 text-indigo-600 shrink-0" />
-                          <span className="text-xs font-semibold text-slate-700">{cert}</span>
-                        </div>
-                      ))}
+                      {cvCertifications.length > 0
+                        ? cvCertifications.map((cert, i) => (
+                            <div
+                              key={i}
+                              className="flex items-center gap-3 p-3 border border-slate-150 rounded-xl bg-indigo-50/20"
+                            >
+                              <BadgeCheck className="w-4.5 h-4.5 text-indigo-600 shrink-0" />
+                              <div className="min-w-0">
+                                <p className="text-xs font-semibold text-slate-700">{cert.name}</p>
+                                {(cert.issuer || cert.year) && (
+                                  <p className="text-[10px] text-slate-400 font-medium mt-0.5">
+                                    {[cert.issuer, cert.year].filter(Boolean).join(' • ')}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          ))
+                        : certs.map((cert, i) => (
+                            <div
+                              key={i}
+                              className="flex items-center gap-3 p-3 border border-slate-150 rounded-xl bg-indigo-50/20"
+                            >
+                              <BadgeCheck className="w-4.5 h-4.5 text-indigo-600 shrink-0" />
+                              <span className="text-xs font-semibold text-slate-700">{cert}</span>
+                            </div>
+                          ))}
                     </div>
                   </div>
 
-                  {/* Education block */}
+                  {/* Academic — prefer structured entries */}
                   <div className="pt-6 border-t border-slate-100">
                     <h4 className="text-xs font-black uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5">
                       <GraduationCap className="w-4.5 h-4.5 text-slate-500" />
                       <span>Academic Background</span>
                     </h4>
-                    <div className="p-3 border border-slate-150 rounded-xl bg-slate-50 text-xs font-semibold text-slate-700">
-                      {education}
-                    </div>
+                    {cvAcademic.length > 0 ? (
+                      <div className="space-y-2.5">
+                        {cvAcademic.map((entry, i) => (
+                          <div key={i} className="p-3 border border-slate-150 rounded-xl bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                            <div>
+                              <p className="text-xs font-bold text-slate-700">{entry.qualification}</p>
+                              <p className="text-[11px] text-slate-500 font-medium mt-0.5">{entry.institution}</p>
+                            </div>
+                            <span className="text-[10px] font-black text-slate-400 bg-slate-100 border border-slate-200/50 px-2.5 py-1 rounded-full shrink-0">
+                              {entry.period}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-3 border border-slate-150 rounded-xl bg-slate-50 text-xs font-semibold text-slate-700">
+                        {education}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
