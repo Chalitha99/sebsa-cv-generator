@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageWrapper } from '../../components/PageWrapper';
 import { useData } from '../../context/DataContext';
+import { getDepartmentsAction } from './actions';
 import {
   emptyCvProfile,
   type CvProfile,
@@ -126,8 +127,24 @@ export default function UploadPage() {
 
   // ── Extra flat fields required by Supabase that are not in CvProfile ──────
   const [email, setEmail] = useState('');
-  const [department, setDepartment] = useState('Engineering');
+  const [department, setDepartment] = useState('');
   const [skillsRaw, setSkillsRaw] = useState('');
+
+  // ── Departments loaded from DB ────────────────────────────────────────────
+  const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
+  const [departmentsLoading, setDepartmentsLoading] = useState(true);
+
+  useEffect(() => {
+    getDepartmentsAction()
+      .then((rows) => {
+        setDepartments(rows);
+        if (rows.length > 0) setDepartment(rows[0].name);
+      })
+      .catch(() => {
+        // Silently ignore — dropdown will be empty; user can type manually
+      })
+      .finally(() => setDepartmentsLoading(false));
+  }, []);
 
   // ── UI state ──────────────────────────────────────────────────────────────
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -503,12 +520,20 @@ export default function UploadPage() {
                 <select
                   value={department}
                   onChange={(e) => setDepartment(e.target.value)}
-                  disabled={status !== 'done'}
+                  disabled={status !== 'done' || departmentsLoading}
                   className={INPUT_CLS}
                 >
-                  {['Engineering', 'Design', 'Product Management', 'Marketing', 'Finance', 'Intelligence'].map((d) => (
-                    <option key={d}>{d}</option>
-                  ))}
+                  {departmentsLoading ? (
+                    <option value="">Loading departments…</option>
+                  ) : departments.length === 0 ? (
+                    <option value="">No departments found</option>
+                  ) : (
+                    departments.map((d) => (
+                      <option key={d.id} value={d.name}>
+                        {d.name}
+                      </option>
+                    ))
+                  )}
                 </select>
               </div>
               <div className="sm:col-span-2">

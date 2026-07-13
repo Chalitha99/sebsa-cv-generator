@@ -133,7 +133,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     const response = await ai.models.generateContent({
       // Use gemini-2.5-pro; swap to "gemini-2.5-flash" for lower cost and faster responses
-      model: 'gemini-2.5-pro',
+      model: 'gemini-3-flash-preview',
       contents: [
         {
           role: 'user',
