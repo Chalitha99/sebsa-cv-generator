@@ -1,6 +1,12 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
 import { GoogleGenAI, Type } from '@google/genai';
+import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { getCurrentUser } from '@/lib/auth';
+import { listTemplates, uploadTemplate, deleteTemplate } from '@/services/template-service';
+import { getSavedGeneratedCv, saveGeneratedCv } from '@/services/generated-cv-service';
 import type { Employee } from '@/types/domain';
 import type { TailoredCv } from './types';
 
@@ -138,4 +144,78 @@ ${newInstruction ? `Latest User Refinement Request: "${newInstruction}"` : 'Init
     console.error('customizeCvAction failed:', error);
     throw new Error('AI tailoring failed. Please check your instructions and try again.');
   }
+}
+
+// ─── Template Actions ────────────────────────────────────────────────────────
+
+export async function listTemplatesAction() {
+  const supabase = await createClient();
+  return listTemplates(supabase);
+}
+
+export async function uploadTemplateAction(formData: FormData): Promise<string> {
+  const user = await getCurrentUser();
+  if (!user) throw new Error('Not authenticated.');
+  if (user.role !== 'admin') throw new Error('Unauthorized: Admin role required.');
+
+  const name = formData.get('name') as string;
+  const description = formData.get('description') as string;
+  const file = formData.get('file') as File;
+
+  if (!name || !file) {
+    throw new Error('Name and DOCX file are required.');
+  }
+
+  const arrayBuffer = await file.arrayBuffer();
+  const adminClient = createAdminClient();
+
+  const templateId = await uploadTemplate(
+    adminClient,
+    name,
+    description,
+    arrayBuffer,
+    file.name,
+    user.id
+  );
+
+  revalidatePath('/templates');
+  return templateId;
+}
+
+export async function deleteTemplateAction(templateId: string): Promise<void> {
+  const user = await getCurrentUser();
+  if (!user) throw new Error('Not authenticated.');
+  if (user.role !== 'admin') throw new Error('Unauthorized: Admin role required.');
+
+  const adminClient = createAdminClient();
+  await deleteTemplate(adminClient, templateId);
+
+  revalidatePath('/templates');
+}
+
+// ─── Generated CV Actions ───────────────────────────────────────────────────
+
+export async function getSavedGeneratedCvAction(
+  profileId: string,
+  templateId: string
+): Promise<Record<string, any> | null> {
+  const supabase = await createClient();
+  return getSavedGeneratedCv(supabase, profileId, templateId);
+}
+
+export async function saveGeneratedCvAction(
+  profileId: string,
+  templateId: string,
+  content: Record<string, any>
+): Promise<void> {
+  const user = await getCurrentUser();
+  if (!user) throw new Error('Not authenticated.');
+
+  const adminClient = createAdminClient();
+  await saveGeneratedCv(adminClient, {
+    profileId,
+    templateId,
+    content,
+    userId: user.id,
+  });
 }

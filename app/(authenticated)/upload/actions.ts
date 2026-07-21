@@ -7,6 +7,43 @@ import { createEmployee } from '@/services/employee-service';
 import type { CreateEmployeeInput } from '@/types/domain';
 
 /**
+ * Uploads a profile picture to the `profile-pictures` Supabase Storage bucket.
+ * Returns the public URL of the uploaded image.
+ */
+export async function uploadProfilePictureAction(formData: FormData): Promise<string> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated.');
+
+  const file = formData.get('file') as File | null;
+  if (!file) throw new Error('No image file provided.');
+
+  const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg';
+  const uniqueName = `avatars/${Date.now()}_${user.id}.${ext}`;
+
+  const adminClient = createAdminClient();
+
+  const { error: uploadError } = await adminClient.storage
+    .from('profile-pictures')
+    .upload(uniqueName, await file.arrayBuffer(), {
+      contentType: file.type || 'image/jpeg',
+      upsert: true,
+    });
+
+  if (uploadError) {
+    throw new Error(`Failed to upload profile picture: ${uploadError.message}`);
+  }
+
+  const { data: urlData } = adminClient.storage
+    .from('profile-pictures')
+    .getPublicUrl(uniqueName);
+
+  return urlData.publicUrl;
+}
+
+/**
  * Creates a new employee profile.
  *
  * Uses the service-role (admin) Supabase client for all write operations so that

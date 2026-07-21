@@ -76,4 +76,7 @@ export interface CreateEmployeeInput {
   cvAcademic?: CvAcademicEntry[];
   specialProjects?: CvProjectEntry[];
   cvCertifications?: CvCertificationEntry[];
+
+  // Profile picture URL — stored in Supabase Storage profile-pictures bucket
+  avatarUrl?: string;
 }

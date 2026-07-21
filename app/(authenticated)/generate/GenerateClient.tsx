@@ -6,9 +6,13 @@ import { useData } from '../../context/DataContext';
 import { PageWrapper } from '../../components/PageWrapper';
 import type { Employee } from '@/types/domain';
 import type { TailoredCv } from './types';
-import { customizeCvAction } from './actions';
-import CvPreviewTemplate from './CvPreviewTemplate';
-import { exportToPdf, exportToDocx } from '@/lib/cvExport';
+import {
+  customizeCvAction,
+  listTemplatesAction,
+  getSavedGeneratedCvAction,
+  saveGeneratedCvAction
+} from './actions';
+import { exportToPdf } from '@/lib/cvExport';
 import {
   BrainCircuit,
   Sparkles,
@@ -16,7 +20,6 @@ import {
   ChevronRight,
   ChevronLeft,
   Download,
-  Copy,
   FolderSync,
   RefreshCw,
   Cpu,
@@ -28,8 +31,17 @@ import {
   Send,
   User,
   Bot,
-  AlertCircle
+  AlertCircle,
+  FileText
 } from 'lucide-react';
+
+interface Template {
+  id: string;
+  name: string;
+  description: string;
+  storagePath: string;
+  createdAt: string;
+}
 
 interface GenerateClientProps {
   employees: Employee[];
@@ -39,7 +51,7 @@ export default function GenerateClient({ employees }: GenerateClientProps) {
   return (
     <Suspense fallback={
       <div className="p-8 flex items-center justify-center min-h-screen">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-650" />
       </div>
     }>
       <GeneratePageContent employees={employees} />
@@ -64,6 +76,16 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
   const [preferredExp, setPreferredExp] = useState('At least 6 years orchestrating large-scale financial microservices and leading infrastructure transformations.');
   const [creativity, setCreativity] = useState(70);
 
+  // DOCX Templates state
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [templatesLoading, setTemplatesLoading] = useState(true);
+
+  // Saved CV State for selected employee + template
+  const [hasSavedCv, setHasSavedCv] = useState(false);
+  const [savedCvContent, setSavedCvContent] = useState<TailoredCv | null>(null);
+  const [useSavedCv, setUseSavedCv] = useState(true);
+
   // Chat refinement state
   const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
   const [chatInput, setChatInput] = useState('');
@@ -72,11 +94,32 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
 
   // Current Tailored CV output
   const [tailoredCv, setTailoredCv] = useState<TailoredCv | null>(null);
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   // Find currently selected employee object
   const selectedEmployee = useMemo(() => {
     return employees.find((emp) => emp.id === selectedCandidateId) || employees[0];
   }, [employees, selectedCandidateId]);
+
+  // Load Templates
+  useEffect(() => {
+    const fetchTemplates = async () => {
+      try {
+        setTemplatesLoading(true);
+        const list = await listTemplatesAction();
+        setTemplates(list);
+        if (list.length > 0) {
+          setSelectedTemplateId(list[0].id);
+        }
+      } catch (err) {
+        console.error('Failed to load templates:', err);
+      } finally {
+        setTemplatesLoading(false);
+      }
+    };
+    fetchTemplates();
+  }, []);
 
   // Set default selection based on query params or fallback
   useEffect(() => {
@@ -91,40 +134,114 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
     }
   }, [employees, preselectedName]);
 
+  // Load saved CV from database if available
+  useEffect(() => {
+    if (!selectedEmployee || !selectedTemplateId) return;
+
+    const checkSavedCv = async () => {
+      try {
+        const saved = await getSavedGeneratedCvAction(selectedEmployee.rowId, selectedTemplateId);
+        if (saved) {
+          setHasSavedCv(true);
+          setSavedCvContent(saved as TailoredCv);
+          setUseSavedCv(true);
+        } else {
+          setHasSavedCv(false);
+          setSavedCvContent(null);
+          setUseSavedCv(false);
+        }
+      } catch (err) {
+        console.error('Error checking saved CV:', err);
+      }
+    };
+
+    checkSavedCv();
+  }, [selectedEmployee, selectedTemplateId]);
+
+  // Helper to fetch template preview HTML
+  const updatePreview = async (cv: TailoredCv, templateId: string) => {
+    if (!cv || !templateId) return;
+    try {
+      setPreviewLoading(true);
+      const res = await fetch('/api/templates/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          templateId,
+          tailoredCv: cv,
+          avatarUrl: selectedEmployee?.avatar || null,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPreviewHtml(data.html);
+      } else {
+        const errData = await res.json();
+        console.error('Failed to generate template preview:', errData.error);
+      }
+    } catch (err) {
+      console.error('Error fetching preview:', err);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
   // Initial Customization Action (goes to step 2)
   const handleInitialGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!selectedTemplateId) {
+      alert('Please upload and select a DOCX template first.');
+      return;
+    }
+
     setCustomizingLoading(true);
     setCustomizingError(null);
     setWizardStep(2);
 
     try {
-      const tailored = await customizeCvAction(
-        selectedEmployee,
-        customerName,
-        requiredSkills,
-        preferredExp,
-        []
-      );
-      setTailoredCv(tailored);
-      setChatHistory([
-        {
-          role: 'assistant',
-          content: `Initial resume draft generated for ${selectedEmployee.name} aligned with ${customerName}. You can ask me to modify sections, highlight specific work, or reframe skills below.`
-        }
-      ]);
+      if (useSavedCv && savedCvContent) {
+        // Load saved draft from DB
+        setTailoredCv(savedCvContent);
+        setChatHistory([
+          {
+            role: 'assistant',
+            content: `Loaded previously saved CV draft from database for ${selectedEmployee.name}. You can refine it further or request changes.`
+          }
+        ]);
+        await updatePreview(savedCvContent, selectedTemplateId);
+      } else {
+        // Generate new using Gemini
+        const tailored = await customizeCvAction(
+          selectedEmployee,
+          customerName,
+          requiredSkills,
+          preferredExp,
+          []
+        );
+        setTailoredCv(tailored);
+        setChatHistory([
+          {
+            role: 'assistant',
+            content: `Initial resume draft generated for ${selectedEmployee.name} aligned with ${customerName}. You can ask me to modify sections, highlight specific work, or reframe skills below.`
+          }
+        ]);
+        await updatePreview(tailored, selectedTemplateId);
 
-      // Log generation activity
-      addActivity({
-        type: 'success',
-        title: 'Customized CV Compiled',
-        desc: `AI tailored CV for ${selectedEmployee.name} aligned with ${customerName}.`,
-        status: '96% FIT',
-        user: {
-          name: selectedEmployee.name,
-          avatar: selectedEmployee.avatar,
-        },
-      });
+        // Auto save to database
+        await saveGeneratedCvAction(selectedEmployee.rowId, selectedTemplateId, tailored);
+
+        // Log generation activity
+        addActivity({
+          type: 'success',
+          title: 'Customized CV Compiled',
+          desc: `AI tailored CV for ${selectedEmployee.name} aligned with ${customerName}.`,
+          status: '96% FIT',
+          user: {
+            name: selectedEmployee.name,
+            avatar: selectedEmployee.avatar,
+          },
+        });
+      }
     } catch (err) {
       setCustomizingError(err instanceof Error ? err.message : 'AI Customization failed. Please check setup.');
     } finally {
@@ -135,7 +252,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
   // Refine chat instruction
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chatInput.trim() || customizingLoading || !tailoredCv) return;
+    if (!chatInput.trim() || customizingLoading || !tailoredCv || !selectedTemplateId) return;
 
     const userMessage = chatInput.trim();
     const updatedHistory = [...chatHistory, { role: 'user' as const, content: userMessage }];
@@ -161,6 +278,10 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
           content: `Customization applied: ${userMessage}. Summary, competencies, and project history adjusted to prioritize this instruction.`
         }
       ]);
+      await updatePreview(tailored, selectedTemplateId);
+
+      // Auto save updated draft to DB
+      await saveGeneratedCvAction(selectedEmployee.rowId, selectedTemplateId, tailored);
     } catch (err) {
       setCustomizingError(err instanceof Error ? err.message : 'AI refinement failed. Try phrasing differently.');
     } finally {
@@ -168,26 +289,46 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
     }
   };
 
-  // Handle local CV preview modifications
-  const handleCvChange = (updated: TailoredCv) => {
-    setTailoredCv(updated);
-  };
-
   const handleDownloadPdf = async () => {
     if (!tailoredCv) return;
     try {
       await exportToPdf('cv-preview-root', `${tailoredCv.name.replace(/\s+/g, '_')}_Tailored_CV`);
     } catch (err) {
-      alert('Could not export to PDF. Try adjusting text sizing.');
+      alert('Could not export to PDF. Try adjusting layout styling.');
     }
   };
 
   const handleDownloadDocx = async () => {
-    if (!tailoredCv) return;
+    if (!tailoredCv || !selectedTemplateId) return;
     try {
-      await exportToDocx(tailoredCv, `${tailoredCv.name.replace(/\s+/g, '_')}_Tailored_CV`);
+      const response = await fetch('/api/templates/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          templateId: selectedTemplateId,
+          tailoredCv,
+          avatarUrl: selectedEmployee?.avatar || null,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to generate DOCX file from server.');
+      }
+      const blob = await response.blob();
+      const { saveAs } = await import('file-saver');
+      saveAs(blob, `${tailoredCv.name.replace(/\s+/g, '_')}_Tailored_CV.docx`);
     } catch (err) {
+      console.error(err);
       alert('Could not export to Word DOCX.');
+    }
+  };
+
+  const handleSyncToCrm = async () => {
+    if (!tailoredCv || !selectedTemplateId) return;
+    try {
+      await saveGeneratedCvAction(selectedEmployee.rowId, selectedTemplateId, tailoredCv);
+      alert('Successfully synchronized tailored layout to CRM database.');
+    } catch (err: any) {
+      alert(`Could not sync to CRM: ${err.message}`);
     }
   };
 
@@ -220,11 +361,11 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
 
         {/* Stepper tracker indicators */}
         <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl self-start sm:self-auto border border-slate-200/40">
-          <span className={`px-3 py-1.5 text-[10px] font-black rounded-lg transition-all ${wizardStep === 1 ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>1. PARAMETERS</span>
+          <span className={`px-3 py-1.5 text-[10px] font-black rounded-lg transition-all ${wizardStep === 1 ? 'bg-white text-indigo-650 shadow-sm' : 'text-slate-400'}`}>1. PARAMETERS</span>
           <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
-          <span className={`px-3 py-1.5 text-[10px] font-black rounded-lg transition-all ${wizardStep === 2 ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>2. CUSTOMIZE</span>
+          <span className={`px-3 py-1.5 text-[10px] font-black rounded-lg transition-all ${wizardStep === 2 ? 'bg-white text-indigo-650 shadow-sm' : 'text-slate-400'}`}>2. CUSTOMIZE</span>
           <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
-          <span className={`px-3 py-1.5 text-[10px] font-black rounded-lg transition-all ${wizardStep === 3 ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>3. PREVIEW & EXPORT</span>
+          <span className={`px-3 py-1.5 text-[10px] font-black rounded-lg transition-all ${wizardStep === 3 ? 'bg-white text-indigo-650 shadow-sm' : 'text-slate-400'}`}>3. PREVIEW & EXPORT</span>
         </div>
       </div>
 
@@ -237,7 +378,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
               className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col gap-5"
             >
               <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-                <Sliders className="w-5 h-5 text-indigo-600" />
+                <Sliders className="w-5 h-5 text-indigo-650" />
                 <h4 className="font-sans text-xs font-black uppercase tracking-widest text-slate-400">
                   Opportunity Customization Details
                 </h4>
@@ -258,23 +399,87 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                 />
               </div>
 
-              {/* Select Employee */}
+              {/* Select Talent Profile */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">
                   Select Talent Profile
                 </label>
-                <select
-                  value={selectedCandidateId}
-                  onChange={(e) => setSelectedCandidateId(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200/80 rounded-xl px-4 py-3 text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-500/10 focus:border-slate-400 transition-all text-slate-700"
-                >
-                  {employees.map((emp) => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.name} ({emp.role})
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <select
+                    value={selectedCandidateId}
+                    onChange={(e) => setSelectedCandidateId(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200/80 rounded-xl px-4 py-3 text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-500/10 focus:border-slate-400 transition-all text-slate-700"
+                  >
+                    {employees.map((emp) => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.name} ({emp.role})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {/* Employee avatar preview */}
+                {selectedEmployee && (
+                  <div className="flex items-center gap-2.5 mt-2">
+                    <img
+                      src={selectedEmployee.avatar}
+                      alt={selectedEmployee.name}
+                      className="w-8 h-8 rounded-full object-cover border border-slate-200 shadow-sm"
+                    />
+                    <span className="text-[11px] text-slate-500 font-semibold">
+                      {selectedEmployee.department} · {selectedEmployee.role}
+                    </span>
+                  </div>
+                )}
               </div>
+
+              {/* Select DOCX Template */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+                  Select CV Template (DOCX)
+                </label>
+                {templatesLoading ? (
+                  <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-xl text-slate-400 text-xs font-semibold">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Loading active templates...</span>
+                  </div>
+                ) : templates.length === 0 ? (
+                  <div className="p-3.5 bg-rose-50 border border-rose-100 rounded-xl text-rose-700 text-xs font-bold flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>No DOCX templates found. Upload one in CV Templates page first.</span>
+                  </div>
+                ) : (
+                  <select
+                    value={selectedTemplateId}
+                    onChange={(e) => setSelectedTemplateId(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200/80 rounded-xl px-4 py-3 text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-500/10 focus:border-slate-400 transition-all text-slate-700"
+                  >
+                    {templates.map((tpl) => (
+                      <option key={tpl.id} value={tpl.id}>
+                        {tpl.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {/* Saved Draft Toggle Option */}
+              {hasSavedCv && (
+                <div className="p-3.5 bg-emerald-50 border border-emerald-150 rounded-xl flex items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-2 text-emerald-850 font-semibold">
+                    <BookmarkCheck className="w-4 h-4 text-emerald-650" />
+                    <span>A saved draft exists for this layout.</span>
+                  </div>
+                  <label className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-[10px] text-slate-600 select-none cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={useSavedCv}
+                      onChange={(e) => setUseSavedCv(e.target.checked)}
+                      className="rounded accent-emerald-600"
+                    />
+                    Load Saved Draft
+                  </label>
+                </div>
+              )}
 
               {/* Mandatory Skills */}
               <div className="space-y-1.5">
@@ -311,7 +516,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                   <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">
                     AI Customization Alignment Strictness
                   </label>
-                  <span className="text-xs font-black text-indigo-600 font-mono">
+                  <span className="text-xs font-black text-indigo-650 font-mono">
                     {creativity}% Creative
                   </span>
                 </div>
@@ -331,10 +536,13 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
 
               <button
                 type="submit"
-                className="mt-4 py-4 bg-gradient-to-r from-sky-600 to-indigo-700 hover:from-sky-500 hover:to-indigo-600 text-white rounded-xl font-sans text-sm font-black shadow-lg shadow-sky-600/10 active:scale-[0.98] transition-transform flex items-center justify-center gap-2.5 cursor-pointer"
+                disabled={templates.length === 0}
+                className="mt-4 py-4 bg-gradient-to-r from-sky-600 to-indigo-700 hover:from-sky-500 hover:to-indigo-600 disabled:from-slate-400 disabled:to-slate-400 disabled:cursor-not-allowed text-white rounded-xl font-sans text-sm font-black shadow-lg shadow-sky-600/10 active:scale-[0.98] transition-transform flex items-center justify-center gap-2.5 cursor-pointer"
               >
                 <BrainCircuit className="w-5 h-5" />
-                <span>Initialize AI Tailored CV</span>
+                <span>
+                  {useSavedCv && savedCvContent ? 'Load Existing Saved CV Draft' : 'Initialize AI Tailored CV'}
+                </span>
               </button>
             </form>
           </div>
@@ -349,7 +557,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
             <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col flex-1 min-h-[480px]">
               <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
                 <div className="flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-indigo-600 fill-indigo-100" />
+                  <Sparkles className="w-5 h-5 text-indigo-650 fill-indigo-100" />
                   <h4 className="font-sans text-xs font-black uppercase tracking-widest text-slate-400">
                     AI Customizer Chat
                   </h4>
@@ -446,14 +654,23 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
           {/* Right Live Preview Box */}
           <div className="col-span-12 lg:col-span-7 flex flex-col">
             <div className="bg-slate-100 p-5 rounded-2xl border border-slate-200/80 flex items-center justify-center min-h-[480px] max-h-[600px] overflow-y-auto">
-              {tailoredCv ? (
-                <div className="scale-[0.8] origin-top my-4 shadow-lg w-full">
-                  <CvPreviewTemplate cv={tailoredCv} onChange={handleCvChange} />
-                </div>
-              ) : (
+              {previewLoading ? (
                 <div className="text-center text-xs text-slate-400 flex flex-col items-center">
                   <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mb-2" />
-                  <span>Drafting initial profile context...</span>
+                  <span>Compiling dynamic template formatting...</span>
+                </div>
+              ) : previewHtml ? (
+                <div className="scale-[0.8] origin-top my-4 shadow-lg w-full">
+                  <div
+                    id="cv-preview-root"
+                    className="w-full max-w-[800px] mx-auto bg-white border border-slate-200 shadow-xl rounded-xl font-sans text-slate-800 leading-relaxed text-sm select-text p-8"
+                    style={{ minHeight: '1120px' }}
+                    dangerouslySetInnerHTML={{ __html: previewHtml }}
+                  />
+                </div>
+              ) : (
+                <div className="text-center text-xs text-slate-450">
+                  <span>No preview compiled. Please check template variables.</span>
                 </div>
               )}
             </div>
@@ -474,8 +691,8 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                 <ChevronLeft className="w-4 h-4" />
               </button>
               <div>
-                <h4 className="text-sm font-black text-slate-800">Final Edit & Export Panel</h4>
-                <p className="text-[11px] text-slate-450 font-medium">Click on any text item on the CV preview below to edit it inline.</p>
+                <h4 className="text-sm font-black text-slate-800">Final CV Preview & Export Panel</h4>
+                <p className="text-[11px] text-slate-450 font-medium">Verify layout structure and placeholder replacements before downloading.</p>
               </div>
             </div>
 
@@ -497,9 +714,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
               </button>
 
               <button
-                onClick={() => {
-                  alert('Successfully synchronized tailored layout to CRM database.');
-                }}
+                onClick={handleSyncToCrm}
                 className="flex items-center gap-2 px-5 py-2.5 bg-indigo-650 text-white font-black rounded-xl text-xs hover:bg-indigo-750 transition-colors cursor-pointer active:scale-95 shadow-md"
               >
                 <FolderSync className="w-4 h-4 text-sky-200" />
@@ -510,7 +725,22 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
 
           {/* Full-width editable preview */}
           <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200/80 shadow-inner flex justify-center">
-            <CvPreviewTemplate cv={tailoredCv} onChange={handleCvChange} />
+            {previewLoading ? (
+              <div className="flex items-center justify-center p-20 min-h-[400px]">
+                <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+              </div>
+            ) : previewHtml ? (
+              <div
+                id="cv-preview-root"
+                className="w-full max-w-[800px] bg-white border border-slate-250 shadow-xl rounded-xl font-sans text-slate-800 leading-relaxed text-sm select-text p-8"
+                style={{ minHeight: '1120px' }}
+                dangerouslySetInnerHTML={{ __html: previewHtml }}
+              />
+            ) : (
+              <div className="p-12 text-slate-400 bg-white border rounded-xl w-full text-center">
+                No preview HTML generated.
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -55,161 +55,30 @@ export async function exportToPdf(elementId: string, filename: string): Promise<
   pdf.save(`${filename}.pdf`);
 }
 
-// ─── DOCX Export ─────────────────────────────────────────────────────────────
+export async function exportToDocx(elementId: string, filename: string): Promise<void> {
+  const element = document.getElementById(elementId);
+  if (!element) throw new Error(`Element #${elementId} not found in DOM.`);
 
-export async function exportToDocx(cv: TailoredCv, filename: string): Promise<void> {
-  const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, BorderStyle } =
-    await import('docx');
+  // Get the modified HTML from the preview element
+  const htmlContent = element.innerHTML;
 
-  const { saveAs } = await import('file-saver');
-
-  const BRAND_COLOR = '003D9B'; // IFS navy blue
-
-  // ── Helpers ──────────────────────────────────────────────────────────────
-  const sectionHeading = (text: string) =>
-    new Paragraph({
-      text: text.toUpperCase(),
-      heading: HeadingLevel.HEADING_2,
-      spacing: { before: 300, after: 120 },
-      border: {
-        bottom: { style: BorderStyle.SINGLE, size: 6, color: BRAND_COLOR, space: 4 },
-      },
-      run: { color: BRAND_COLOR, bold: true, size: 22 },
-    });
-
-  const bodyText = (text: string) =>
-    new Paragraph({
-      children: [new TextRun({ text, size: 20, color: '333333' })],
-      spacing: { after: 80 },
-    });
-
-  const boldLine = (label: string, value: string) =>
-    new Paragraph({
-      children: [
-        new TextRun({ text: `${label}: `, bold: true, size: 20 }),
-        new TextRun({ text: value, size: 20 }),
-      ],
-      spacing: { after: 60 },
-    });
-
-  const bulletPoint = (text: string) =>
-    new Paragraph({
-      text,
-      bullet: { level: 0 },
-      spacing: { after: 60 },
-      run: { size: 20, color: '333333' },
-    });
-
-  // ── Document ──────────────────────────────────────────────────────────────
-  const doc = new Document({
-    styles: {
-      default: {
-        document: {
-          run: { font: 'Calibri', size: 22 },
-        },
-      },
+  // Call our new API route to convert HTML to DOCX
+  const response = await fetch('/api/export-docx', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
     },
-    sections: [
-      {
-        children: [
-          // Header block
-          new Paragraph({
-            alignment: AlignmentType.CENTER,
-            children: [new TextRun({ text: cv.name, bold: true, size: 48, color: BRAND_COLOR })],
-            spacing: { after: 80 },
-          }),
-          new Paragraph({
-            alignment: AlignmentType.CENTER,
-            children: [new TextRun({ text: cv.currentPosition, size: 26, color: '555555' })],
-            spacing: { after: 60 },
-          }),
-          ...(cv.customerName
-            ? [
-                new Paragraph({
-                  alignment: AlignmentType.CENTER,
-                  children: [
-                    new TextRun({ text: `Tailored for: ${cv.customerName}`, italics: true, size: 20, color: '888888' }),
-                  ],
-                  spacing: { after: 300 },
-                }),
-              ]
-            : []),
-
-          // Summary
-          ...(cv.summary
-            ? [sectionHeading('Professional Summary'), bodyText(cv.summary)]
-            : []),
-
-          // Skills
-          ...(cv.skillsAligned.length > 0
-            ? [
-                sectionHeading('Core Competencies'),
-                new Paragraph({
-                  children: [new TextRun({ text: cv.skillsAligned.join(' • '), size: 20 })],
-                  spacing: { after: 200 },
-                }),
-              ]
-            : []),
-
-          // Experience
-          ...(cv.experience.length > 0
-            ? [
-                sectionHeading('Professional Experience'),
-                ...cv.experience.flatMap((exp) => [
-                  new Paragraph({
-                    children: [
-                      new TextRun({ text: exp.position, bold: true, size: 22 }),
-                      new TextRun({ text: `  |  ${exp.company}`, size: 22, color: '555555' }),
-                      new TextRun({ text: `  |  ${exp.period}`, size: 20, color: '888888', italics: true }),
-                    ],
-                    spacing: { before: 200, after: 80 },
-                  }),
-                  ...exp.tasks.map((task) => bulletPoint(task)),
-                ]),
-              ]
-            : []),
-
-          // Academic
-          ...(cv.academic.length > 0
-            ? [
-                sectionHeading('Academic Background'),
-                ...cv.academic.map((acad) =>
-                  boldLine(acad.qualification, `${acad.institution}  |  ${acad.period}`)
-                ),
-              ]
-            : []),
-
-          // Projects
-          ...(cv.specialProjects.length > 0
-            ? [
-                sectionHeading('Special Projects'),
-                ...cv.specialProjects.flatMap((proj) => [
-                  new Paragraph({
-                    children: [new TextRun({ text: proj.title, bold: true, size: 20 })],
-                    spacing: { before: 120, after: 60 },
-                  }),
-                  bodyText(proj.brief),
-                ]),
-              ]
-            : []),
-
-          // Certifications
-          ...(cv.certifications.length > 0
-            ? [
-                sectionHeading('Certifications'),
-                ...cv.certifications.map((cert) =>
-                  boldLine(
-                    cert.name,
-                    [cert.issuer, cert.year].filter(Boolean).join(' • ')
-                  )
-                ),
-              ]
-            : []),
-        ],
-      },
-    ],
+    body: JSON.stringify({ html: htmlContent }),
   });
 
-  const blob = await Packer.toBlob(doc);
+  if (!response.ok) {
+    throw new Error('Failed to generate DOCX file from server.');
+  }
+
+  // The API returns a blob representing the docx
+  const blob = await response.blob();
+
+  // Dynamically import file-saver to keep client bundle small
+  const { saveAs } = await import('file-saver');
   saveAs(blob, `${filename}.docx`);
 }

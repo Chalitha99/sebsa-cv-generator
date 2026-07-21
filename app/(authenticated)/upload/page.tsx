@@ -4,7 +4,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageWrapper } from '../../components/PageWrapper';
 import { useData } from '../../context/DataContext';
-import { getDepartmentsAction } from './actions';
+import { getDepartmentsAction, uploadProfilePictureAction } from './actions';
 import {
   emptyCvProfile,
   type CvProfile,
@@ -30,6 +30,8 @@ import {
   Briefcase,
   Award,
   Layers,
+  ImageIcon,
+  UserCircle2,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -115,12 +117,19 @@ export default function UploadPage() {
   const router = useRouter();
   const { addEmployee } = useData();
 
-  // ── File state ────────────────────────────────────────────────────────────
+  // ── CV File state ─────────────────────────────────────────────────────────
   const [isDragActive, setIsDragActive] = useState(false);
   const [droppedFile, setDroppedFile] = useState<{ name: string; size: string } | null>(null);
   const [status, setStatus] = useState<UploadStatus>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Profile Image state ───────────────────────────────────────────────────
+  const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
+  const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null);
+  const [isImageDragActive, setIsImageDragActive] = useState(false);
+  const [imageUploadError, setImageUploadError] = useState<string | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   // ── Parsed CV profile (editable) ─────────────────────────────────────────
   const [profile, setProfile] = useState<CvProfile>(emptyCvProfile());
@@ -270,6 +279,41 @@ export default function UploadPage() {
       profile.certifications.map((c, idx) => (idx === i ? { ...c, [field]: value } : c))
     );
 
+  // ─── Profile Image handlers ────────────────────────────────────────────────
+
+  const processImageFile = useCallback((file: File) => {
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!validTypes.includes(file.type)) {
+      setImageUploadError('Please upload a JPG, PNG, WEBP, or GIF image.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setImageUploadError('Image must be smaller than 5 MB.');
+      return;
+    }
+    setImageUploadError(null);
+    setProfileImageFile(file);
+    const reader = new FileReader();
+    reader.onload = (ev) => setProfileImagePreview(ev.target?.result as string);
+    reader.readAsDataURL(file);
+  }, []);
+
+  const handleImageDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsImageDragActive(e.type === 'dragenter' || e.type === 'dragover');
+  };
+
+  const handleImageDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsImageDragActive(false);
+    if (e.dataTransfer.files?.[0]) processImageFile(e.dataTransfer.files[0]);
+  };
+
+  const handleImageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.[0]) processImageFile(e.target.files[0]);
+  };
+
   // ─── Submit ────────────────────────────────────────────────────────────────
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -283,6 +327,14 @@ export default function UploadPage() {
       .filter((s) => s.length > 0);
 
     try {
+      // Upload profile image first if provided
+      let avatarUrl: string | undefined;
+      if (profileImageFile) {
+        const imgFormData = new FormData();
+        imgFormData.append('file', profileImageFile);
+        avatarUrl = await uploadProfilePictureAction(imgFormData);
+      }
+
       await addEmployee({
         name: profile.name,
         email,
@@ -290,6 +342,7 @@ export default function UploadPage() {
         department,
         skills,
         cvProfile: profile,
+        avatarUrl,
       });
       router.push('/repository');
     } catch (err) {
@@ -308,7 +361,11 @@ export default function UploadPage() {
     setEmail('');
     setSkillsRaw('');
     setSubmitError(null);
+    setProfileImageFile(null);
+    setProfileImagePreview(null);
+    setImageUploadError(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
+    if (imageInputRef.current) imageInputRef.current.value = '';
   };
 
   // ─── Status helpers ────────────────────────────────────────────────────────
@@ -428,6 +485,77 @@ export default function UploadPage() {
                   )}
                 </div>
               </div>
+            )}
+          </div>
+
+          {/* ── Profile Image Upload ── */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
+            <h4 className="font-sans text-xs font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
+              <UserCircle2 className="w-4 h-4 text-indigo-500" />
+              Profile Photo
+              <span className="font-normal normal-case tracking-normal text-slate-400">(optional)</span>
+            </h4>
+
+            {profileImagePreview ? (
+              <div className="flex flex-col items-center gap-4">
+                <div className="relative">
+                  <img
+                    src={profileImagePreview}
+                    alt="Profile preview"
+                    className="w-28 h-28 rounded-full object-cover border-4 border-indigo-100 shadow-md"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileImageFile(null);
+                      setProfileImagePreview(null);
+                      if (imageInputRef.current) imageInputRef.current.value = '';
+                    }}
+                    className="absolute -top-1 -right-1 w-6 h-6 bg-rose-500 text-white rounded-full flex items-center justify-center hover:bg-rose-600 transition-colors"
+                  >
+                    ×
+                  </button>
+                </div>
+                <p className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Photo ready to upload
+                </p>
+              </div>
+            ) : (
+              <div
+                onDragEnter={handleImageDrag}
+                onDragOver={handleImageDrag}
+                onDragLeave={() => setIsImageDragActive(false)}
+                onDrop={handleImageDrop}
+                onClick={() => imageInputRef.current?.click()}
+                className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center text-center transition-all cursor-pointer ${
+                  isImageDragActive
+                    ? 'border-indigo-500 bg-indigo-50/30'
+                    : 'border-slate-300 hover:border-indigo-400 bg-slate-50/20 hover:bg-indigo-50/10'
+                }`}
+              >
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="hidden"
+                  onChange={handleImageInputChange}
+                />
+                <div className="w-12 h-12 rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center mb-3">
+                  <ImageIcon className="w-6 h-6" />
+                </div>
+                <p className="text-xs font-semibold text-slate-600">
+                  {isImageDragActive ? 'Drop photo here' : 'Drag & drop or click to upload'}
+                </p>
+                <p className="text-[10px] text-slate-400 mt-1">JPG, PNG, WEBP up to 5 MB</p>
+              </div>
+            )}
+
+            {imageUploadError && (
+              <p className="mt-2 text-[11px] text-rose-600 font-semibold flex items-center gap-1">
+                <AlertCircle className="w-3.5 h-3.5" />
+                {imageUploadError}
+              </p>
             )}
           </div>
 

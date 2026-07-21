@@ -49,6 +49,8 @@ export interface NewEmployeePayload {
   skills: string[];
   /** Structured CV data extracted by Gemini */
   cvProfile: CvProfile;
+  /** Public URL of the uploaded profile picture (from profile-pictures bucket) */
+  avatarUrl?: string;
 }
 
 interface DataContextType {
@@ -164,6 +166,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       cvAcademic: payload.cvProfile.academic,
       specialProjects: payload.cvProfile.specialProjects,
       cvCertifications: payload.cvProfile.certifications,
+      avatarUrl: payload.avatarUrl,
     });
 
     // Log to activity feed

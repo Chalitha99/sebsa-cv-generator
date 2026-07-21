@@ -118,6 +118,7 @@ export async function createEmployeeRow(
         department_id: dept?.id ?? null,
         status: 'published',
         education: educationJson,
+        avatar_url: input.avatarUrl ?? null,
         created_by: createdBy,
         updated_by: createdBy,
       })
