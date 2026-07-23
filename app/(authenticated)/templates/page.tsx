@@ -136,7 +136,7 @@ export default function TemplatesPage() {
       {/* Page Header */}
       <div className="mb-8">
         <h2 className="text-3xl font-black tracking-tight text-slate-900 font-sans leading-none">
-          CV Template Management
+          CV Templates
         </h2>
         <p className="text-sm font-medium text-slate-500 mt-2">
           Upload and manage master DOCX templates containing placeholders like `{"{{fullName}}"}` or `{"{{experience}}"}`.

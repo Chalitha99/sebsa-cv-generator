@@ -1,0 +1,961 @@
+'use client';
+
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { PageWrapper } from '../../components/PageWrapper';
+import { uploadProfilePictureAction } from '../upload/actions';
+import { getEmployeeDetailsAction, updateEmployeeAction } from './actions';
+import {
+  emptyCvProfile,
+  type CvProfile,
+  type CvExperienceEntry,
+  type CvAcademicEntry,
+  type CvProjectEntry,
+  type CvCertificationEntry,
+} from '@/lib/cvTypes';
+import type { Employee, CreateEmployeeInput } from '@/types/domain';
+import {
+  CloudUpload,
+  FileText,
+  Loader2,
+  CheckCircle2,
+  Sparkles,
+  Save,
+  Plus,
+  Minus,
+  ChevronDown,
+  ChevronUp,
+  AlertCircle,
+  GraduationCap,
+  Briefcase,
+  Award,
+  Layers,
+  ImageIcon,
+  UserCircle2,
+} from 'lucide-react';
+
+// ─── Sub-components (consistent with upload/page.tsx) ───────────────────────────
+
+function SectionTitle({ icon: Icon, children }: { icon: React.ElementType; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2 mb-4">
+      <div className="w-7 h-7 bg-indigo-50 rounded-lg flex items-center justify-center">
+        <Icon className="w-4 h-4 text-indigo-600" />
+      </div>
+      <h4 className="text-xs font-black uppercase tracking-widest text-slate-500">{children}</h4>
+    </div>
+  );
+}
+
+function FieldLabel({ children, hint }: { children: React.ReactNode; hint?: string }) {
+  return (
+    <div className="flex items-center justify-between mb-1.5">
+      <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">{children}</label>
+      {hint && <span className="text-[10px] text-slate-400">{hint}</span>}
+    </div>
+  );
+}
+
+const INPUT_CLS =
+  'w-full bg-slate-50 border border-slate-200/80 rounded-xl px-4 py-2.5 text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all text-slate-700 placeholder:text-slate-300';
+
+const TEXTAREA_CLS = INPUT_CLS + ' resize-none leading-relaxed';
+
+const GHOST_BTN =
+  'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all cursor-pointer';
+
+// ─── Text extraction helpers ──────────────────────────────────────────────────
+
+async function extractTextFromTxt(file: File): Promise<string> {
+  return file.text();
+}
+
+async function extractTextFromDocx(file: File): Promise<string> {
+  const mammoth = await import('mammoth');
+  const arrayBuffer = await file.arrayBuffer();
+  const result = await mammoth.extractRawText({ arrayBuffer });
+  return result.value;
+}
+
+async function extractTextFromPdf(file: File): Promise<string> {
+  const pdfjsLib = await import('pdfjs-dist');
+  const workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
+
+  const arrayBuffer = await file.arrayBuffer();
+  const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const pages: string[] = [];
+
+  for (let i = 1; i <= pdfDoc.numPages; i++) {
+    const page = await pdfDoc.getPage(i);
+    const textContent = await page.getTextContent();
+    const pageText = textContent.items
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .map((item: any) => item.str as string)
+      .join(' ');
+    pages.push(pageText);
+  }
+
+  return pages.join('\n');
+}
+
+async function extractText(file: File): Promise<string> {
+  const name = file.name.toLowerCase();
+  if (name.endsWith('.pdf')) return extractTextFromPdf(file);
+  if (name.endsWith('.docx')) return extractTextFromDocx(file);
+  return extractTextFromTxt(file);
+}
+
+// ─── Main Client Component ────────────────────────────────────────────────────
+
+interface UpdateProfileClientProps {
+  initialEmployees: Employee[];
+  departments: { id: string; name: string }[];
+}
+
+type CvUploadStatus = 'idle' | 'extracting' | 'analyzing' | 'done' | 'error';
+
+export default function UpdateProfileClient({
+  initialEmployees,
+  departments,
+}: UpdateProfileClientProps) {
+  const router = useRouter();
+
+  // Selected employee selection
+  const [selectedCode, setSelectedCode] = useState<string>('');
+  const [loadingProfile, setLoadingProfile] = useState<boolean>(false);
+  const [activeProfile, setActiveProfile] = useState<Employee | null>(null);
+
+  // Form editable states
+  const [profile, setProfile] = useState<CvProfile>(emptyCvProfile());
+  const [email, setEmail] = useState('');
+  const [department, setDepartment] = useState('');
+  const [skillsRaw, setSkillsRaw] = useState('');
+
+  // Profile photo states
+  const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
+  const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null);
+  const [isImageDragActive, setIsImageDragActive] = useState(false);
+  const [imageUploadError, setImageUploadError] = useState<string | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  // New CV upload states (for optional replacement)
+  const [cvStatus, setCvStatus] = useState<CvUploadStatus>('idle');
+  const [cvErrorMsg, setCvErrorMsg] = useState<string | null>(null);
+  const [cvDroppedFile, setCvDroppedFile] = useState<{ name: string; size: string } | null>(null);
+  const [isCvDragActive, setIsCvDragActive] = useState(false);
+  const cvFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Save states
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [jsonPreviewOpen, setJsonPreviewOpen] = useState(false);
+
+  // Load selected employee details
+  useEffect(() => {
+    if (!selectedCode) {
+      setActiveProfile(null);
+      setProfile(emptyCvProfile());
+      setEmail('');
+      setSkillsRaw('');
+      setProfileImagePreview(null);
+      setProfileImageFile(null);
+      return;
+    }
+
+    const loadDetails = async () => {
+      try {
+        setLoadingProfile(true);
+        const detailedEmp = await getEmployeeDetailsAction(selectedCode);
+        if (detailedEmp) {
+          setActiveProfile(detailedEmp);
+          setProfile({
+            name: detailedEmp.name,
+            currentPosition: detailedEmp.role,
+            experience: detailedEmp.cvExperience || [],
+            academic: detailedEmp.cvAcademic || [],
+            specialProjects: detailedEmp.specialProjects || [],
+            certifications: detailedEmp.cvCertifications || [],
+          });
+          setEmail(detailedEmp.email);
+          setDepartment(detailedEmp.department);
+          setSkillsRaw(detailedEmp.skills.join(', '));
+          setProfileImagePreview(detailedEmp.avatar);
+          setProfileImageFile(null); // Keep null to flag no changes yet
+        }
+      } catch (err) {
+        console.error('Failed to load profile details:', err);
+      } finally {
+        setLoadingProfile(false);
+      }
+    };
+
+    loadDetails();
+  }, [selectedCode]);
+
+  // ─── CV File upload processing ──────────────────────────────────────────────
+
+  const handleCvDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsCvDragActive(e.type === 'dragenter' || e.type === 'dragover');
+  };
+
+  const processCvFile = useCallback(async (file: File) => {
+    const sizeStr = (file.size / (1024 * 1024)).toFixed(1) + ' MB';
+    setCvDroppedFile({ name: file.name, size: sizeStr });
+    setCvStatus('extracting');
+    setCvErrorMsg(null);
+
+    let rawText: string;
+    try {
+      rawText = await extractText(file);
+    } catch (err) {
+      console.error('Text extraction failed:', err);
+      setCvStatus('error');
+      setCvErrorMsg('Could not read the file. Please try a different format.');
+      return;
+    }
+
+    setCvStatus('analyzing');
+
+    try {
+      const res = await fetch('/api/parse-cv', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: rawText }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error((body as { error?: string }).error ?? `Server error ${res.status}`);
+      }
+
+      const parsed = (await res.json()) as CvProfile;
+      setProfile(parsed);
+      setSkillsRaw(skillsRaw ? `${skillsRaw}, ${parsed.name} skills` : ''); // fallback or append if parsed includes them
+      setCvStatus('done');
+    } catch (err) {
+      console.error('CV parsing failed:', err);
+      setCvStatus('error');
+      setCvErrorMsg(err instanceof Error ? err.message : 'AI parsing failed. Please try again.');
+    }
+  }, [skillsRaw]);
+
+  const handleCvDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsCvDragActive(false);
+    if (e.dataTransfer.files?.[0]) processCvFile(e.dataTransfer.files[0]);
+  };
+
+  const handleCvFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.[0]) processCvFile(e.target.files[0]);
+  };
+
+  // ─── Image Photo Handling ──────────────────────────────────────────────────
+
+  const processImageFile = useCallback((file: File) => {
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!validTypes.includes(file.type)) {
+      setImageUploadError('Please upload a JPG, PNG, WEBP, or GIF image.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setImageUploadError('Image must be smaller than 5 MB.');
+      return;
+    }
+    setImageUploadError(null);
+    setProfileImageFile(file);
+    const reader = new FileReader();
+    reader.onload = (ev) => setProfileImagePreview(ev.target?.result as string);
+    reader.readAsDataURL(file);
+  }, []);
+
+  const handleImageDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsImageDragActive(e.type === 'dragenter' || e.type === 'dragover');
+  };
+
+  const handleImageDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsImageDragActive(false);
+    if (e.dataTransfer.files?.[0]) processImageFile(e.dataTransfer.files[0]);
+  };
+
+  const handleImageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.[0]) processImageFile(e.target.files[0]);
+  };
+
+  // ─── Form Mutators ──────────────────────────────────────────────────────────
+
+  const updateField = <K extends keyof CvProfile>(key: K, value: CvProfile[K]) =>
+    setProfile((p) => ({ ...p, [key]: value }));
+
+  // Experience
+  const addExperience = () =>
+    updateField('experience', [...profile.experience, { position: '', company: '', period: '', tasks: [''] }]);
+  const removeExperience = (i: number) =>
+    updateField('experience', profile.experience.filter((_, idx) => idx !== i));
+  const updateExperience = (i: number, field: keyof CvExperienceEntry, value: string | string[]) =>
+    updateField(
+      'experience',
+      profile.experience.map((e, idx) => (idx === i ? { ...e, [field]: value } : e))
+    );
+  const addTask = (expIdx: number) =>
+    updateExperience(expIdx, 'tasks', [...profile.experience[expIdx].tasks, '']);
+  const removeTask = (expIdx: number, taskIdx: number) =>
+    updateExperience(
+      expIdx,
+      'tasks',
+      profile.experience[expIdx].tasks.filter((_, i) => i !== taskIdx)
+    );
+  const updateTask = (expIdx: number, taskIdx: number, value: string) =>
+    updateExperience(
+      expIdx,
+      'tasks',
+      profile.experience[expIdx].tasks.map((t, i) => (i === taskIdx ? value : t))
+    );
+
+  // Academic
+  const addAcademic = () =>
+    updateField('academic', [...profile.academic, { qualification: '', institution: '', period: '' }]);
+  const removeAcademic = (i: number) =>
+    updateField('academic', profile.academic.filter((_, idx) => idx !== i));
+  const updateAcademic = (i: number, field: keyof CvAcademicEntry, value: string) =>
+    updateField('academic', profile.academic.map((e, idx) => (idx === i ? { ...e, [field]: value } : e)));
+
+  // Special Projects
+  const addProject = () =>
+    updateField('specialProjects', [...profile.specialProjects, { title: '', brief: '' }]);
+  const removeProject = (i: number) =>
+    updateField('specialProjects', profile.specialProjects.filter((_, idx) => idx !== i));
+  const updateProject = (i: number, field: keyof CvProjectEntry, value: string) =>
+    updateField(
+      'specialProjects',
+      profile.specialProjects.map((p, idx) => (idx === i ? { ...p, [field]: value } : p))
+    );
+
+  // Certifications
+  const addCertification = () =>
+    updateField('certifications', [...profile.certifications, { name: '', issuer: '', year: '' }]);
+  const removeCertification = (i: number) =>
+    updateField('certifications', profile.certifications.filter((_, idx) => idx !== i));
+  const updateCertification = (i: number, field: keyof CvCertificationEntry, value: string) =>
+    updateField(
+      'certifications',
+      profile.certifications.map((c, idx) => (idx === i ? { ...c, [field]: value } : c))
+    );
+
+  // ─── Submit Form ───────────────────────────────────────────────────────────
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeProfile) return;
+
+    setSaveError(null);
+    setIsSaving(true);
+
+    const skills = skillsRaw
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+
+    try {
+      let avatarUrl: string | undefined;
+      // Upload new image if selected
+      if (profileImageFile) {
+        const imgFormData = new FormData();
+        imgFormData.append('file', profileImageFile);
+        avatarUrl = await uploadProfilePictureAction(imgFormData);
+      }
+
+      const input: CreateEmployeeInput = {
+        name: profile.name,
+        email,
+        role: profile.currentPosition,
+        department,
+        skills,
+        cvExperience: profile.experience,
+        cvAcademic: profile.academic,
+        specialProjects: profile.specialProjects,
+        cvCertifications: profile.certifications,
+        avatarUrl, // Will be undefined if photo is not replaced
+      };
+
+      await updateEmployeeAction(activeProfile.rowId, input);
+      router.push('/repository');
+      router.refresh();
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to update employee profile.');
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <PageWrapper className="p-8">
+      {/* Page Header */}
+      <div className="mb-8">
+        <h2 className="text-3xl font-black tracking-tight text-slate-900 font-sans leading-none">
+          Update Profile
+        </h2>
+        <p className="text-sm font-medium text-slate-500 mt-2">
+          Select an employee profile to update their information, replace profile photo, or import a new CV.
+        </p>
+      </div>
+
+      {/* Select Employee Selector */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm mb-8 max-w-xl">
+        <FieldLabel>Select Employee Profile</FieldLabel>
+        <select
+          value={selectedCode}
+          onChange={(e) => setSelectedCode(e.target.value)}
+          className="w-full bg-slate-50 border border-slate-200/80 rounded-xl px-4 py-3.5 text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all text-slate-700"
+        >
+          <option value="">Choose an employee to update...</option>
+          {initialEmployees.map((emp) => (
+            <option key={emp.employeeCode} value={emp.employeeCode}>
+              {emp.name} ({emp.role}) - {emp.employeeCode}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {loadingProfile && (
+        <div className="flex justify-center py-16">
+          <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+        </div>
+      )}
+
+      {!loadingProfile && activeProfile && (
+        <div className="grid grid-cols-12 gap-8">
+          {/* Left Column - Image Upload & CV Upload */}
+          <div className="col-span-12 lg:col-span-5 flex flex-col gap-6">
+            {/* Photo upload */}
+            <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
+              <h4 className="font-sans text-xs font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
+                <UserCircle2 className="w-4 h-4 text-indigo-500" />
+                Profile Photo
+              </h4>
+
+              {profileImagePreview ? (
+                <div className="flex flex-col items-center gap-4">
+                  <div className="relative">
+                    <img
+                      src={profileImagePreview}
+                      alt="Profile preview"
+                      className="w-28 h-28 rounded-full object-cover border-4 border-indigo-100 shadow-md"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProfileImageFile(null);
+                        setProfileImagePreview(null);
+                        if (imageInputRef.current) imageInputRef.current.value = '';
+                      }}
+                      className="absolute -top-1 -right-1 w-6 h-6 bg-rose-500 text-white rounded-full flex items-center justify-center hover:bg-rose-600 transition-colors"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-indigo-600 font-semibold">
+                    Current photo displayed (click × to change)
+                  </p>
+                </div>
+              ) : (
+                <div
+                  onDragEnter={handleImageDrag}
+                  onDragOver={handleImageDrag}
+                  onDragLeave={() => setIsImageDragActive(false)}
+                  onDrop={handleImageDrop}
+                  onClick={() => imageInputRef.current?.click()}
+                  className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center text-center transition-all cursor-pointer ${
+                    isImageDragActive
+                      ? 'border-indigo-500 bg-indigo-50/30'
+                      : 'border-slate-300 hover:border-indigo-400 bg-slate-50/20 hover:bg-indigo-50/10'
+                  }`}
+                >
+                  <input
+                    ref={imageInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="hidden"
+                    onChange={handleImageInputChange}
+                  />
+                  <div className="w-12 h-12 rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center mb-3">
+                    <ImageIcon className="w-6 h-6" />
+                  </div>
+                  <p className="text-xs font-semibold text-slate-600">
+                    {isImageDragActive ? 'Drop photo here' : 'Drag & drop or click to replace photo'}
+                  </p>
+                  <p className="text-[10px] text-slate-400 mt-1">JPG, PNG, WEBP up to 5 MB</p>
+                </div>
+              )}
+
+              {imageUploadError && (
+                <p className="mt-2 text-[11px] text-rose-600 font-semibold flex items-center gap-1">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  {imageUploadError}
+                </p>
+              )}
+            </div>
+
+            {/* Optional New CV Upload */}
+            <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
+              <h4 className="font-sans text-xs font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
+                <CloudUpload className="w-4 h-4 text-indigo-500" />
+                Upload New CV (Optional)
+              </h4>
+              <p className="text-[11px] text-slate-400 leading-relaxed mb-4">
+                Uploading a new CV will parse its contents via Gemini AI and overwrite the form fields below. You can review and tweak the changes before saving.
+              </p>
+
+              <div
+                onDragEnter={handleCvDrag}
+                onDragOver={handleCvDrag}
+                onDragLeave={() => setIsCvDragActive(false)}
+                onDrop={handleCvDrop}
+                onClick={() => cvFileInputRef.current?.click()}
+                className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center text-center transition-all cursor-pointer min-h-[140px] ${
+                  isCvDragActive
+                    ? 'border-indigo-500 bg-indigo-50/30'
+                    : 'border-slate-300 hover:border-indigo-400 bg-slate-50/20 hover:bg-indigo-50/10'
+                }`}
+              >
+                <input
+                  ref={cvFileInputRef}
+                  type="file"
+                  onChange={handleCvFileChange}
+                  accept=".pdf,.docx,.txt"
+                  className="hidden"
+                />
+                <CloudUpload className="w-6 h-6 text-slate-400 mb-2 mx-auto" />
+                <span className="text-xs font-bold text-slate-600 block">
+                  {cvDroppedFile ? cvDroppedFile.name : 'Drag & drop new CV file'}
+                </span>
+                <span className="text-[10px] text-slate-400 mt-1 block">
+                  PDF, DOCX, TXT up to 10 MB
+                </span>
+              </div>
+
+              {cvDroppedFile && (
+                <div className="mt-4 p-3 border border-slate-150 rounded-xl bg-slate-50 flex items-center gap-2 text-xs font-semibold text-indigo-600">
+                  {cvStatus === 'extracting' || cvStatus === 'analyzing' ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : cvStatus === 'done' ? (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  ) : (
+                    <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                  )}
+                  <span>
+                    {cvStatus === 'extracting' && 'Extracting text...'}
+                    {cvStatus === 'analyzing' && 'Gemini AI parsing details...'}
+                    {cvStatus === 'done' && 'CV parsed successfully!'}
+                    {cvStatus === 'error' && (cvErrorMsg || 'Parsing failed.')}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* JSON preview */}
+            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setJsonPreviewOpen((o) => !o)}
+                className="w-full flex items-center justify-between px-5 py-4 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                <span className="flex items-center gap-2">
+                  <Layers className="w-4 h-4" />
+                  Profile Preview (JSON)
+                </span>
+                {jsonPreviewOpen ? (
+                  <ChevronUp className="w-4 h-4" />
+                ) : (
+                  <ChevronDown className="w-4 h-4" />
+                )}
+              </button>
+              {jsonPreviewOpen && (
+                <pre className="bg-slate-950 text-emerald-400 text-[10px] font-mono leading-relaxed px-5 py-4 overflow-auto max-h-[300px] whitespace-pre-wrap break-words">
+                  {JSON.stringify(profile, null, 2)}
+                </pre>
+              )}
+            </div>
+          </div>
+
+          {/* Right Column - Form */}
+          <div className="col-span-12 lg:col-span-7">
+            <form
+              onSubmit={handleSubmit}
+              className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col gap-8"
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <h4 className="font-sans text-xs font-black uppercase tracking-widest text-slate-400">
+                  Edit Candidate Information
+                </h4>
+              </div>
+
+              {/* Basic Info */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <FieldLabel>Full Name</FieldLabel>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Sarah Chen"
+                    value={profile.name}
+                    onChange={(e) => updateField('name', e.target.value)}
+                    className={INPUT_CLS}
+                  />
+                </div>
+                <div>
+                  <FieldLabel>Current Position</FieldLabel>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Senior Frontend Engineer"
+                    value={profile.currentPosition}
+                    onChange={(e) => updateField('currentPosition', e.target.value)}
+                    className={INPUT_CLS}
+                  />
+                </div>
+                <div>
+                  <FieldLabel>Work Email</FieldLabel>
+                  <input
+                    type="email"
+                    required
+                    placeholder="e.g. s.chen@corp.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className={INPUT_CLS}
+                  />
+                </div>
+                <div>
+                  <FieldLabel>Department</FieldLabel>
+                  <select
+                    value={department}
+                    onChange={(e) => setDepartment(e.target.value)}
+                    className={INPUT_CLS}
+                  >
+                    {departments.map((d) => (
+                      <option key={d.id} value={d.name}>
+                        {d.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="sm:col-span-2">
+                  <FieldLabel hint="Comma separated">Skills</FieldLabel>
+                  <input
+                    type="text"
+                    placeholder="e.g. React, TypeScript, Node.js"
+                    value={skillsRaw}
+                    onChange={(e) => setSkillsRaw(e.target.value)}
+                    className={INPUT_CLS}
+                  />
+                </div>
+              </div>
+
+              {/* Experience */}
+              <div>
+                <SectionTitle icon={Briefcase}>Work Experience</SectionTitle>
+                <div className="space-y-5">
+                  {profile.experience.map((exp, i) => (
+                    <div key={i} className="border border-slate-200 rounded-xl p-4 bg-slate-50/40 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-indigo-500">
+                          Position {i + 1}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeExperience(i)}
+                          className={`${GHOST_BTN} border-rose-200 text-rose-500 hover:bg-rose-50`}
+                        >
+                          <Minus className="w-3 h-3" /> Remove
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <FieldLabel>Position / Title</FieldLabel>
+                          <input
+                            type="text"
+                            placeholder="e.g. Software Engineer"
+                            value={exp.position}
+                            onChange={(e) => updateExperience(i, 'position', e.target.value)}
+                            className={INPUT_CLS}
+                          />
+                        </div>
+                        <div>
+                          <FieldLabel>Company</FieldLabel>
+                          <input
+                            type="text"
+                            placeholder="e.g. Google"
+                            value={exp.company}
+                            onChange={(e) => updateExperience(i, 'company', e.target.value)}
+                            className={INPUT_CLS}
+                          />
+                        </div>
+                        <div>
+                          <FieldLabel>Period</FieldLabel>
+                          <input
+                            type="text"
+                            placeholder="e.g. Jan 2020 – Present"
+                            value={exp.period}
+                            onChange={(e) => updateExperience(i, 'period', e.target.value)}
+                            className={INPUT_CLS}
+                          />
+                        </div>
+                      </div>
+                      {/* Tasks */}
+                      <div>
+                        <FieldLabel hint={`${exp.tasks.length} task(s)`}>Responsibilities / Achievements</FieldLabel>
+                        <div className="space-y-2">
+                          {exp.tasks.map((task, ti) => (
+                            <div key={ti} className="flex items-start gap-2">
+                              <span className="text-indigo-400 mt-2.5 text-[10px] font-black shrink-0">▸</span>
+                              <input
+                                type="text"
+                                value={task}
+                                placeholder="e.g. Led a team of 5 engineers…"
+                                onChange={(e) => updateTask(i, ti, e.target.value)}
+                                className={INPUT_CLS + ' flex-1'}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => removeTask(i, ti)}
+                                disabled={exp.tasks.length <= 1}
+                                className="mt-1.5 p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-colors disabled:opacity-30"
+                              >
+                                <Minus className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => addTask(i)}
+                            className={`${GHOST_BTN} border-indigo-200 text-indigo-500 hover:bg-indigo-50 mt-1`}
+                          >
+                            <Plus className="w-3 h-3" /> Add Task
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={addExperience}
+                    className={`${GHOST_BTN} border-slate-300 text-slate-500 hover:bg-slate-50`}
+                  >
+                    <Plus className="w-3 h-3" /> Add Experience
+                  </button>
+                </div>
+              </div>
+
+              {/* Academic */}
+              <div>
+                <SectionTitle icon={GraduationCap}>Academic History</SectionTitle>
+                <div className="space-y-3">
+                  {profile.academic.map((acad, i) => (
+                    <div key={i} className="border border-slate-200 rounded-xl p-4 bg-slate-50/40 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-violet-500">
+                          Entry {i + 1}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeAcademic(i)}
+                          className={`${GHOST_BTN} border-rose-200 text-rose-500 hover:bg-rose-50`}
+                        >
+                          <Minus className="w-3 h-3" /> Remove
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="sm:col-span-1">
+                          <FieldLabel>Qualification</FieldLabel>
+                          <input
+                            type="text"
+                            placeholder="e.g. B.Sc. Computer Science"
+                            value={acad.qualification}
+                            onChange={(e) => updateAcademic(i, 'qualification', e.target.value)}
+                            className={INPUT_CLS}
+                          />
+                        </div>
+                        <div className="sm:col-span-1">
+                          <FieldLabel>Institution</FieldLabel>
+                          <input
+                            type="text"
+                            placeholder="e.g. MIT"
+                            value={acad.institution}
+                            onChange={(e) => updateAcademic(i, 'institution', e.target.value)}
+                            className={INPUT_CLS}
+                          />
+                        </div>
+                        <div>
+                          <FieldLabel>Period</FieldLabel>
+                          <input
+                            type="text"
+                            placeholder="e.g. 2014 – 2018"
+                            value={acad.period}
+                            onChange={(e) => updateAcademic(i, 'period', e.target.value)}
+                            className={INPUT_CLS}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={addAcademic}
+                    className={`${GHOST_BTN} border-slate-300 text-slate-500 hover:bg-slate-50`}
+                  >
+                    <Plus className="w-3 h-3" /> Add Academic Entry
+                  </button>
+                </div>
+              </div>
+
+              {/* Special Projects */}
+              <div>
+                <SectionTitle icon={Layers}>Special Projects</SectionTitle>
+                <div className="space-y-3">
+                  {profile.specialProjects.map((proj, i) => (
+                    <div key={i} className="border border-slate-200 rounded-xl p-4 bg-slate-50/40 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-sky-500">
+                          Project {i + 1}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeProject(i)}
+                          className={`${GHOST_BTN} border-rose-200 text-rose-500 hover:bg-rose-50`}
+                        >
+                          <Minus className="w-3 h-3" /> Remove
+                        </button>
+                      </div>
+                      <div>
+                        <FieldLabel>Project Title</FieldLabel>
+                        <input
+                          type="text"
+                          placeholder="e.g. AI-Powered Recommendation Engine"
+                          value={proj.title}
+                          onChange={(e) => updateProject(i, 'title', e.target.value)}
+                          className={INPUT_CLS}
+                        />
+                      </div>
+                      <div>
+                        <FieldLabel>Brief Description</FieldLabel>
+                        <textarea
+                          rows={2}
+                          placeholder="e.g. Built a real-time product recommendation system using collaborative filtering…"
+                          value={proj.brief}
+                          onChange={(e) => updateProject(i, 'brief', e.target.value)}
+                          className={TEXTAREA_CLS}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={addProject}
+                    className={`${GHOST_BTN} border-slate-300 text-slate-500 hover:bg-slate-50`}
+                  >
+                    <Plus className="w-3 h-3" /> Add Project
+                  </button>
+                </div>
+              </div>
+
+              {/* Certifications */}
+              <div>
+                <SectionTitle icon={Award}>Certifications</SectionTitle>
+                <div className="space-y-3">
+                  {profile.certifications.map((cert, i) => (
+                    <div key={i} className="border border-slate-200 rounded-xl p-4 bg-slate-50/40 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-amber-500">
+                          Cert {i + 1}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeCertification(i)}
+                          className={`${GHOST_BTN} border-rose-200 text-rose-500 hover:bg-rose-50`}
+                        >
+                          <Minus className="w-3 h-3" /> Remove
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="sm:col-span-1">
+                          <FieldLabel>Certification Name</FieldLabel>
+                          <input
+                            type="text"
+                            placeholder="e.g. AWS Certified Solutions Architect"
+                            value={cert.name}
+                            onChange={(e) => updateCertification(i, 'name', e.target.value)}
+                            className={INPUT_CLS}
+                          />
+                        </div>
+                        <div>
+                          <FieldLabel>Issuer</FieldLabel>
+                          <input
+                            type="text"
+                            placeholder="e.g. Amazon Web Services"
+                            value={cert.issuer}
+                            onChange={(e) => updateCertification(i, 'issuer', e.target.value)}
+                            className={INPUT_CLS}
+                          />
+                        </div>
+                        <div>
+                          <FieldLabel>Year</FieldLabel>
+                          <input
+                            type="text"
+                            placeholder="e.g. 2023"
+                            value={cert.year}
+                            onChange={(e) => updateCertification(i, 'year', e.target.value)}
+                            className={INPUT_CLS}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={addCertification}
+                    className={`${GHOST_BTN} border-slate-300 text-slate-500 hover:bg-slate-50`}
+                  >
+                    <Plus className="w-3 h-3" /> Add Certification
+                  </button>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="pt-4 border-t border-slate-100">
+                {saveError && (
+                  <div className="mb-4 flex items-center gap-2 text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200/60 rounded-lg px-3 py-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    {saveError}
+                  </div>
+                )}
+                <div className="flex items-center justify-end">
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-sans text-xs font-black uppercase tracking-wider px-6 py-3.5 rounded-xl shadow-md shadow-indigo-600/10 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Saving...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4" />
+                        <span>Save Changes</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </PageWrapper>
+  );
+}

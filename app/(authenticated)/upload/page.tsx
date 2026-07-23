@@ -387,11 +387,10 @@ export default function UploadPage() {
       {/* Page Header */}
       <div className="mb-8">
         <h2 className="text-3xl font-black tracking-tight text-slate-900 font-sans leading-none">
-          Upload Employee CV
+          Create Profile
         </h2>
         <p className="text-sm font-medium text-slate-500 mt-2">
-          Import new candidates or staff CVs. Gemini AI automatically structures experiences,
-          academic history, projects, certifications and skills.
+          Create a new employee profile by uploading their CV and profile photo. Gemini AI automatically extracts and structures experiences, academic history, projects, certifications, and skills.
         </p>
       </div>
 
@@ -493,7 +492,7 @@ export default function UploadPage() {
             <h4 className="font-sans text-xs font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
               <UserCircle2 className="w-4 h-4 text-indigo-500" />
               Profile Photo
-              <span className="font-normal normal-case tracking-normal text-slate-400">(optional)</span>
+              <span className="text-rose-500 font-bold normal-case tracking-normal font-sans text-[10px] bg-rose-50 border border-rose-100/60 px-2 py-0.5 rounded-full ml-1">Required</span>
             </h4>
 
             {profileImagePreview ? (
@@ -967,17 +966,18 @@ export default function UploadPage() {
 
                 <button
                   type="submit"
-                  disabled={status !== 'done' || isSubmitting}
+                  disabled={status !== 'done' || !profileImageFile || isSubmitting}
                   className="bg-indigo-600 hover:bg-indigo-700 text-white font-sans text-xs font-black uppercase tracking-wider px-6 py-3.5 rounded-xl shadow-md shadow-indigo-600/10 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                  title={!profileImageFile ? "Profile Photo is required" : status !== 'done' ? "Please upload and parse a CV document first" : "Create Profile"}
                 >
                   {isSubmitting ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Importing…</span>
+                      <span>Creating Profile…</span>
                     </>
                   ) : (
                     <>
-                      <span>Import to Repository</span>
+                      <span>Create Profile</span>
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}

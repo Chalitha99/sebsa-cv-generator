@@ -339,7 +339,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
           <BrainCircuit className="w-10 h-10 text-slate-300 mb-4" />
           <h5 className="text-sm font-bold text-slate-700">No employee profiles found</h5>
           <p className="text-xs text-slate-400 mt-1 max-w-sm leading-relaxed">
-            Upload at least one candidate CV from the Upload page first.
+            Create at least one employee profile from the Create Profile page first.
           </p>
         </div>
       </PageWrapper>
@@ -352,7 +352,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
       <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-3xl font-black tracking-tight text-slate-900 font-sans leading-none">
-            Customer CV Generation
+            Customize CVs
           </h2>
           <p className="text-sm font-medium text-slate-500 mt-2">
             Tailor, customize, and export high-fidelity CVs aligned perfectly to customer opportunity requirements.

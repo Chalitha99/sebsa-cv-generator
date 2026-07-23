@@ -4,6 +4,7 @@ import {
   deleteEmployeeRow,
   getEmployeeRowByCode,
   listEmployeeRows,
+  updateEmployeeRow,
 } from '@/repositories/employee-repository';
 import type {
   CreateEmployeeInput,
@@ -12,9 +13,7 @@ import type {
   EmployeeProject,
 } from '@/types/domain';
 import type { CvAcademicEntry, CvExperienceEntry, CvProjectEntry, CvCertificationEntry } from '@/lib/cvTypes';
-
-const DEFAULT_AVATAR =
-  'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=120';
+import { getSignedAvatarUrl, DEFAULT_AVATAR } from '@/lib/avatar';
 
 function formatDate(value: string | null | undefined): string {
   if (!value) return '';
@@ -64,7 +63,13 @@ function tryParseJson<T>(value: string | null | undefined): T | null {
 
 export async function listEmployees(supabase: SupabaseClient): Promise<Employee[]> {
   const rows = await listEmployeeRows(supabase);
-  return rows.map(mapListRow);
+  const mapped = rows.map(mapListRow);
+  await Promise.all(
+    mapped.map(async (emp) => {
+      emp.avatar = await getSignedAvatarUrl(supabase, emp.avatar);
+    })
+  );
+  return mapped;
 }
 
 export async function getEmployeeByCode(
@@ -150,7 +155,7 @@ export async function getEmployeeByCode(
   // Legacy plain-text education field (non-JSON)
   const educationText = cvAcademic.length === 0 ? (rawEducation ?? undefined) : undefined;
 
-  return {
+  const emp = {
     ...mapListRow(row),
     experience: experience.length > 0 ? experience : undefined,
     projects: projects.length > 0 ? projects : undefined,
@@ -163,6 +168,8 @@ export async function getEmployeeByCode(
     cvAcademic: cvAcademic.length > 0 ? cvAcademic : undefined,
     currentPosition: (row as any).role_title ?? undefined,
   };
+  emp.avatar = await getSignedAvatarUrl(supabase, emp.avatar);
+  return emp;
 }
 
 export async function createEmployee(
@@ -175,4 +182,13 @@ export async function createEmployee(
 
 export async function deleteEmployee(supabase: SupabaseClient, rowId: string): Promise<void> {
   await deleteEmployeeRow(supabase, rowId);
+}
+
+export async function updateEmployee(
+  supabase: SupabaseClient,
+  profileId: string,
+  input: CreateEmployeeInput,
+  updatedBy: string
+): Promise<void> {
+  await updateEmployeeRow(supabase, profileId, input, updatedBy);
 }

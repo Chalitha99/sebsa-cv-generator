@@ -250,3 +250,73 @@ export async function deleteEmployeeRow(supabase: SupabaseClient, rowId: string)
   const { error } = await supabase.from('profiles').delete().eq('id', rowId);
   if (error) throw error;
 }
+
+export async function updateEmployeeRow(
+  supabase: SupabaseClient,
+  profileId: string,
+  input: CreateEmployeeInput,
+  updatedBy: string
+): Promise<void> {
+  const { data: dept } = await supabase
+    .from('departments')
+    .select('id')
+    .eq('name', input.department)
+    .maybeSingle();
+
+  // Serialise academic entries as JSON into the profiles.education text column
+  const educationJson = input.cvAcademic && input.cvAcademic.length > 0
+    ? JSON.stringify(input.cvAcademic)
+    : null;
+
+  const updateFields: any = {
+    full_name: input.name,
+    email: input.email,
+    role_title: input.currentPosition ?? input.role,
+    department_id: dept?.id ?? null,
+    education: educationJson,
+    updated_by: updatedBy,
+    updated_at: new Date().toISOString(),
+  };
+
+  // Only update avatar_url if a new one was uploaded
+  if (input.avatarUrl !== undefined && input.avatarUrl !== null) {
+    updateFields.avatar_url = input.avatarUrl;
+  }
+
+  const { error: profileError } = await supabase
+    .from('profiles')
+    .update(updateFields)
+    .eq('id', profileId);
+
+  if (profileError) throw profileError;
+
+  // Clear existing related records
+  const { error: clearExpError } = await supabase.from('experiences').delete().eq('profile_id', profileId);
+  if (clearExpError) throw clearExpError;
+
+  const { error: clearProjError } = await supabase.from('projects').delete().eq('profile_id', profileId);
+  if (clearProjError) throw clearProjError;
+
+  const { error: clearCertError } = await supabase.from('certifications').delete().eq('profile_id', profileId);
+  if (clearCertError) throw clearCertError;
+
+  const { error: clearSkillError } = await supabase.from('profile_skills').delete().eq('profile_id', profileId);
+  if (clearSkillError) throw clearSkillError;
+
+  // Insert new related records
+  if (input.cvExperience && input.cvExperience.length > 0) {
+    await insertExperiences(supabase, profileId, input.cvExperience);
+  }
+
+  if (input.specialProjects && input.specialProjects.length > 0) {
+    await insertProjects(supabase, profileId, input.specialProjects);
+  }
+
+  if (input.cvCertifications && input.cvCertifications.length > 0) {
+    await insertCertifications(supabase, profileId, input.cvCertifications);
+  }
+
+  if (input.skills.length > 0) {
+    await linkSkills(supabase, profileId, input.skills);
+  }
+}
