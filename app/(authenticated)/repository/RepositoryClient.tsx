@@ -99,10 +99,8 @@ export default function RepositoryClient({ employees }: RepositoryClientProps) {
     router.push(`/repository/${cleanId}`);
   };
 
-  // Resolve avatar image regardless of whether the record stores it as
-  // `avatar_url` (from the DB / profiles table) or the legacy `avatar` field.
-  const getAvatarSrc = (emp: Employee) =>
-    (emp as Employee & { avatar_url?: string }).avatar_url || emp.avatar;
+  // Resolve avatar image
+  const getAvatarSrc = (emp: Employee) => emp.avatar;
 
   return (
     <PageWrapper className="p-8">

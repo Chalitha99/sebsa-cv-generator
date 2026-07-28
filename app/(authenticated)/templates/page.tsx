@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { PageWrapper } from '../../components/PageWrapper';
 import { createClient } from '@/lib/supabase/client';
+import DocxPreview from '../generate/DocxPreview';
 import {
   listTemplatesAction,
   uploadTemplateAction,
@@ -16,6 +17,8 @@ import {
   AlertCircle,
   UploadCloud,
   FileCode,
+  Eye,
+  X,
 } from 'lucide-react';
 
 interface Template {
@@ -38,6 +41,10 @@ export default function TemplatesPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
+
+  // Preview State
+  const [selectedPreviewTemplateId, setSelectedPreviewTemplateId] = useState<string | null>(null);
+  const [selectedPreviewTemplateName, setSelectedPreviewTemplateName] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -299,15 +306,27 @@ export default function TemplatesPage() {
 
                     <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400 font-semibold">
                       <span>Uploaded {new Date(template.createdAt).toLocaleDateString()}</span>
-                      {isAdmin && (
+                      <div className="flex items-center gap-1.5">
                         <button
-                          onClick={() => handleDelete(template.id)}
-                          className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 p-1.5 rounded transition-colors"
-                          title="Delete Template"
+                          onClick={() => {
+                            setSelectedPreviewTemplateId(template.id);
+                            setSelectedPreviewTemplateName(template.name);
+                          }}
+                          className="text-indigo-650 hover:text-indigo-850 hover:bg-indigo-50 p-1.5 rounded transition-colors cursor-pointer"
+                          title="Preview Template"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Eye className="w-3.5 h-3.5" />
                         </button>
-                      )}
+                        {isAdmin && (
+                          <button
+                            onClick={() => handleDelete(template.id)}
+                            className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 p-1.5 rounded transition-colors cursor-pointer"
+                            title="Delete Template"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -316,6 +335,39 @@ export default function TemplatesPage() {
           </div>
         </div>
       </div>
+
+      {/* Document Preview Modal */}
+      {selectedPreviewTemplateId && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-6">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div>
+                <h4 className="text-sm font-black text-slate-800">
+                  Preview Template: {selectedPreviewTemplateName}
+                </h4>
+                <p className="text-[11px] text-slate-450 font-medium mt-0.5">
+                  Faithfully rendering the original DOCX layout.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setSelectedPreviewTemplateId(null);
+                  setSelectedPreviewTemplateName(null);
+                }}
+                className="p-1.5 hover:bg-slate-200/65 rounded-lg text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto bg-slate-100 flex-1 flex justify-center custom-scrollbar">
+              <DocxPreview
+                templateId={selectedPreviewTemplateId}
+                className="min-h-[500px]"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </PageWrapper>
   );
 }

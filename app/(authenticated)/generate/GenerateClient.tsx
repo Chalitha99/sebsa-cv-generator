@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, Suspense } from 'react';
+import DocxPreview from './DocxPreview';
 import { useSearchParams } from 'next/navigation';
 import { useData } from '../../context/DataContext';
 import { PageWrapper } from '../../components/PageWrapper';
@@ -22,17 +23,12 @@ import {
   Download,
   FolderSync,
   RefreshCw,
-  Cpu,
-  CheckCircle2,
-  FileCheck2,
   BookmarkCheck,
-  Eye,
   Loader2,
   Send,
   User,
   Bot,
   AlertCircle,
-  FileText
 } from 'lucide-react';
 
 interface Template {
@@ -94,8 +90,6 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
 
   // Current Tailored CV output
   const [tailoredCv, setTailoredCv] = useState<TailoredCv | null>(null);
-  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
 
   // Find currently selected employee object
   const selectedEmployee = useMemo(() => {
@@ -158,33 +152,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
     checkSavedCv();
   }, [selectedEmployee, selectedTemplateId]);
 
-  // Helper to fetch template preview HTML
-  const updatePreview = async (cv: TailoredCv, templateId: string) => {
-    if (!cv || !templateId) return;
-    try {
-      setPreviewLoading(true);
-      const res = await fetch('/api/templates/preview', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          templateId,
-          tailoredCv: cv,
-          avatarUrl: selectedEmployee?.avatar || null,
-        }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setPreviewHtml(data.html);
-      } else {
-        const errData = await res.json();
-        console.error('Failed to generate template preview:', errData.error);
-      }
-    } catch (err) {
-      console.error('Error fetching preview:', err);
-    } finally {
-      setPreviewLoading(false);
-    }
-  };
+  // Preview is now handled client-side by <DocxPreview> using the raw DOCX blob.
 
   // Initial Customization Action (goes to step 2)
   const handleInitialGenerate = async (e: React.FormEvent) => {
@@ -208,7 +176,6 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
             content: `Loaded previously saved CV draft from database for ${selectedEmployee.name}. You can refine it further or request changes.`
           }
         ]);
-        await updatePreview(savedCvContent, selectedTemplateId);
       } else {
         // Generate new using Gemini
         const tailored = await customizeCvAction(
@@ -225,7 +192,6 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
             content: `Initial resume draft generated for ${selectedEmployee.name} aligned with ${customerName}. You can ask me to modify sections, highlight specific work, or reframe skills below.`
           }
         ]);
-        await updatePreview(tailored, selectedTemplateId);
 
         // Auto save to database
         await saveGeneratedCvAction(selectedEmployee.rowId, selectedTemplateId, tailored);
@@ -278,7 +244,6 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
           content: `Customization applied: ${userMessage}. Summary, competencies, and project history adjusted to prioritize this instruction.`
         }
       ]);
-      await updatePreview(tailored, selectedTemplateId);
 
       // Auto save updated draft to DB
       await saveGeneratedCvAction(selectedEmployee.rowId, selectedTemplateId, tailored);
@@ -651,28 +616,13 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
             </div>
           </div>
 
-          {/* Right Live Preview Box */}
+          {/* Right Live Preview Box — rendered client-side via docx-preview */}
           <div className="col-span-12 lg:col-span-7 flex flex-col">
-            <div className="bg-slate-100 p-5 rounded-2xl border border-slate-200/80 flex items-center justify-center min-h-[480px] max-h-[600px] overflow-y-auto">
-              {previewLoading ? (
-                <div className="text-center text-xs text-slate-400 flex flex-col items-center">
-                  <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mb-2" />
-                  <span>Compiling dynamic template formatting...</span>
-                </div>
-              ) : previewHtml ? (
-                <div className="scale-[0.8] origin-top my-4 shadow-lg w-full">
-                  <div
-                    id="cv-preview-root"
-                    className="w-full max-w-[800px] mx-auto bg-white border border-slate-200 shadow-xl rounded-xl font-sans text-slate-800 leading-relaxed text-sm select-text p-8"
-                    style={{ minHeight: '1120px' }}
-                    dangerouslySetInnerHTML={{ __html: previewHtml }}
-                  />
-                </div>
-              ) : (
-                <div className="text-center text-xs text-slate-450">
-                  <span>No preview compiled. Please check template variables.</span>
-                </div>
-              )}
+            <div className="bg-slate-100 p-3 rounded-2xl border border-slate-200/80 min-h-[480px] max-h-[600px] overflow-y-auto">
+              <DocxPreview
+                templateId={selectedTemplateId || null}
+                className="min-h-[440px]"
+              />
             </div>
           </div>
         </div>
@@ -723,24 +673,12 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
             </div>
           </div>
 
-          {/* Full-width editable preview */}
-          <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200/80 shadow-inner flex justify-center">
-            {previewLoading ? (
-              <div className="flex items-center justify-center p-20 min-h-[400px]">
-                <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
-              </div>
-            ) : previewHtml ? (
-              <div
-                id="cv-preview-root"
-                className="w-full max-w-[800px] bg-white border border-slate-250 shadow-xl rounded-xl font-sans text-slate-800 leading-relaxed text-sm select-text p-8"
-                style={{ minHeight: '1120px' }}
-                dangerouslySetInnerHTML={{ __html: previewHtml }}
-              />
-            ) : (
-              <div className="p-12 text-slate-400 bg-white border rounded-xl w-full text-center">
-                No preview HTML generated.
-              </div>
-            )}
+          {/* Full-width preview rendered client-side via docx-preview */}
+          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 shadow-inner">
+            <DocxPreview
+              templateId={selectedTemplateId || null}
+              className="min-h-[600px]"
+            />
           </div>
         </div>
       )}
