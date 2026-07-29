@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import DocxPreview from './DocxPreview';
+import GeneratedCvPreview from './GeneratedCvPreview';
 import { useSearchParams } from 'next/navigation';
 import { useData } from '../../context/DataContext';
 import { PageWrapper } from '../../components/PageWrapper';
@@ -152,7 +153,8 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
     checkSavedCv();
   }, [selectedEmployee, selectedTemplateId]);
 
-  // Preview is now handled client-side by <DocxPreview> using the raw DOCX blob.
+  // Preview is handled by <DocxPreview> which uses Microsoft Office Online Viewer
+  // with a signed URL from Supabase Storage (10-minute expiry).
 
   // Initial Customization Action (goes to step 2)
   const handleInitialGenerate = async (e: React.FormEvent) => {
@@ -616,7 +618,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
             </div>
           </div>
 
-          {/* Right Live Preview Box — rendered client-side via docx-preview */}
+          {/* Right: Template layout reference (raw template, not filled) */}
           <div className="col-span-12 lg:col-span-7 flex flex-col">
             <div className="bg-slate-100 p-3 rounded-2xl border border-slate-200/80 min-h-[480px] max-h-[600px] overflow-y-auto">
               <DocxPreview
@@ -673,10 +675,12 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
             </div>
           </div>
 
-          {/* Full-width preview rendered client-side via docx-preview */}
+          {/* Full-width customized CV preview — shows AI-generated content filled into the template */}
           <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 shadow-inner">
-            <DocxPreview
+            <GeneratedCvPreview
               templateId={selectedTemplateId || null}
+              tailoredCv={tailoredCv}
+              avatarUrl={selectedEmployee?.avatar ?? null}
               className="min-h-[600px]"
             />
           </div>

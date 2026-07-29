@@ -6,8 +6,8 @@ import { getTemplateById } from '@/services/template-service';
  * GET /api/templates/raw?templateId=<id>
  *
  * Returns the raw DOCX file from Supabase Storage as an octet-stream blob.
- * This is used by the client-side docx-preview renderer to display the
- * original template faithfully without any placeholder parsing.
+ * Used as a download fallback in the DocxPreview error/footer UI so users
+ * can directly download the original template file.
  */
 export async function GET(request: Request) {
   try {
