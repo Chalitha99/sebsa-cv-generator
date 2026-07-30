@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, Suspense } from 'react';
-import DocxPreview from './DocxPreview';
 import GeneratedCvPreview from './GeneratedCvPreview';
+import CvSectionEditor from './CvSectionEditor';
 import { useSearchParams } from 'next/navigation';
 import { useData } from '../../context/DataContext';
 import { PageWrapper } from '../../components/PageWrapper';
@@ -11,8 +11,7 @@ import type { TailoredCv } from './types';
 import {
   customizeCvAction,
   listTemplatesAction,
-  getSavedGeneratedCvAction,
-  saveGeneratedCvAction
+  saveGeneratedCvAction,
 } from './actions';
 import { exportToPdf } from '@/lib/cvExport';
 import {
@@ -23,13 +22,9 @@ import {
   ChevronLeft,
   Download,
   FolderSync,
-  RefreshCw,
-  BookmarkCheck,
   Loader2,
-  Send,
-  User,
-  Bot,
   AlertCircle,
+  CheckCircle2,
 } from 'lucide-react';
 
 interface Template {
@@ -46,11 +41,13 @@ interface GenerateClientProps {
 
 export default function GenerateClient({ employees }: GenerateClientProps) {
   return (
-    <Suspense fallback={
-      <div className="p-8 flex items-center justify-center min-h-screen">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-650" />
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="p-8 flex items-center justify-center min-h-screen">
+          <Loader2 className="w-8 h-8 animate-spin text-indigo-650" />
+        </div>
+      }
+    >
       <GeneratePageContent employees={employees} />
     </Suspense>
   );
@@ -59,54 +56,57 @@ export default function GenerateClient({ employees }: GenerateClientProps) {
 function GeneratePageContent({ employees }: GenerateClientProps) {
   const { addActivity } = useData();
   const searchParams = useSearchParams();
-
-  // Selected candidate from query params if any
   const preselectedName = searchParams ? searchParams.get('name') : '';
 
-  // Pipeline Wizard Steps: 1 = Configure, 2 = Customize Chat, 3 = Preview & Edit
+  // ── Wizard step ─────────────────────────────────────────────────────────────
+  // 1 = Parameters, 2 = Review & Edit, 3 = Preview & Export
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1);
 
-  // Form State
+  // ── Step 1 form state ───────────────────────────────────────────────────────
   const [customerName, setCustomerName] = useState('Acme Corp — Lead Architect Initiative');
   const [selectedCandidateId, setSelectedCandidateId] = useState('');
-  const [requiredSkills, setRequiredSkills] = useState('Kubernetes, Go, AWS Cloud Services, Terraform Architecture');
-  const [preferredExp, setPreferredExp] = useState('At least 6 years orchestrating large-scale financial microservices and leading infrastructure transformations.');
-  const [creativity, setCreativity] = useState(70);
+  const [requiredSkills, setRequiredSkills] = useState(
+    'Kubernetes, Go, AWS Cloud Services, Terraform Architecture'
+  );
+  const [preferredExp, setPreferredExp] = useState(
+    'At least 6 years orchestrating large-scale financial microservices and leading infrastructure transformations.'
+  );
 
-  // DOCX Templates state
+  // ── Template state ──────────────────────────────────────────────────────────
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [templatesLoading, setTemplatesLoading] = useState(true);
 
-  // Saved CV State for selected employee + template
-  const [hasSavedCv, setHasSavedCv] = useState(false);
-  const [savedCvContent, setSavedCvContent] = useState<TailoredCv | null>(null);
-  const [useSavedCv, setUseSavedCv] = useState(true);
-
-  // Chat refinement state
-  const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
-  const [chatInput, setChatInput] = useState('');
+  // ── Generation state ────────────────────────────────────────────────────────
   const [customizingLoading, setCustomizingLoading] = useState(false);
   const [customizingError, setCustomizingError] = useState<string | null>(null);
 
-  // Current Tailored CV output
+  // ── CV content state ────────────────────────────────────────────────────────
   const [tailoredCv, setTailoredCv] = useState<TailoredCv | null>(null);
 
-  // Find currently selected employee object
-  const selectedEmployee = useMemo(() => {
-    return employees.find((emp) => emp.id === selectedCandidateId) || employees[0];
-  }, [employees, selectedCandidateId]);
+  // ── Save state ──────────────────────────────────────────────────────────────
+  const [saving, setSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
-  // Load Templates
+  // ── Derived ─────────────────────────────────────────────────────────────────
+  const selectedEmployee = useMemo(
+    () => employees.find((emp) => emp.id === selectedCandidateId) || employees[0],
+    [employees, selectedCandidateId]
+  );
+
+  const selectedTemplate = useMemo(
+    () => templates.find((t) => t.id === selectedTemplateId) || null,
+    [templates, selectedTemplateId]
+  );
+
+  // ── Load templates on mount ─────────────────────────────────────────────────
   useEffect(() => {
     const fetchTemplates = async () => {
       try {
         setTemplatesLoading(true);
         const list = await listTemplatesAction();
         setTemplates(list);
-        if (list.length > 0) {
-          setSelectedTemplateId(list[0].id);
-        }
+        if (list.length > 0) setSelectedTemplateId(list[0].id);
       } catch (err) {
         console.error('Failed to load templates:', err);
       } finally {
@@ -116,48 +116,27 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
     fetchTemplates();
   }, []);
 
-  // Set default selection based on query params or fallback
+  // ── Pre-select employee from query param ────────────────────────────────────
   useEffect(() => {
-    if (employees.length > 0) {
-      const match = employees.find((emp) => emp.name.toLowerCase() === preselectedName?.toLowerCase());
-      if (match) {
-        setSelectedCandidateId(match.id);
-      } else {
-        const alex = employees.find((emp) => emp.name.includes('Alexander'));
-        setSelectedCandidateId(alex ? alex.id : employees[0].id);
-      }
+    if (employees.length === 0) return;
+    const match = employees.find(
+      (emp) => emp.name.toLowerCase() === preselectedName?.toLowerCase()
+    );
+    if (match) {
+      setSelectedCandidateId(match.id);
+    } else {
+      const alex = employees.find((emp) => emp.name.includes('Alexander'));
+      setSelectedCandidateId(alex ? alex.id : employees[0].id);
     }
   }, [employees, preselectedName]);
 
-  // Load saved CV from database if available
-  useEffect(() => {
-    if (!selectedEmployee || !selectedTemplateId) return;
+  // ── Handlers ────────────────────────────────────────────────────────────────
 
-    const checkSavedCv = async () => {
-      try {
-        const saved = await getSavedGeneratedCvAction(selectedEmployee.rowId, selectedTemplateId);
-        if (saved) {
-          setHasSavedCv(true);
-          setSavedCvContent(saved as TailoredCv);
-          setUseSavedCv(true);
-        } else {
-          setHasSavedCv(false);
-          setSavedCvContent(null);
-          setUseSavedCv(false);
-        }
-      } catch (err) {
-        console.error('Error checking saved CV:', err);
-      }
-    };
-
-    checkSavedCv();
-  }, [selectedEmployee, selectedTemplateId]);
-
-  // Preview is handled by <DocxPreview> which uses Microsoft Office Online Viewer
-  // with a signed URL from Supabase Storage (10-minute expiry).
-
-  // Initial Customization Action (goes to step 2)
-  const handleInitialGenerate = async (e: React.FormEvent) => {
+  /**
+   * Always generates a completely fresh CV from Gemini using the current
+   * employee profile and customer requirements. No saved draft is used.
+   */
+  const handleCustomize = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTemplateId) {
       alert('Please upload and select a DOCX template first.');
@@ -166,68 +145,9 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
 
     setCustomizingLoading(true);
     setCustomizingError(null);
+    setSaveSuccess(false);
+    setTailoredCv(null);
     setWizardStep(2);
-
-    try {
-      if (useSavedCv && savedCvContent) {
-        // Load saved draft from DB
-        setTailoredCv(savedCvContent);
-        setChatHistory([
-          {
-            role: 'assistant',
-            content: `Loaded previously saved CV draft from database for ${selectedEmployee.name}. You can refine it further or request changes.`
-          }
-        ]);
-      } else {
-        // Generate new using Gemini
-        const tailored = await customizeCvAction(
-          selectedEmployee,
-          customerName,
-          requiredSkills,
-          preferredExp,
-          []
-        );
-        setTailoredCv(tailored);
-        setChatHistory([
-          {
-            role: 'assistant',
-            content: `Initial resume draft generated for ${selectedEmployee.name} aligned with ${customerName}. You can ask me to modify sections, highlight specific work, or reframe skills below.`
-          }
-        ]);
-
-        // Auto save to database
-        await saveGeneratedCvAction(selectedEmployee.rowId, selectedTemplateId, tailored);
-
-        // Log generation activity
-        addActivity({
-          type: 'success',
-          title: 'Customized CV Compiled',
-          desc: `AI tailored CV for ${selectedEmployee.name} aligned with ${customerName}.`,
-          status: '96% FIT',
-          user: {
-            name: selectedEmployee.name,
-            avatar: selectedEmployee.avatar,
-          },
-        });
-      }
-    } catch (err) {
-      setCustomizingError(err instanceof Error ? err.message : 'AI Customization failed. Please check setup.');
-    } finally {
-      setCustomizingLoading(false);
-    }
-  };
-
-  // Refine chat instruction
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!chatInput.trim() || customizingLoading || !tailoredCv || !selectedTemplateId) return;
-
-    const userMessage = chatInput.trim();
-    const updatedHistory = [...chatHistory, { role: 'user' as const, content: userMessage }];
-    setChatHistory(updatedHistory);
-    setChatInput('');
-    setCustomizingLoading(true);
-    setCustomizingError(null);
 
     try {
       const tailored = await customizeCvAction(
@@ -235,34 +155,56 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
         customerName,
         requiredSkills,
         preferredExp,
-        updatedHistory,
-        userMessage
+        [] // Always empty — fresh generation every time
       );
       setTailoredCv(tailored);
-      setChatHistory([
-        ...updatedHistory,
-        {
-          role: 'assistant',
-          content: `Customization applied: ${userMessage}. Summary, competencies, and project history adjusted to prioritize this instruction.`
-        }
-      ]);
 
-      // Auto save updated draft to DB
-      await saveGeneratedCvAction(selectedEmployee.rowId, selectedTemplateId, tailored);
+      addActivity({
+        type: 'success',
+        title: 'Customized CV Generated',
+        desc: `AI tailored CV for ${selectedEmployee.name} aligned with ${customerName}.`,
+        status: '96% FIT',
+        user: { name: selectedEmployee.name, avatar: selectedEmployee.avatar },
+      });
     } catch (err) {
-      setCustomizingError(err instanceof Error ? err.message : 'AI refinement failed. Try phrasing differently.');
+      setCustomizingError(
+        err instanceof Error ? err.message : 'AI customization failed. Please check setup.'
+      );
     } finally {
       setCustomizingLoading(false);
     }
   };
 
-  const handleDownloadPdf = async () => {
-    if (!tailoredCv) return;
+  /**
+   * Saves the current (possibly edited) tailoredCv to the generated_cvs table.
+   * Returns true on success, false on failure.
+   */
+  const handleSave = async (): Promise<boolean> => {
+    if (!tailoredCv || !selectedEmployee || !selectedTemplateId) return false;
+    setSaving(true);
     try {
-      await exportToPdf('cv-preview-root', `${tailoredCv.name.replace(/\s+/g, '_')}_Tailored_CV`);
-    } catch (err) {
-      alert('Could not export to PDF. Try adjusting layout styling.');
+      await saveGeneratedCvAction(selectedEmployee.rowId, selectedTemplateId, tailoredCv);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 4000);
+      return true;
+    } catch (err: any) {
+      alert(`Save failed: ${err.message}`);
+      return false;
+    } finally {
+      setSaving(false);
     }
+  };
+
+  /**
+   * Auto-saves the CV (if not yet saved), then navigates to Step 3 preview.
+   */
+  const handleGoToPreview = async () => {
+    if (!tailoredCv) return;
+    if (!saveSuccess) {
+      const ok = await handleSave();
+      if (!ok) return;
+    }
+    setWizardStep(3);
   };
 
   const handleDownloadDocx = async () => {
@@ -277,15 +219,25 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
           avatarUrl: selectedEmployee?.avatar || null,
         }),
       });
-      if (!response.ok) {
-        throw new Error('Failed to generate DOCX file from server.');
-      }
+      if (!response.ok) throw new Error('Failed to generate DOCX from server.');
       const blob = await response.blob();
       const { saveAs } = await import('file-saver');
-      saveAs(blob, `${tailoredCv.name.replace(/\s+/g, '_')}_Tailored_CV.docx`);
+      saveAs(blob, `${(tailoredCv.name ?? 'CV').replace(/\s+/g, '_')}_Tailored_CV.docx`);
     } catch (err) {
       console.error(err);
-      alert('Could not export to Word DOCX.');
+      alert('Could not export to DOCX.');
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!tailoredCv) return;
+    try {
+      await exportToPdf(
+        'cv-preview-root',
+        `${(tailoredCv.name ?? 'CV').replace(/\s+/g, '_')}_Tailored_CV`
+      );
+    } catch {
+      alert('Could not export to PDF. Try adjusting layout styling.');
     }
   };
 
@@ -293,12 +245,13 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
     if (!tailoredCv || !selectedTemplateId) return;
     try {
       await saveGeneratedCvAction(selectedEmployee.rowId, selectedTemplateId, tailoredCv);
-      alert('Successfully synchronized tailored layout to CRM database.');
+      alert('Successfully synchronized tailored CV to CRM database.');
     } catch (err: any) {
       alert(`Could not sync to CRM: ${err.message}`);
     }
   };
 
+  // ── Empty state ─────────────────────────────────────────────────────────────
   if (employees.length === 0) {
     return (
       <PageWrapper className="p-8">
@@ -313,35 +266,57 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
     );
   }
 
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <PageWrapper className="p-8">
-      {/* Page Header */}
+      {/* ── Page Header ──────────────────────────────────────────────────── */}
       <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-3xl font-black tracking-tight text-slate-900 font-sans leading-none">
             Customize CVs
           </h2>
           <p className="text-sm font-medium text-slate-500 mt-2">
-            Tailor, customize, and export high-fidelity CVs aligned perfectly to customer opportunity requirements.
+            Tailor, customize, and export high-fidelity CVs aligned perfectly to customer
+            opportunity requirements.
           </p>
         </div>
 
-        {/* Stepper tracker indicators */}
+        {/* Stepper */}
         <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl self-start sm:self-auto border border-slate-200/40">
-          <span className={`px-3 py-1.5 text-[10px] font-black rounded-lg transition-all ${wizardStep === 1 ? 'bg-white text-indigo-650 shadow-sm' : 'text-slate-400'}`}>1. PARAMETERS</span>
+          <span
+            className={`px-3 py-1.5 text-[10px] font-black rounded-lg transition-all ${
+              wizardStep === 1 ? 'bg-white text-indigo-650 shadow-sm' : 'text-slate-400'
+            }`}
+          >
+            1. PARAMETERS
+          </span>
           <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
-          <span className={`px-3 py-1.5 text-[10px] font-black rounded-lg transition-all ${wizardStep === 2 ? 'bg-white text-indigo-650 shadow-sm' : 'text-slate-400'}`}>2. CUSTOMIZE</span>
+          <span
+            className={`px-3 py-1.5 text-[10px] font-black rounded-lg transition-all ${
+              wizardStep === 2 ? 'bg-white text-indigo-650 shadow-sm' : 'text-slate-400'
+            }`}
+          >
+            2. REVIEW &amp; EDIT
+          </span>
           <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
-          <span className={`px-3 py-1.5 text-[10px] font-black rounded-lg transition-all ${wizardStep === 3 ? 'bg-white text-indigo-650 shadow-sm' : 'text-slate-400'}`}>3. PREVIEW & EXPORT</span>
+          <span
+            className={`px-3 py-1.5 text-[10px] font-black rounded-lg transition-all ${
+              wizardStep === 3 ? 'bg-white text-indigo-650 shadow-sm' : 'text-slate-400'
+            }`}
+          >
+            3. PREVIEW &amp; EXPORT
+          </span>
         </div>
       </div>
 
-      {/* STEP 1: CONFIGURE OPPORTUNITY */}
+      {/* ════════════════════════════════════════════════════════════════════
+          STEP 1 — CONFIGURE OPPORTUNITY
+      ════════════════════════════════════════════════════════════════════ */}
       {wizardStep === 1 && (
         <div className="grid grid-cols-12 gap-8">
           <div className="col-span-12 lg:col-span-6 mx-auto w-full">
             <form
-              onSubmit={handleInitialGenerate}
+              onSubmit={handleCustomize}
               className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col gap-5"
             >
               <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
@@ -371,20 +346,18 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">
                   Select Talent Profile
                 </label>
-                <div className="relative">
-                  <select
-                    value={selectedCandidateId}
-                    onChange={(e) => setSelectedCandidateId(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200/80 rounded-xl px-4 py-3 text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-500/10 focus:border-slate-400 transition-all text-slate-700"
-                  >
-                    {employees.map((emp) => (
-                      <option key={emp.id} value={emp.id}>
-                        {emp.name} ({emp.role})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                {/* Employee avatar preview */}
+                <select
+                  value={selectedCandidateId}
+                  onChange={(e) => setSelectedCandidateId(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200/80 rounded-xl px-4 py-3 text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-500/10 focus:border-slate-400 transition-all text-slate-700"
+                >
+                  {employees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.name} ({emp.role})
+                    </option>
+                  ))}
+                </select>
+
                 {selectedEmployee && (
                   <div className="flex items-center gap-2.5 mt-2">
                     <img
@@ -429,25 +402,6 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                 )}
               </div>
 
-              {/* Saved Draft Toggle Option */}
-              {hasSavedCv && (
-                <div className="p-3.5 bg-emerald-50 border border-emerald-150 rounded-xl flex items-center justify-between gap-3 text-xs">
-                  <div className="flex items-center gap-2 text-emerald-850 font-semibold">
-                    <BookmarkCheck className="w-4 h-4 text-emerald-650" />
-                    <span>A saved draft exists for this layout.</span>
-                  </div>
-                  <label className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-[10px] text-slate-600 select-none cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={useSavedCv}
-                      onChange={(e) => setUseSavedCv(e.target.checked)}
-                      className="rounded accent-emerald-600"
-                    />
-                    Load Saved Draft
-                  </label>
-                </div>
-              )}
-
               {/* Mandatory Skills */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">
@@ -463,193 +417,258 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                 />
               </div>
 
-              {/* Preferred Specs */}
+              {/* Preferred Specs / JD */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">
-                  Preferred Specs / Job Description
+                  Customer Requirements / Job Description
                 </label>
                 <textarea
                   rows={4}
                   value={preferredExp}
                   onChange={(e) => setPreferredExp(e.target.value)}
-                  placeholder="Paste details of the role or specific experiences required..."
+                  placeholder="Paste the role requirements or job description details..."
                   className="w-full bg-slate-50 border border-slate-200/80 rounded-xl px-4 py-3 text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-500/10 focus:border-slate-400 transition-all text-slate-700 leading-relaxed resize-none placeholder:text-slate-300"
                 />
               </div>
 
-              {/* Range slider for creativity levels */}
-              <div className="space-y-2 pt-2">
-                <div className="flex justify-between items-center">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">
-                    AI Customization Alignment Strictness
-                  </label>
-                  <span className="text-xs font-black text-indigo-650 font-mono">
-                    {creativity}% Creative
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min="10"
-                  max="100"
-                  value={creativity}
-                  onChange={(e) => setCreativity(Number(e.target.value))}
-                  className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600 focus:outline-none"
-                />
-                <div className="flex justify-between text-[10px] text-slate-400 font-bold uppercase">
-                  <span>Strict Fact Match</span>
-                  <span>Optimized flow</span>
-                </div>
-              </div>
-
+              {/* Submit */}
               <button
                 type="submit"
                 disabled={templates.length === 0}
                 className="mt-4 py-4 bg-gradient-to-r from-sky-600 to-indigo-700 hover:from-sky-500 hover:to-indigo-600 disabled:from-slate-400 disabled:to-slate-400 disabled:cursor-not-allowed text-white rounded-xl font-sans text-sm font-black shadow-lg shadow-sky-600/10 active:scale-[0.98] transition-transform flex items-center justify-center gap-2.5 cursor-pointer"
               >
                 <BrainCircuit className="w-5 h-5" />
-                <span>
-                  {useSavedCv && savedCvContent ? 'Load Existing Saved CV Draft' : 'Initialize AI Tailored CV'}
-                </span>
+                <span>Customize CV</span>
               </button>
             </form>
           </div>
         </div>
       )}
 
-      {/* STEP 2: CHAT CUSTOMIZATION & LIVE PREVIEW */}
+      {/* ════════════════════════════════════════════════════════════════════
+          STEP 2 — REVIEW & EDIT
+      ════════════════════════════════════════════════════════════════════ */}
       {wizardStep === 2 && (
-        <div className="grid grid-cols-12 gap-8">
-          {/* Chat Controller Panel */}
-          <div className="col-span-12 lg:col-span-5 flex flex-col gap-4">
-            <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col flex-1 min-h-[480px]">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-indigo-650 fill-indigo-100" />
-                  <h4 className="font-sans text-xs font-black uppercase tracking-widest text-slate-400">
-                    AI Customizer Chat
+        <div className="grid grid-cols-12 gap-6">
+          {/* ── Left sidebar: context + action buttons (sticky) ─────────── */}
+          <div className="col-span-12 lg:col-span-3">
+            <div className="sticky top-6 flex flex-col gap-4">
+              {/* Candidate info card */}
+              <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 space-y-4">
+                <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+                  <Sparkles className="w-4 h-4 text-indigo-650" />
+                  <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">
+                    Customization Context
                   </h4>
                 </div>
-                <button
-                  onClick={() => setWizardStep(1)}
-                  className="text-[10px] font-bold text-slate-400 hover:text-slate-600 flex items-center gap-1"
-                >
-                  <ChevronLeft className="w-3 h-3" /> Back
-                </button>
+
+                {/* Employee */}
+                {selectedEmployee && (
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={selectedEmployee.avatar}
+                      alt={selectedEmployee.name}
+                      className="w-11 h-11 rounded-full object-cover border-2 border-indigo-100 shadow-sm shrink-0"
+                    />
+                    <div className="min-w-0">
+                      <p className="text-xs font-black text-slate-800 truncate">
+                        {selectedEmployee.name}
+                      </p>
+                      <p className="text-[10px] text-slate-500 font-medium truncate">
+                        {selectedEmployee.role}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      Target Customer
+                    </p>
+                    <p className="text-xs font-semibold text-slate-700 mt-0.5 leading-snug">
+                      {customerName}
+                    </p>
+                  </div>
+                  {selectedTemplate && (
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        Template
+                      </p>
+                      <p className="text-xs font-semibold text-slate-700 mt-0.5">
+                        {selectedTemplate.name}
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              {/* Chat Message Panel */}
-              <div className="flex-1 overflow-y-auto max-h-[350px] space-y-4 pr-1 mb-4">
-                {chatHistory.map((message, idx) => (
-                  <div
-                    key={idx}
-                    className={`flex items-start gap-2.5 max-w-[85%] ${
-                      message.role === 'user' ? 'ml-auto flex-row-reverse' : ''
-                    }`}
+              {/* Action buttons */}
+              {tailoredCv && !customizingLoading && (
+                <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 space-y-3">
+                  <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 pb-3 border-b border-slate-100">
+                    Actions
+                  </h4>
+
+                  {/* Save Customized CV */}
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-xl text-xs font-black uppercase tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                   >
-                    <div
-                      className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 shadow-sm ${
-                        message.role === 'user'
-                          ? 'bg-indigo-650 text-white'
-                          : 'bg-emerald-50 border border-emerald-100 text-emerald-600'
-                      }`}
-                    >
-                      {message.role === 'user' ? <User className="w-3.5 h-3.5" /> : <Bot className="w-3.5 h-3.5" />}
-                    </div>
-                    <div
-                      className={`p-3 rounded-2xl text-xs leading-relaxed ${
-                        message.role === 'user'
-                          ? 'bg-indigo-600 text-white rounded-tr-none'
-                          : 'bg-slate-50 border border-slate-200/80 rounded-tl-none text-slate-700'
-                      }`}
-                    >
-                      {message.content}
-                    </div>
-                  </div>
-                ))}
+                    {saving ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Saving...</span>
+                      </>
+                    ) : saveSuccess ? (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Saved!</span>
+                      </>
+                    ) : (
+                      <span>Save Customized CV</span>
+                    )}
+                  </button>
 
-                {customizingLoading && (
-                  <div className="flex items-center gap-2.5 max-w-[85%]">
-                    <div className="w-7 h-7 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-600 flex items-center justify-center animate-spin">
-                      <RefreshCw className="w-3.5 h-3.5" />
-                    </div>
-                    <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-2xl rounded-tl-none text-xs text-slate-400">
-                      Tailoring CV content to request specs...
-                    </div>
-                  </div>
-                )}
+                  {/* Apply to Template & Preview */}
+                  <button
+                    type="button"
+                    onClick={handleGoToPreview}
+                    disabled={saving}
+                    className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-xl text-xs font-black uppercase tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                  >
+                    {saving ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Saving...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Apply to Template</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </>
+                    )}
+                  </button>
 
-                {customizingError && (
-                  <div className="flex items-center gap-2 p-3 bg-rose-50 border border-rose-200/60 rounded-xl text-rose-700 text-xs font-semibold">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    {customizingError}
-                  </div>
-                )}
-              </div>
-
-              {/* Chat Input form */}
-              <form onSubmit={handleSendMessage} className="flex gap-2">
-                <input
-                  type="text"
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  placeholder="e.g. Highlight AWS Cloud Architecture projects..."
-                  disabled={customizingLoading}
-                  className="flex-1 bg-slate-50 border border-slate-200/80 rounded-xl px-4 py-2.5 text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all text-slate-700 placeholder:text-slate-350 disabled:opacity-50"
-                />
-                <button
-                  type="submit"
-                  disabled={customizingLoading || !chatInput.trim()}
-                  className="p-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl active:scale-95 transition-all flex items-center justify-center shrink-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  <Send className="w-4 h-4" />
-                </button>
-              </form>
-
-              {/* Continue button */}
-              {tailoredCv && (
-                <button
-                  onClick={() => setWizardStep(3)}
-                  className="mt-5 py-3 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-sans text-xs font-black uppercase tracking-wider rounded-xl shadow-md active:scale-98 transition-transform flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <span>Review Draft & Export</span>
-                  <ChevronRight className="w-4 h-4" />
-                </button>
+                  <p className="text-[10px] text-slate-400 text-center leading-relaxed">
+                    "Apply to Template" auto-saves then generates the DOCX preview.
+                  </p>
+                </div>
               )}
+
+              {/* Back button */}
+              <button
+                type="button"
+                onClick={() => setWizardStep(1)}
+                className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400 hover:text-slate-600 transition-colors self-start"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+                Back to Parameters
+              </button>
             </div>
           </div>
 
-          {/* Right: Template layout reference (raw template, not filled) */}
-          <div className="col-span-12 lg:col-span-7 flex flex-col">
-            <div className="bg-slate-100 p-3 rounded-2xl border border-slate-200/80 min-h-[480px] max-h-[600px] overflow-y-auto">
-              <DocxPreview
-                templateId={selectedTemplateId || null}
-                className="min-h-[440px]"
-              />
-            </div>
+          {/* ── Right main: loading / error / section editor ─────────────── */}
+          <div className="col-span-12 lg:col-span-9">
+            {/* Loading state */}
+            {customizingLoading && (
+              <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm flex flex-col items-center justify-center py-28 gap-5">
+                <div className="relative">
+                  <div className="w-16 h-16 rounded-full border-4 border-indigo-100 border-t-indigo-600 animate-spin" />
+                  <Sparkles className="w-6 h-6 text-indigo-600 absolute inset-0 m-auto" />
+                </div>
+                <div className="text-center space-y-1">
+                  <p className="text-sm font-black text-slate-800">
+                    Generating Customized CV…
+                  </p>
+                  <p className="text-xs text-slate-500 max-w-xs leading-relaxed">
+                    AI is tailoring{' '}
+                    <span className="font-bold text-slate-700">{selectedEmployee?.name}</span>'s
+                    profile for{' '}
+                    <span className="font-bold text-slate-700">{customerName}</span>
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Error state */}
+            {customizingError && !customizingLoading && (
+              <div className="bg-white rounded-2xl border border-rose-200 shadow-sm flex flex-col items-center justify-center py-20 gap-4 text-center px-8">
+                <AlertCircle className="w-10 h-10 text-rose-400" />
+                <div className="space-y-1">
+                  <p className="text-sm font-black text-rose-700">Customization Failed</p>
+                  <p className="text-xs text-slate-500 max-w-sm leading-relaxed">
+                    {customizingError}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setWizardStep(1)}
+                  className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-colors cursor-pointer flex items-center gap-1.5"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" /> Back to Parameters
+                </button>
+              </div>
+            )}
+
+            {/* Section editor — shown when CV is ready */}
+            {tailoredCv && !customizingLoading && !customizingError && (
+              <>
+                {/* Context banner */}
+                <div className="mb-4 px-5 py-3.5 bg-indigo-50 border border-indigo-100 rounded-xl flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-black text-indigo-800">
+                      AI Generated — Review &amp; Edit Before Saving
+                    </p>
+                    <p className="text-[10px] text-indigo-600 font-medium mt-0.5">
+                      All sections are editable. Expand collapsed sections to see more.
+                    </p>
+                  </div>
+                  {saveSuccess && (
+                    <div className="flex items-center gap-1.5 text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg text-[10px] font-bold shrink-0">
+                      <CheckCircle2 className="w-3 h-3" />
+                      Saved to database
+                    </div>
+                  )}
+                </div>
+
+                <CvSectionEditor cv={tailoredCv} onChange={setTailoredCv} />
+              </>
+            )}
           </div>
         </div>
       )}
 
-      {/* STEP 3: INTERACTIVE PREVIEW & EXPORT / DOWNLOAD */}
+      {/* ════════════════════════════════════════════════════════════════════
+          STEP 3 — PREVIEW & EXPORT
+      ════════════════════════════════════════════════════════════════════ */}
       {wizardStep === 3 && tailoredCv && (
         <div className="flex flex-col gap-6">
-          {/* Action Toolbar */}
+          {/* Action toolbar */}
           <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-2.5">
               <button
+                type="button"
                 onClick={() => setWizardStep(2)}
                 className="p-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg transition-colors cursor-pointer active:scale-95"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
               <div>
-                <h4 className="text-sm font-black text-slate-800">Final CV Preview & Export Panel</h4>
-                <p className="text-[11px] text-slate-450 font-medium">Verify layout structure and placeholder replacements before downloading.</p>
+                <h4 className="text-sm font-black text-slate-800">
+                  Final CV Preview &amp; Export Panel
+                </h4>
+                <p className="text-[11px] text-slate-450 font-medium">
+                  Verify the filled template before downloading.
+                </p>
               </div>
             </div>
 
             <div className="flex items-center gap-3">
               <button
+                type="button"
                 onClick={handleDownloadPdf}
                 className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-50 transition-colors cursor-pointer active:scale-95 shadow-sm"
               >
@@ -658,6 +677,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
               </button>
 
               <button
+                type="button"
                 onClick={handleDownloadDocx}
                 className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-50 transition-colors cursor-pointer active:scale-95 shadow-sm"
               >
@@ -666,6 +686,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
               </button>
 
               <button
+                type="button"
                 onClick={handleSyncToCrm}
                 className="flex items-center gap-2 px-5 py-2.5 bg-indigo-650 text-white font-black rounded-xl text-xs hover:bg-indigo-750 transition-colors cursor-pointer active:scale-95 shadow-md"
               >
@@ -675,7 +696,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
             </div>
           </div>
 
-          {/* Full-width customized CV preview — shows AI-generated content filled into the template */}
+          {/* Full-width filled DOCX preview via Office Online Viewer */}
           <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 shadow-inner">
             <GeneratedCvPreview
               templateId={selectedTemplateId || null}
