@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { getSignedAvatarUrl, DEFAULT_AVATAR } from '@/lib/avatar';
 
 export type UserRole = 'admin' | 'employee';
 
@@ -9,9 +10,6 @@ export interface CurrentUser {
   fullName: string;
   avatarUrl: string;
 }
-
-const DEFAULT_AVATAR =
-  'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=120';
 
 /**
  * Server-only. Resolves the signed-in user's session + RBAC role + (if linked) profile display
@@ -39,11 +37,13 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     .eq('user_id', user.id)
     .maybeSingle();
 
+  const avatarUrl = await getSignedAvatarUrl(supabase, profileRow?.avatar_url);
+
   return {
     id: user.id,
     email: user.email ?? '',
     role: (roleRow?.role as UserRole | undefined) ?? 'employee',
     fullName: profileRow?.full_name ?? user.email ?? 'Unnamed User',
-    avatarUrl: profileRow?.avatar_url ?? DEFAULT_AVATAR,
+    avatarUrl,
   };
 }

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { CreateEmployeeInput } from '@/types/domain';
+import type { CvExperienceEntry, CvAcademicEntry, CvProjectEntry, CvCertificationEntry } from '@/lib/cvTypes';
 
 /**
  * Server-only. Raw Supabase queries for the `profiles` aggregate (profiles + experiences +
@@ -54,6 +55,39 @@ function generateEmployeeCode(): string {
 
 const UNIQUE_VIOLATION = '23505';
 
+/**
+ * Attempts to parse a period string like "Jan 2020 – Present" or "2018 – 2021" into
+ * approximate start / end dates and an is_current flag. Returns null values when parsing fails.
+ */
+function parsePeriod(period: string): {
+  startDate: string | null;
+  endDate: string | null;
+  isCurrent: boolean;
+} {
+  if (!period) return { startDate: null, endDate: null, isCurrent: false };
+
+  const isCurrent =
+    /present|current|now/i.test(period) || period.trim().endsWith('–') || period.trim().endsWith('-');
+
+  // Extract year numbers
+  const years = period.match(/\d{4}/g) ?? [];
+  const startYear = years[0] ?? null;
+  const endYear = !isCurrent && years[1] ? years[1] : null;
+
+  return {
+    startDate: startYear ? `${startYear}-01-01` : null,
+    endDate: endYear ? `${endYear}-12-31` : null,
+    isCurrent,
+  };
+}
+
+/** Converts a year string like "2022" into an ISO date string "2022-01-01". */
+function yearToDate(year: string): string | null {
+  const y = parseInt(year, 10);
+  if (isNaN(y) || y < 1900 || y > 2100) return null;
+  return `${y}-01-01`;
+}
+
 export async function createEmployeeRow(
   supabase: SupabaseClient,
   input: CreateEmployeeInput,
@@ -65,6 +99,11 @@ export async function createEmployeeRow(
     .eq('name', input.department)
     .maybeSingle();
 
+  // Serialise academic entries as JSON into the profiles.education text column
+  const educationJson = input.cvAcademic && input.cvAcademic.length > 0
+    ? JSON.stringify(input.cvAcademic)
+    : null;
+
   let profileId: string | null = null;
   let lastError: { code?: string; message: string } | null = null;
 
@@ -75,9 +114,11 @@ export async function createEmployeeRow(
         employee_code: generateEmployeeCode(),
         full_name: input.name,
         email: input.email,
-        role_title: input.role,
+        role_title: input.currentPosition ?? input.role,
         department_id: dept?.id ?? null,
         status: 'published',
+        education: educationJson,
+        avatar_url: input.avatarUrl ?? null,
         created_by: createdBy,
         updated_by: createdBy,
       })
@@ -97,11 +138,85 @@ export async function createEmployeeRow(
     throw new Error(lastError?.message ?? 'Failed to generate a unique employee code.');
   }
 
+  // ── Insert structured experience entries ──────────────────────────────────
+  if (input.cvExperience && input.cvExperience.length > 0) {
+    await insertExperiences(supabase, profileId, input.cvExperience);
+  }
+
+  // ── Insert special projects ───────────────────────────────────────────────
+  if (input.specialProjects && input.specialProjects.length > 0) {
+    await insertProjects(supabase, profileId, input.specialProjects);
+  }
+
+  // ── Insert certifications ─────────────────────────────────────────────────
+  if (input.cvCertifications && input.cvCertifications.length > 0) {
+    await insertCertifications(supabase, profileId, input.cvCertifications);
+  }
+
+  // ── Link skills ───────────────────────────────────────────────────────────
   if (input.skills.length > 0) {
     await linkSkills(supabase, profileId, input.skills);
   }
 
   return profileId;
+}
+
+async function insertExperiences(
+  supabase: SupabaseClient,
+  profileId: string,
+  entries: CvExperienceEntry[]
+) {
+  const rows = entries.map((exp, i) => {
+    const { startDate, endDate, isCurrent } = parsePeriod(exp.period);
+    return {
+      profile_id: profileId,
+      role_title: exp.position,
+      company: exp.company,
+      employment_type: 'Full-time',
+      start_date: startDate,
+      end_date: endDate,
+      is_current: isCurrent,
+      // Serialise point-wise tasks as JSON inside the description column
+      description: JSON.stringify(exp.tasks),
+      display_order: i,
+    };
+  });
+
+  const { error } = await supabase.from('experiences').insert(rows);
+  if (error) throw error;
+}
+
+async function insertProjects(
+  supabase: SupabaseClient,
+  profileId: string,
+  projects: CvProjectEntry[]
+) {
+  const rows = projects.map((p, i) => ({
+    profile_id: profileId,
+    name: p.title,
+    description: p.brief,
+    tags: [],
+    display_order: i,
+  }));
+
+  const { error } = await supabase.from('projects').insert(rows);
+  if (error) throw error;
+}
+
+async function insertCertifications(
+  supabase: SupabaseClient,
+  profileId: string,
+  certs: CvCertificationEntry[]
+) {
+  const rows = certs.map((c) => ({
+    profile_id: profileId,
+    name: c.name,
+    issuer: c.issuer,
+    issued_date: yearToDate(c.year),
+  }));
+
+  const { error } = await supabase.from('certifications').insert(rows);
+  if (error) throw error;
 }
 
 async function linkSkills(supabase: SupabaseClient, profileId: string, skillNames: string[]) {
@@ -134,4 +249,74 @@ async function linkSkills(supabase: SupabaseClient, profileId: string, skillName
 export async function deleteEmployeeRow(supabase: SupabaseClient, rowId: string) {
   const { error } = await supabase.from('profiles').delete().eq('id', rowId);
   if (error) throw error;
+}
+
+export async function updateEmployeeRow(
+  supabase: SupabaseClient,
+  profileId: string,
+  input: CreateEmployeeInput,
+  updatedBy: string
+): Promise<void> {
+  const { data: dept } = await supabase
+    .from('departments')
+    .select('id')
+    .eq('name', input.department)
+    .maybeSingle();
+
+  // Serialise academic entries as JSON into the profiles.education text column
+  const educationJson = input.cvAcademic && input.cvAcademic.length > 0
+    ? JSON.stringify(input.cvAcademic)
+    : null;
+
+  const updateFields: any = {
+    full_name: input.name,
+    email: input.email,
+    role_title: input.currentPosition ?? input.role,
+    department_id: dept?.id ?? null,
+    education: educationJson,
+    updated_by: updatedBy,
+    updated_at: new Date().toISOString(),
+  };
+
+  // Only update avatar_url if a new one was uploaded
+  if (input.avatarUrl !== undefined && input.avatarUrl !== null) {
+    updateFields.avatar_url = input.avatarUrl;
+  }
+
+  const { error: profileError } = await supabase
+    .from('profiles')
+    .update(updateFields)
+    .eq('id', profileId);
+
+  if (profileError) throw profileError;
+
+  // Clear existing related records
+  const { error: clearExpError } = await supabase.from('experiences').delete().eq('profile_id', profileId);
+  if (clearExpError) throw clearExpError;
+
+  const { error: clearProjError } = await supabase.from('projects').delete().eq('profile_id', profileId);
+  if (clearProjError) throw clearProjError;
+
+  const { error: clearCertError } = await supabase.from('certifications').delete().eq('profile_id', profileId);
+  if (clearCertError) throw clearCertError;
+
+  const { error: clearSkillError } = await supabase.from('profile_skills').delete().eq('profile_id', profileId);
+  if (clearSkillError) throw clearSkillError;
+
+  // Insert new related records
+  if (input.cvExperience && input.cvExperience.length > 0) {
+    await insertExperiences(supabase, profileId, input.cvExperience);
+  }
+
+  if (input.specialProjects && input.specialProjects.length > 0) {
+    await insertProjects(supabase, profileId, input.specialProjects);
+  }
+
+  if (input.cvCertifications && input.cvCertifications.length > 0) {
+    await insertCertifications(supabase, profileId, input.cvCertifications);
+  }
+
+  if (input.skills.length > 0) {
+    await linkSkills(supabase, profileId, input.skills);
+  }
 }

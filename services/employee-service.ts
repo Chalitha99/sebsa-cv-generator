@@ -4,11 +4,16 @@ import {
   deleteEmployeeRow,
   getEmployeeRowByCode,
   listEmployeeRows,
+  updateEmployeeRow,
 } from '@/repositories/employee-repository';
-import type { CreateEmployeeInput, Employee, EmployeeExperience, EmployeeProject } from '@/types/domain';
-
-const DEFAULT_AVATAR =
-  'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=120';
+import type {
+  CreateEmployeeInput,
+  Employee,
+  EmployeeExperience,
+  EmployeeProject,
+} from '@/types/domain';
+import type { CvAcademicEntry, CvExperienceEntry, CvProjectEntry, CvCertificationEntry } from '@/lib/cvTypes';
+import { getSignedAvatarUrl, DEFAULT_AVATAR } from '@/lib/avatar';
 
 function formatDate(value: string | null | undefined): string {
   if (!value) return '';
@@ -42,9 +47,29 @@ function mapListRow(row: any): Employee {
   };
 }
 
+/**
+ * Safely attempts to parse a JSON string. Returns null if the string is not
+ * valid JSON or is a plain text value (legacy).
+ */
+function tryParseJson<T>(value: string | null | undefined): T | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed as T;
+  } catch {
+    return null;
+  }
+}
+
 export async function listEmployees(supabase: SupabaseClient): Promise<Employee[]> {
   const rows = await listEmployeeRows(supabase);
-  return rows.map(mapListRow);
+  const mapped = rows.map(mapListRow);
+  await Promise.all(
+    mapped.map(async (emp) => {
+      emp.avatar = await getSignedAvatarUrl(supabase, emp.avatar);
+    })
+  );
+  return mapped;
 }
 
 export async function getEmployeeByCode(
@@ -54,6 +79,7 @@ export async function getEmployeeByCode(
   const row = await getEmployeeRowByCode(supabase, employeeCode);
   if (!row) return null;
 
+  // ── Legacy experience mapping (with JSON tasks fallback) ──────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const experience: EmployeeExperience[] = ((row as any).experiences ?? [])
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -66,9 +92,32 @@ export async function getEmployeeByCode(
       period: `${formatDate(e.start_date) || 'N/A'} — ${
         e.is_current ? 'Present' : formatDate(e.end_date) || 'N/A'
       }`,
-      desc: e.description ?? '',
+      // desc is the serialised tasks array or free text
+      desc: (() => {
+        const tasks = tryParseJson<string[]>(e.description);
+        return Array.isArray(tasks) ? tasks.join(' • ') : (e.description ?? '');
+      })(),
     }));
 
+  // ── Structured CV experience mapping ─────────────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const cvExperience: CvExperienceEntry[] = ((row as any).experiences ?? [])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .sort((a: any, b: any) => a.display_order - b.display_order)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .map((e: any) => {
+      const tasks = tryParseJson<string[]>(e.description);
+      return {
+        position: e.role_title,
+        company: e.company,
+        period: `${formatDate(e.start_date) || 'N/A'} — ${
+          e.is_current ? 'Present' : formatDate(e.end_date) || 'N/A'
+        }`,
+        tasks: Array.isArray(tasks) ? tasks : (e.description ? [e.description] : []),
+      };
+    });
+
+  // ── Projects mapping ──────────────────────────────────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const projects: EmployeeProject[] = ((row as any).projects ?? [])
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -76,6 +125,15 @@ export async function getEmployeeByCode(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .map((p: any) => ({ name: p.name, desc: p.description ?? '', tags: p.tags ?? [] }));
 
+  // ── Structured special projects mapping ───────────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const specialProjects: CvProjectEntry[] = ((row as any).projects ?? [])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .sort((a: any, b: any) => a.display_order - b.display_order)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .map((p: any) => ({ title: p.name, brief: p.description ?? '' }));
+
+  // ── Certifications mapping ────────────────────────────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const certs: string[] = ((row as any).certifications ?? []).map((c: any) =>
     [c.name, c.issuer ? `(${c.issuer}${c.issued_date ? ` • ${new Date(c.issued_date).getFullYear()}` : ''})` : null]
@@ -83,14 +141,35 @@ export async function getEmployeeByCode(
       .join(' ')
   );
 
-  return {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const cvCertifications: CvCertificationEntry[] = ((row as any).certifications ?? []).map((c: any) => ({
+    name: c.name,
+    issuer: c.issuer ?? '',
+    year: c.issued_date ? String(new Date(c.issued_date).getFullYear()) : '',
+  }));
+
+  // ── Academic mapping ──────────────────────────────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rawEducation: string | null = (row as any).education ?? null;
+  const cvAcademic: CvAcademicEntry[] = tryParseJson<CvAcademicEntry[]>(rawEducation) ?? [];
+  // Legacy plain-text education field (non-JSON)
+  const educationText = cvAcademic.length === 0 ? (rawEducation ?? undefined) : undefined;
+
+  const emp = {
     ...mapListRow(row),
     experience: experience.length > 0 ? experience : undefined,
     projects: projects.length > 0 ? projects : undefined,
     certs: certs.length > 0 ? certs : undefined,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    education: (row as any).education ?? undefined,
+    education: educationText,
+    // Structured fields
+    cvExperience: cvExperience.length > 0 ? cvExperience : undefined,
+    specialProjects: specialProjects.length > 0 ? specialProjects : undefined,
+    cvCertifications: cvCertifications.length > 0 ? cvCertifications : undefined,
+    cvAcademic: cvAcademic.length > 0 ? cvAcademic : undefined,
+    currentPosition: (row as any).role_title ?? undefined,
   };
+  emp.avatar = await getSignedAvatarUrl(supabase, emp.avatar);
+  return emp;
 }
 
 export async function createEmployee(
@@ -103,4 +182,13 @@ export async function createEmployee(
 
 export async function deleteEmployee(supabase: SupabaseClient, rowId: string): Promise<void> {
   await deleteEmployeeRow(supabase, rowId);
+}
+
+export async function updateEmployee(
+  supabase: SupabaseClient,
+  profileId: string,
+  input: CreateEmployeeInput,
+  updatedBy: string
+): Promise<void> {
+  await updateEmployeeRow(supabase, profileId, input, updatedBy);
 }

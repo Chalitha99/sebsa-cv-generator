@@ -11,16 +11,10 @@ import {
   Plus,
   Users,
   Cpu,
-  TrendingUp,
-  AlertCircle,
   Eye,
-  Edit,
   Trash2,
-  Brain,
   ChevronLeft,
   ChevronRight,
-  MoreVertical,
-  X
 } from 'lucide-react';
 
 interface RepositoryClientProps {
@@ -49,8 +43,6 @@ export default function RepositoryClient({ employees }: RepositoryClientProps) {
     return {
       total: employees.length,
       aiSynced: '94%',
-      hiringVelocity: '+12.4%',
-      outdated: 42 - (5 - employees.length), // Updates slightly based on removals
     };
   }, [employees]);
 
@@ -107,13 +99,16 @@ export default function RepositoryClient({ employees }: RepositoryClientProps) {
     router.push(`/repository/${cleanId}`);
   };
 
+  // Resolve avatar image
+  const getAvatarSrc = (emp: Employee) => emp.avatar;
+
   return (
     <PageWrapper className="p-8">
       {/* Page Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
         <div>
           <h2 className="text-3xl font-black tracking-tight text-slate-900 font-sans leading-none">
-            Employee CV Repository
+            Employee Profiles
           </h2>
           <p className="text-sm font-medium text-slate-500 mt-2">
             Manage, verify, and analyze your internal workforce talent pool with cognitive AI filters.
@@ -135,36 +130,6 @@ export default function RepositoryClient({ employees }: RepositoryClientProps) {
             <span>Add Employee</span>
           </button>
         </div>
-      </div>
-
-      {/* Stats Bento Widgets Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        {[
-          { title: 'Total CVs', value: stats.total, icon: Users, color: 'text-indigo-600', bg: 'bg-indigo-50 border-indigo-100/50' },
-          { title: 'AI Synced', value: stats.aiSynced, icon: Cpu, color: 'text-sky-600', bg: 'bg-sky-50 border-sky-100/50' },
-          { title: 'Hiring Velocity', value: stats.hiringVelocity, icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-100/50' },
-          { title: 'Outdated CVs', value: stats.outdated, icon: AlertCircle, color: 'text-rose-600', bg: 'bg-rose-50 border-rose-100/50' },
-        ].map((stat, i) => {
-          const Icon = stat.icon;
-          return (
-            <div
-              key={i}
-              className={`p-5 rounded-2xl border bg-white shadow-sm flex items-center gap-4 transition-all hover:scale-[1.01]`}
-            >
-              <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${stat.bg}`}>
-                <Icon className={`w-5.5 h-5.5 ${stat.color}`} />
-              </div>
-              <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1.5">
-                  {stat.title}
-                </p>
-                <p className="text-2xl font-black text-slate-900 leading-none">
-                  {stat.value}
-                </p>
-              </div>
-            </div>
-          );
-        })}
       </div>
 
       {/* Primary Table Module */}
@@ -252,7 +217,7 @@ export default function RepositoryClient({ employees }: RepositoryClientProps) {
                     <td className="py-4 px-6">
                       <div className="flex items-center gap-3">
                         <img
-                          src={emp.avatar}
+                          src={getAvatarSrc(emp)}
                           alt={emp.name}
                           className="w-10 h-10 rounded-full border border-slate-200 object-cover"
                         />

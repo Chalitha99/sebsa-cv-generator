@@ -35,10 +35,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ user }) => {
 
   const navItems = [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-    { name: 'Repository', path: '/repository', icon: FolderOpen },
-    { name: 'Upload', path: '/upload', icon: CloudUpload },
-    { name: 'Generate', path: '/generate', icon: BrainCircuit },
-    { name: 'Templates', path: '/templates', icon: FileSpreadsheet },
+    { name: 'Employee Profiles', path: '/repository', icon: FolderOpen },
+    { name: 'Create Profile', path: '/upload', icon: CloudUpload },
+    { name: 'Update Profile', path: '/update-profile', icon: Users },
+    { name: 'Customize CVs', path: '/generate', icon: BrainCircuit },
+    { name: 'CV Templates', path: '/templates', icon: FileSpreadsheet },
   ];
 
   return (
