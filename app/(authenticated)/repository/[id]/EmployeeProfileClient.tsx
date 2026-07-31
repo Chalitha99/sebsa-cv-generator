@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { PageWrapper } from '../../../components/PageWrapper';
 import type { Employee } from '@/types/domain';
 import type { CvExperienceEntry } from '@/lib/cvTypes';
+import { isAdminOrAbove, type UserRole } from '@/lib/roles';
 import {
   ArrowLeft,
   Mail,
@@ -20,16 +21,20 @@ import {
   ExternalLink,
   Code2,
   Cpu,
-  BadgeCheck
+  BadgeCheck,
+  Clock,
+  PenLine,
 } from 'lucide-react';
 
 interface EmployeeProfileClientProps {
   employee: Employee;
+  viewerRole: UserRole;
 }
 
-export default function EmployeeProfileClient({ employee }: EmployeeProfileClientProps) {
+export default function EmployeeProfileClient({ employee, viewerRole }: EmployeeProfileClientProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'experience' | 'projects'>('experience');
+  const canGenerateCv = isAdminOrAbove(viewerRole);
 
   const handleBack = () => {
     router.push('/repository');
@@ -90,13 +95,44 @@ export default function EmployeeProfileClient({ employee }: EmployeeProfileClien
   return (
     <PageWrapper className="p-8">
       {/* Breadcrumb / Back button */}
-      <button
-        onClick={handleBack}
-        className="flex items-center gap-2 text-xs font-black text-slate-500 hover:text-slate-900 uppercase tracking-wider mb-6 group cursor-pointer"
-      >
-        <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
-        <span>Back to Repository</span>
-      </button>
+      <div className="flex items-center justify-between mb-6">
+        <button
+          onClick={handleBack}
+          className="flex items-center gap-2 text-xs font-black text-slate-500 hover:text-slate-900 uppercase tracking-wider group cursor-pointer"
+        >
+          <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
+          <span>Back to Repository</span>
+        </button>
+
+        {viewerRole === 'employee' && employee.status === 'published' && !employee.hasPendingChange && (
+          <button
+            onClick={() => router.push('/my-profile')}
+            className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-wide transition-colors"
+          >
+            <PenLine className="w-3.5 h-3.5" />
+            <span>Edit Profile</span>
+          </button>
+        )}
+      </div>
+
+      {/* Review status banners */}
+      {employee.status === 'draft' && (
+        <div className="mb-6 flex items-center gap-2.5 px-4 py-3 bg-amber-50 border border-amber-200/60 rounded-xl text-amber-700">
+          <Clock className="w-4 h-4 shrink-0" />
+          <p className="text-xs font-semibold">
+            This profile is pending review by a Super Admin or CV Reviewer — it won't appear in the
+            general repository until approved.
+          </p>
+        </div>
+      )}
+      {employee.hasPendingChange && (
+        <div className="mb-6 flex items-center gap-2.5 px-4 py-3 bg-amber-50 border border-amber-200/60 rounded-xl text-amber-700">
+          <Clock className="w-4 h-4 shrink-0" />
+          <p className="text-xs font-semibold">
+            A proposed update to this profile is pending review.
+          </p>
+        </div>
+      )}
 
       {/* Two Column Dashboard Grid */}
       <div className="grid grid-cols-12 gap-8">
@@ -146,16 +182,23 @@ export default function EmployeeProfileClient({ employee }: EmployeeProfileClien
 
               {/* Verify Match button CTA */}
               <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 border border-slate-200/50 px-2 py-1 rounded">
-                  AI Synced October 2023
+                <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded flex items-center gap-1.5 ${
+                  employee.isAccountLinked
+                    ? 'bg-emerald-50 border border-emerald-200/50 text-emerald-700'
+                    : 'bg-slate-50 border border-slate-200/50 text-slate-400'
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${employee.isAccountLinked ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                  Account {employee.isAccountLinked ? 'Active' : 'Inactive'}
                 </span>
-                <button
-                  onClick={() => router.push(`/generate?name=${encodeURIComponent(employee.name)}`)}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-sans text-xs font-black uppercase tracking-wider px-5 py-2.5 rounded-full shadow-md shadow-indigo-600/10 active:scale-95 transition-transform flex items-center gap-2"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-sky-300" />
-                  <span>Verify Talent Match</span>
-                </button>
+                {canGenerateCv && (
+                  <button
+                    onClick={() => router.push(`/generate?name=${encodeURIComponent(employee.name)}`)}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-sans text-xs font-black uppercase tracking-wider px-5 py-2.5 rounded-full shadow-md shadow-indigo-600/10 active:scale-95 transition-transform flex items-center gap-2"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-sky-300" />
+                    <span>Verify Talent Match</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>

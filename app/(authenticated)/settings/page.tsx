@@ -1,8 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { useData } from '../../context/DataContext';
 import { PageWrapper } from '../../components/PageWrapper';
+import { createClient } from '@/lib/supabase/client';
+import { isAdminOrAbove, canAssignRole, type UserRole } from '@/lib/roles';
+import { listUsersAction, updateUserRoleAction, type ManagedUser } from './actions';
 import {
   Settings,
   Building2,
@@ -14,10 +18,21 @@ import {
   Palette,
   ShieldAlert,
   ToggleLeft,
-  ToggleRight
+  ToggleRight,
+  Loader2,
 } from 'lucide-react';
 
+const ASSIGNABLE_ROLES: UserRole[] = ['super_admin', 'admin', 'cv_reviewer', 'employee'];
+
+const ROLE_LABELS: Record<UserRole, string> = {
+  super_admin: 'Super Admin',
+  admin: 'Admin',
+  cv_reviewer: 'CV Reviewer',
+  employee: 'Employee',
+};
+
 export default function SettingsPage() {
+  const router = useRouter();
   const { companySettings, updateCompanySettings, notificationSettings, updateNotificationSettings } = useData();
 
   // Settings State
@@ -31,6 +46,67 @@ export default function SettingsPage() {
   const [notifSys, setNotifSys] = useState(notificationSettings.systemUpdates);
 
   const [isSaved, setIsSaved] = useState(false);
+
+  // ── User Access & Team Controls (real data) ──────────────────────────────────
+  const [currentUserRole, setCurrentUserRole] = useState<UserRole | null>(null);
+  const [users, setUsers] = useState<ManagedUser[]>([]);
+  const [usersLoading, setUsersLoading] = useState(true);
+  const [usersError, setUsersError] = useState<string | null>(null);
+  const [savingUserId, setSavingUserId] = useState<string | null>(null);
+
+  const loadUserAccess = useCallback(async () => {
+    setUsersLoading(true);
+    setUsersError(null);
+    try {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: roleRow } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      const viewerRole = (roleRow?.role as UserRole | undefined) ?? 'employee';
+      setCurrentUserRole(viewerRole);
+
+      // Settings is entirely an Admin/Super Admin surface (company config, templates picker,
+      // user access) — docs/04-rbac-security.md §2. UX guard only; the User Access card's own
+      // actions (listUsersAction/updateUserRoleAction) are the real boundary.
+      if (!isAdminOrAbove(viewerRole)) {
+        router.replace('/dashboard');
+        return;
+      }
+
+      const list = await listUsersAction();
+      setUsers(list);
+    } catch (err) {
+      console.error('Failed to load user access data:', err);
+      setUsersError(err instanceof Error ? err.message : 'Failed to load users.');
+    } finally {
+      setUsersLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadUserAccess();
+  }, [loadUserAccess]);
+
+  const handleRoleChange = async (targetUserId: string, newRole: UserRole) => {
+    setSavingUserId(targetUserId);
+    setUsersError(null);
+    try {
+      await updateUserRoleAction(targetUserId, newRole);
+      await loadUserAccess();
+    } catch (err) {
+      console.error('Failed to update role:', err);
+      setUsersError(err instanceof Error ? err.message : 'Failed to update role.');
+    } finally {
+      setSavingUserId(null);
+    }
+  };
 
   const handleSaveCompany = (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,12 +143,6 @@ export default function SettingsPage() {
     { name: 'Executive Modern', desc: 'High-contrast typography, ideal for leadership profiles.' },
     { name: 'Muted Minimalist', desc: 'Understated margins, elegant serif details for designers.' },
     { name: 'Swiss Clean Slate', desc: 'Highly structure grid system, tech-forward monospace font.' },
-  ];
-
-  const adminUsersList = [
-    { name: 'Sarah Mitchell', email: 'sarah.mitchell@cv-ai.com', role: 'System Administrator', status: 'Active', avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=120' },
-    { name: 'Michael Chen', email: 'm.chen@cv-ai.com', role: 'Talent Recruiter', status: 'Active', avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=120' },
-    { name: 'Emily Watson', email: 'emily.w@cv-ai.com', role: 'Viewer / Auditor', status: 'Suspended', avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=120' },
   ];
 
   return (
@@ -191,7 +261,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* User management table */}
+          {/* User Access & Team Controls — real user_roles data */}
           <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col gap-4">
             <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
               <Users2 className="w-5 h-5 text-indigo-600" />
@@ -200,43 +270,71 @@ export default function SettingsPage() {
               </h4>
             </div>
 
-            <div className="space-y-3.5">
-              {adminUsersList.map((usr, i) => (
-                <div
-                  key={i}
-                  className="flex items-center justify-between p-3 border border-slate-100 rounded-xl bg-slate-50/50"
-                >
-                  <div className="flex items-center gap-3">
-                    <img
-                      src={usr.avatar}
-                      alt={usr.name}
-                      className="w-9 h-9 rounded-full border border-slate-200 object-cover"
-                    />
-                    <div>
-                      <h5 className="text-[11px] font-black text-slate-800 leading-none">
-                        {usr.name}
-                      </h5>
-                      <p className="text-[9px] text-slate-400 mt-1 leading-none">
-                        {usr.email}
-                      </p>
-                    </div>
-                  </div>
+            {usersLoading && (
+              <div className="flex items-center justify-center py-8 text-slate-400">
+                <Loader2 className="w-5 h-5 animate-spin" />
+              </div>
+            )}
 
-                  <div className="text-right">
-                    <p className="text-[9px] font-black uppercase tracking-wide text-slate-600 leading-none">
-                      {usr.role.split(' ')[0]}
-                    </p>
-                    <span className={`text-[8px] font-black uppercase tracking-wider mt-1 inline-block px-1.5 py-0.5 rounded ${
-                      usr.status === 'Active'
-                        ? 'bg-emerald-150 text-emerald-800'
-                        : 'bg-rose-150 text-rose-800'
-                    }`}>
-                      {usr.status}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
+            {!usersLoading && currentUserRole && !isAdminOrAbove(currentUserRole) && (
+              <p className="text-xs text-slate-400 py-4 text-center">
+                Only Admin and Super Admin can view or manage user access.
+              </p>
+            )}
+
+            {usersError && (
+              <p className="text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200/60 rounded-lg px-3 py-2">
+                {usersError}
+              </p>
+            )}
+
+            {!usersLoading && currentUserRole && isAdminOrAbove(currentUserRole) && (
+              <div className="space-y-3.5">
+                {users.map((usr) => {
+                  const actorCanActOnRow = canAssignRole(currentUserRole, usr.role);
+                  const assignableOptions = ASSIGNABLE_ROLES.filter((r) =>
+                    canAssignRole(currentUserRole, r)
+                  );
+                  return (
+                    <div
+                      key={usr.id}
+                      className="flex items-center justify-between p-3 border border-slate-100 rounded-xl bg-slate-50/50 gap-3"
+                    >
+                      <div className="min-w-0">
+                        <h5 className="text-[11px] font-black text-slate-800 leading-none truncate">
+                          {usr.email}
+                        </h5>
+                        <p className="text-[9px] text-slate-400 mt-1 leading-none">
+                          Joined {new Date(usr.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+
+                      {actorCanActOnRow ? (
+                        <select
+                          value={usr.role}
+                          disabled={savingUserId === usr.id}
+                          onChange={(e) => handleRoleChange(usr.id, e.target.value as UserRole)}
+                          className="text-[10px] font-black uppercase tracking-wide text-slate-600 bg-white border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 disabled:opacity-50 shrink-0"
+                        >
+                          {assignableOptions.map((r) => (
+                            <option key={r} value={r}>
+                              {ROLE_LABELS[r]}
+                            </option>
+                          ))}
+                          {!assignableOptions.includes(usr.role) && (
+                            <option value={usr.role}>{ROLE_LABELS[usr.role]}</option>
+                          )}
+                        </select>
+                      ) : (
+                        <span className="text-[9px] font-black uppercase tracking-wide text-slate-500 bg-slate-100 border border-slate-200 px-2 py-1 rounded-lg shrink-0">
+                          {ROLE_LABELS[usr.role]}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>

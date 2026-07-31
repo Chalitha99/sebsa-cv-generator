@@ -4,6 +4,7 @@ import React, { useState, useMemo, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageWrapper } from '../../components/PageWrapper';
 import type { Employee } from '@/types/domain';
+import { isAdminOrAbove, isReviewerOrAbove, type UserRole } from '@/lib/roles';
 import { deleteEmployeeAction } from './actions';
 import {
   Search,
@@ -19,11 +20,16 @@ import {
 
 interface RepositoryClientProps {
   employees: Employee[];
+  viewerRole: UserRole;
 }
 
-export default function RepositoryClient({ employees }: RepositoryClientProps) {
+export default function RepositoryClient({ employees, viewerRole }: RepositoryClientProps) {
   const router = useRouter();
   const [isDeleting, startDeleteTransition] = useTransition();
+  // CV Reviewer can now create profiles too (docs/04-rbac-security.md §13), but editing/deleting
+  // someone else's existing profile stays Admin/Super-Admin-only.
+  const canCreateEmployees = isReviewerOrAbove(viewerRole);
+  const canDeleteEmployees = isAdminOrAbove(viewerRole);
 
   const deleteEmployee = (rowId: string) => {
     startDeleteTransition(async () => {
@@ -122,13 +128,15 @@ export default function RepositoryClient({ employees }: RepositoryClientProps) {
             <Filter className="w-4 h-4" />
             <span>Clear Filters</span>
           </button>
-          <button
-            onClick={handleAddEmployee}
-            className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white font-sans text-xs font-black uppercase tracking-wider rounded-full shadow-lg shadow-indigo-600/10 hover:bg-indigo-700 transition-all active:scale-95"
-          >
-            <Plus className="w-4.5 h-4.5" />
-            <span>Add Employee</span>
-          </button>
+          {canCreateEmployees && (
+            <button
+              onClick={handleAddEmployee}
+              className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white font-sans text-xs font-black uppercase tracking-wider rounded-full shadow-lg shadow-indigo-600/10 hover:bg-indigo-700 transition-all active:scale-95"
+            >
+              <Plus className="w-4.5 h-4.5" />
+              <span>Add Employee</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -202,6 +210,7 @@ export default function RepositoryClient({ employees }: RepositoryClientProps) {
                 <th className="py-4 px-6 text-xs font-bold uppercase text-slate-500 tracking-wider">Department</th>
                 <th className="py-4 px-6 text-xs font-bold uppercase text-slate-500 tracking-wider">Skills</th>
                 <th className="py-4 px-6 text-xs font-bold uppercase text-slate-500 tracking-wider">Last Updated</th>
+                <th className="py-4 px-6 text-xs font-bold uppercase text-slate-500 tracking-wider">Account</th>
                 <th className="py-4 px-6 text-xs font-bold uppercase text-slate-500 tracking-wider text-right">Actions</th>
               </tr>
             </thead>
@@ -281,6 +290,18 @@ export default function RepositoryClient({ employees }: RepositoryClientProps) {
                       {emp.lastUpdated}
                     </td>
 
+                    {/* Account link status — Active once the employee has claimed/self-registered */}
+                    <td className="py-4 px-6">
+                      <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded flex items-center gap-1.5 w-fit ${
+                        emp.isAccountLinked
+                          ? 'bg-emerald-50 border border-emerald-200/50 text-emerald-700'
+                          : 'bg-slate-100 border border-slate-200 text-slate-400'
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${emp.isAccountLinked ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                        {emp.isAccountLinked ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+
                     {/* Actions button strip (visible on hover) */}
                     <td className="py-4 px-6 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
@@ -291,21 +312,23 @@ export default function RepositoryClient({ employees }: RepositoryClientProps) {
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={() => deleteEmployee(emp.rowId)}
-                          disabled={isDeleting}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all disabled:opacity-40"
-                          title="Remove Record"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {canDeleteEmployees && (
+                          <button
+                            onClick={() => deleteEmployee(emp.rowId)}
+                            disabled={isDeleting}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all disabled:opacity-40"
+                            title="Remove Record"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center">
+                  <td colSpan={8} className="py-12 text-center">
                     <p className="text-sm font-medium text-slate-400">
                       No candidate profile records match your search criteria.
                     </p>

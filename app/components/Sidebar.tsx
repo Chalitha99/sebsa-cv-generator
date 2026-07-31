@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import type { CurrentUser } from '@/lib/auth';
+import { isAdminOrAbove, isReviewerOrAbove } from '@/lib/roles';
 import {
   LayoutDashboard,
   FolderOpen,
@@ -15,6 +16,8 @@ import {
   Settings,
   Sparkles,
   Users,
+  User,
+  ClipboardCheck,
   LogOut
 } from 'lucide-react';
 
@@ -33,14 +36,25 @@ export const Sidebar: React.FC<SidebarProps> = ({ user }) => {
     router.refresh();
   };
 
-  const navItems = [
-    { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-    { name: 'Employee Profiles', path: '/repository', icon: FolderOpen },
-    { name: 'Create Profile', path: '/upload', icon: CloudUpload },
-    { name: 'Update Profile', path: '/update-profile', icon: Users },
-    { name: 'Customize CVs', path: '/generate', icon: BrainCircuit },
-    { name: 'CV Templates', path: '/templates', icon: FileSpreadsheet },
-  ];
+  // Nav visibility follows the permission matrix (docs/04-rbac-security.md §2/§10): Employee only
+  // ever has their own profile; CV Reviewer can view profiles, create profiles, manage CV
+  // templates, and review pending approvals, but can't edit others' profiles or generate CVs;
+  // Admin/Super Admin keep the full set.
+  const navItems = user.role === 'employee'
+    ? [{ name: 'My Profile', path: `/repository/${user.employeeCode}`, icon: User }]
+    : [
+        ...(isAdminOrAbove(user.role) ? [{ name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard }] : []),
+        { name: 'Employee Profiles', path: '/repository', icon: FolderOpen },
+        ...(isReviewerOrAbove(user.role) ? [{ name: 'Create Profile', path: '/upload', icon: CloudUpload }] : []),
+        ...(isAdminOrAbove(user.role)
+          ? [
+              { name: 'Update Profile', path: '/update-profile', icon: Users },
+              { name: 'Customize CVs', path: '/generate', icon: BrainCircuit },
+            ]
+          : []),
+        ...(isReviewerOrAbove(user.role) ? [{ name: 'CV Templates', path: '/templates', icon: FileSpreadsheet }] : []),
+        ...(isReviewerOrAbove(user.role) ? [{ name: 'Pending Approvals', path: '/review', icon: ClipboardCheck }] : []),
+      ];
 
   return (
     <aside className="fixed left-0 top-0 h-full w-[260px] bg-slate-900 text-slate-100 flex flex-col p-5 border-r border-slate-800 z-50">
@@ -90,24 +104,28 @@ export const Sidebar: React.FC<SidebarProps> = ({ user }) => {
           );
         })}
 
-        <div className="w-full h-px bg-slate-800/80 my-4" />
+        {isAdminOrAbove(user.role) && (
+          <>
+            <div className="w-full h-px bg-slate-800/80 my-4" />
 
-        {/* Settings Item */}
-        <Link
-          href="/settings"
-          className={`flex items-center px-4 py-3 rounded-xl gap-3.5 transition-all duration-300 group ${
-            pathname === '/settings'
-              ? 'bg-gradient-to-r from-sky-500/20 to-indigo-500/10 border border-sky-500/30 text-sky-300 font-semibold'
-              : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'
-          }`}
-        >
-          <Settings
-            className={`w-5 h-5 transition-transform duration-300 group-hover:scale-110 ${
-              pathname === '/settings' ? 'text-sky-400' : 'text-slate-400 group-hover:text-slate-200'
-            }`}
-          />
-          <span className="font-sans text-sm tracking-wide">Settings</span>
-        </Link>
+            {/* Settings Item */}
+            <Link
+              href="/settings"
+              className={`flex items-center px-4 py-3 rounded-xl gap-3.5 transition-all duration-300 group ${
+                pathname === '/settings'
+                  ? 'bg-gradient-to-r from-sky-500/20 to-indigo-500/10 border border-sky-500/30 text-sky-300 font-semibold'
+                  : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'
+              }`}
+            >
+              <Settings
+                className={`w-5 h-5 transition-transform duration-300 group-hover:scale-110 ${
+                  pathname === '/settings' ? 'text-sky-400' : 'text-slate-400 group-hover:text-slate-200'
+                }`}
+              />
+              <span className="font-sans text-sm tracking-wide">Settings</span>
+            </Link>
+          </>
+        )}
       </nav>
 
       {/* User Footer Profile */}

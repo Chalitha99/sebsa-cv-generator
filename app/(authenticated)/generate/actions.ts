@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { GoogleGenAI, Type } from '@google/genai';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { getCurrentUser } from '@/lib/auth';
+import { getCurrentUser, isReviewerOrAbove } from '@/lib/auth';
 import { listTemplates, uploadTemplate, deleteTemplate } from '@/services/template-service';
 import { getSavedGeneratedCv, saveGeneratedCv } from '@/services/generated-cv-service';
 import type { Employee } from '@/types/domain';
@@ -156,7 +156,7 @@ export async function listTemplatesAction() {
 export async function uploadTemplateAction(formData: FormData): Promise<string> {
   const user = await getCurrentUser();
   if (!user) throw new Error('Not authenticated.');
-  if (user.role !== 'admin') throw new Error('Unauthorized: Admin role required.');
+  if (!isReviewerOrAbove(user.role)) throw new Error('Unauthorized: Admin or CV Reviewer role required.');
 
   const name = formData.get('name') as string;
   const description = formData.get('description') as string;
@@ -185,7 +185,7 @@ export async function uploadTemplateAction(formData: FormData): Promise<string> 
 export async function deleteTemplateAction(templateId: string): Promise<void> {
   const user = await getCurrentUser();
   if (!user) throw new Error('Not authenticated.');
-  if (user.role !== 'admin') throw new Error('Unauthorized: Admin role required.');
+  if (!isReviewerOrAbove(user.role)) throw new Error('Unauthorized: Admin or CV Reviewer role required.');
 
   const adminClient = createAdminClient();
   await deleteTemplate(adminClient, templateId);

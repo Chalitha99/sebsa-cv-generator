@@ -44,6 +44,7 @@ function mapListRow(row: any): Employee {
     skills: mapSkills(row),
     lastUpdated: formatDate(row.updated_at),
     avatar: row.avatar_url ?? DEFAULT_AVATAR,
+    isAccountLinked: row.user_id != null,
   };
 }
 
@@ -167,6 +168,8 @@ export async function getEmployeeByCode(
     cvCertifications: cvCertifications.length > 0 ? cvCertifications : undefined,
     cvAcademic: cvAcademic.length > 0 ? cvAcademic : undefined,
     currentPosition: (row as any).role_title ?? undefined,
+    status: (row as any).status ?? undefined,
+    hasPendingChange: (row as any).pending_change != null,
   };
   emp.avatar = await getSignedAvatarUrl(supabase, emp.avatar);
   return emp;

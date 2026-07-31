@@ -2,7 +2,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { PageWrapper } from '../../components/PageWrapper';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { isReviewerOrAbove, type UserRole } from '@/lib/roles';
 import DocxPreview from '../generate/DocxPreview';
 import {
   listTemplatesAction,
@@ -30,9 +32,10 @@ interface Template {
 }
 
 export default function TemplatesPage() {
+  const router = useRouter();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userRole, setUserRole] = useState<'admin' | 'employee'>('employee');
+  const [userRole, setUserRole] = useState<UserRole>('employee');
 
   // Form State
   const [name, setName] = useState('');
@@ -65,7 +68,14 @@ export default function TemplatesPage() {
           .eq('user_id', user.id)
           .maybeSingle();
         if (roleData) {
-          setUserRole(roleData.role as 'admin' | 'employee');
+          const resolvedRole = roleData.role as UserRole;
+          setUserRole(resolvedRole);
+          // Employee has no template access at all (docs/04-rbac-security.md §2) — UX guard
+          // only; templates_reviewer_all RLS is the real boundary.
+          if (!isReviewerOrAbove(resolvedRole)) {
+            router.replace('/dashboard');
+            return;
+          }
         }
       }
     } catch (err) {
@@ -136,7 +146,7 @@ export default function TemplatesPage() {
     }
   };
 
-  const isAdmin = userRole === 'admin';
+  const canManageTemplates = isReviewerOrAbove(userRole);
 
   return (
     <PageWrapper className="p-8">
@@ -151,9 +161,9 @@ export default function TemplatesPage() {
       </div>
 
       <div className="grid grid-cols-12 gap-8">
-        {/* Upload Template Panel (Admin only) */}
+        {/* Upload Template Panel (Admin, Super Admin, CV Reviewer) */}
         <div className="col-span-12 lg:col-span-4">
-          {isAdmin ? (
+          {canManageTemplates ? (
             <form
               onSubmit={handleUploadSubmit}
               className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col gap-4"
@@ -317,7 +327,7 @@ export default function TemplatesPage() {
                         >
                           <Eye className="w-3.5 h-3.5" />
                         </button>
-                        {isAdmin && (
+                        {canManageTemplates && (
                           <button
                             onClick={() => handleDelete(template.id)}
                             className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 p-1.5 rounded transition-colors cursor-pointer"

@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Image from "next/image";
 import { useRouter } from 'next/navigation';
 import { PageWrapper } from '../components/PageWrapper';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import LightRays from '../components/LightRays';
 import { Mail, Eye, EyeOff, LogIn, CheckCircle, ShieldCheck, TrendingUp, Sparkles, BrainCircuit } from 'lucide-react';
@@ -200,10 +201,10 @@ export default function LoginPage() {
           {/* Footer Info */}
           <footer className="mt-12 text-center text-xs font-medium text-slate-500">
             <p>
-              Don't have enterprise access?{' '}
-              <a href="#" className="text-slate-900 font-black hover:underline">
-                Contact Sales
-              </a>
+              New employee?{' '}
+              <Link href="/signup" className="text-slate-900 font-black hover:underline">
+                Create your account
+              </Link>
             </p>
             <div className="mt-6 flex justify-center gap-4 text-[11px] text-slate-400">
               <a href="#" className="hover:text-slate-600 transition-colors">

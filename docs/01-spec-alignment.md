@@ -71,8 +71,14 @@ Found during the codebase survey — these need new tables/logic, not new screen
 - **Templates as data**: `/templates` page is a single hardcoded resume, not connected to any
   list of selectable branded templates. `/settings` has a separate hardcoded `templatesList`.
   These converge into one real `templates` table (Phase 8).
-- **Admin user/role management**: `/settings` has a hardcoded `adminUsersList`. Needs `user_roles`
-  table + admin CRUD (Phase 3 for schema, Phase 10 for UI wiring).
+- **Admin user/role management**: `/settings` had a hardcoded `adminUsersList` — resolved on the
+  `feature/update-rbac` branch, which wires the "User Access & Team Controls" card to real
+  `user_roles` data with a working role-change control. That same branch also widened the role
+  model from Admin/Employee to the four roles (Super Admin, Admin, CV Reviewer, Employee) defined
+  in `SEBSA_Access_Control_Retention_Privacy_Protocol.docx` — see
+  [04-rbac-security.md](./04-rbac-security.md) §0 for exactly what was and wasn't implemented
+  from that document (the maker-checker/retention/disposal workflow it also describes is a much
+  larger effort, deliberately deferred to a future phase).
 - **Opportunities are fully ephemeral**: `/generate` never persists the customer requirement it
   parses — spec requires reuse across multiple employee generations for the same opportunity
   (Phase 6).
