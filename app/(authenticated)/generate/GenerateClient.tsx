@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, Suspense } from 'react';
-import GeneratedCvPreview from './GeneratedCvPreview';
+import CvPreviewTemplate from './CvPreviewTemplate';
 import CvSectionEditor from './CvSectionEditor';
 import { useSearchParams } from 'next/navigation';
 import { useData } from '../../context/DataContext';
@@ -13,7 +13,7 @@ import {
   listTemplatesAction,
   saveGeneratedCvAction,
 } from './actions';
-import { exportToPdf } from '@/lib/cvExport';
+import { exportToPdf, exportToDocx } from '@/lib/cvExport';
 import {
   BrainCircuit,
   Sparkles,
@@ -208,21 +208,12 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
   };
 
   const handleDownloadDocx = async () => {
-    if (!tailoredCv || !selectedTemplateId) return;
+    if (!tailoredCv) return;
     try {
-      const response = await fetch('/api/templates/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          templateId: selectedTemplateId,
-          tailoredCv,
-          avatarUrl: selectedEmployee?.avatar || null,
-        }),
-      });
-      if (!response.ok) throw new Error('Failed to generate DOCX from server.');
-      const blob = await response.blob();
-      const { saveAs } = await import('file-saver');
-      saveAs(blob, `${(tailoredCv.name ?? 'CV').replace(/\s+/g, '_')}_Tailored_CV.docx`);
+      await exportToDocx(
+        'cv-preview-root',
+        `${(tailoredCv.name ?? 'CV').replace(/\s+/g, '_')}_Tailored_CV`
+      );
     } catch (err) {
       console.error(err);
       alert('Could not export to DOCX.');
@@ -696,13 +687,13 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
             </div>
           </div>
 
-          {/* Full-width filled DOCX preview via Office Online Viewer */}
-          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 shadow-inner">
-            <GeneratedCvPreview
-              templateId={selectedTemplateId || null}
-              tailoredCv={tailoredCv}
-              avatarUrl={selectedEmployee?.avatar ?? null}
-              className="min-h-[600px]"
+          {/* Full-width interactive HTML preview showing the customized CV template */}
+          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 shadow-inner flex justify-center">
+            <CvPreviewTemplate
+              cv={{
+                ...tailoredCv,
+                avatar: selectedEmployee?.avatar || null,
+              }}
             />
           </div>
         </div>
