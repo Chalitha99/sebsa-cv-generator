@@ -19,24 +19,68 @@ function mapCvToTemplateData(cv: any, imageBuffer?: Buffer) {
     title: cv.currentPosition || '',
     objective: cv.summary || '',
     summary: cv.summary || '',
-    skills: Array.isArray(cv.skillsAligned) ? cv.skillsAligned.join(', ') : '',
+    skills: Array.isArray(cv.skillsAligned)
+      ? cv.skillsAligned.map((s: string) => ({ name: s }))
+      : [],
     skillsAligned: Array.isArray(cv.skillsAligned)
       ? cv.skillsAligned.map((s: string) => ({ name: s }))
       : [],
     experience: Array.isArray(cv.experience)
       ? cv.experience.map((e: any) => ({
-          ...e,
+          position: e.position || '',
+          company: e.company || '',
+          period: e.period || '',
+          description: Array.isArray(e.tasks)
+            ? e.tasks.map((t: string) => `• ${t}`).join('\n')
+            : (e.description || ''),
           tasks: Array.isArray(e.tasks) ? e.tasks.map((t: string) => ({ task: t })) : [],
           tasksList: Array.isArray(e.tasks)
             ? e.tasks.map((t: string) => `• ${t}`).join('\n')
             : '',
         }))
       : [],
-    education: Array.isArray(cv.academic) ? cv.academic : [],
-    academic: Array.isArray(cv.academic) ? cv.academic : [],
-    projects: Array.isArray(cv.specialProjects) ? cv.specialProjects : [],
-    specialProjects: Array.isArray(cv.specialProjects) ? cv.specialProjects : [],
-    certifications: Array.isArray(cv.certifications) ? cv.certifications : [],
+    education: Array.isArray(cv.academic)
+      ? cv.academic.map((a: any) => ({
+          degree: a.qualification || '',
+          qualification: a.qualification || '',
+          institution: a.institution || '',
+          year: a.period || '',
+          period: a.period || '',
+        }))
+      : [],
+    academic: Array.isArray(cv.academic)
+      ? cv.academic.map((a: any) => ({
+          degree: a.qualification || '',
+          qualification: a.qualification || '',
+          institution: a.institution || '',
+          year: a.period || '',
+          period: a.period || '',
+        }))
+      : [],
+    projects: Array.isArray(cv.specialProjects)
+      ? cv.specialProjects.map((p: any) => ({
+          projectName: p.title || '',
+          title: p.title || '',
+          projectDescription: p.brief || '',
+          brief: p.brief || '',
+        }))
+      : [],
+    specialProjects: Array.isArray(cv.specialProjects)
+      ? cv.specialProjects.map((p: any) => ({
+          projectName: p.title || '',
+          title: p.title || '',
+          projectDescription: p.brief || '',
+          brief: p.brief || '',
+        }))
+      : [],
+    certifications: Array.isArray(cv.certifications)
+      ? cv.certifications.map((c: any) => ({
+          certificateName: c.name || '',
+          name: c.name || '',
+          issuer: c.issuer || '',
+          year: c.year || '',
+        }))
+      : [],
     ...(imageBuffer ? { profileImage: imageBuffer } : {}),
   };
 }
@@ -128,6 +172,17 @@ export async function POST(request: Request) {
       const imgBuf = imageBuffer;
       const imageModule = new ImageModule({
         centered: false,
+        setParser(placeHolderContent: string) {
+          if (placeHolderContent === 'profileImage') {
+            return {
+              type: 'placeholder',
+              value: 'profileImage',
+              module: 'open-xml-templating/docxtemplater-image-module',
+              centered: false,
+            };
+          }
+          return null;
+        },
         getImage() {
           return imgBuf;
         },
