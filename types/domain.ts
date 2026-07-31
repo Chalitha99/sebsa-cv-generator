@@ -48,6 +48,8 @@ export interface Employee {
   skills: string[];
   lastUpdated: string;
   avatar: string;
+  /** True once this profile is linked to a real login (self-claimed or self-registered). */
+  isAccountLinked: boolean;
 
   // Legacy optional fields (populated from Supabase for existing employees)
   experience?: EmployeeExperience[];
@@ -79,4 +81,10 @@ export interface CreateEmployeeInput {
 
   // Profile picture URL — stored in Supabase Storage profile-pictures bucket
   avatarUrl?: string;
+
+  // Set only by the self-service /onboarding flow (see app/onboarding/actions.ts). Links the new
+  // profile to the creating auth user and forces status='draft' regardless of caller — admin/
+  // reviewer-created profiles never set this and stay 'published' immediately, matching existing
+  // behavior (docs/04-rbac-security.md §0.2 — full maker-checker review isn't built yet).
+  selfServiceUserId?: string;
 }

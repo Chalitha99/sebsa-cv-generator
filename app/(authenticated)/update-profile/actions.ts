@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getEmployeeByCode, updateEmployee } from '@/services/employee-service';
+import { getCurrentUser, isAdminOrAbove } from '@/lib/auth';
 import type { CreateEmployeeInput, Employee } from '@/types/domain';
 
 /**
@@ -29,11 +30,15 @@ export async function updateEmployeeAction(
   profileId: string,
   input: CreateEmployeeInput
 ): Promise<void> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // This uses the service-role client below (bypasses RLS), so this role check is the actual
+  // enforcement boundary, not just a friendlier error message. Previously this only checked for
+  // *any* authenticated session, which let any signed-in user — including role 'employee' —
+  // edit an arbitrary profile by id.
+  const user = await getCurrentUser();
   if (!user) throw new Error('Not authenticated.');
+  if (!isAdminOrAbove(user.role)) {
+    throw new Error('Unauthorized: Admin or Super Admin role required.');
+  }
 
   const adminClient = createAdminClient();
   await updateEmployee(adminClient, profileId, input, user.id);

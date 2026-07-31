@@ -44,6 +44,7 @@ function mapListRow(row: any): Employee {
     skills: mapSkills(row),
     lastUpdated: formatDate(row.updated_at),
     avatar: row.avatar_url ?? DEFAULT_AVATAR,
+    isAccountLinked: row.user_id != null,
   };
 }
 

@@ -13,7 +13,7 @@ import type { CvExperienceEntry, CvAcademicEntry, CvProjectEntry, CvCertificatio
 
 const LIST_SELECT = `
   id, employee_code, full_name, email, role_title, specialty, location, years_experience,
-  avatar_url, updated_at,
+  avatar_url, updated_at, user_id,
   departments ( name ),
   profile_skills ( skills ( name ) )
 `;
@@ -116,7 +116,11 @@ export async function createEmployeeRow(
         email: input.email,
         role_title: input.currentPosition ?? input.role,
         department_id: dept?.id ?? null,
-        status: 'published',
+        // Self-service submissions start as 'draft' (not searchable/usable) until an Admin
+        // reviews them — see docs/04-rbac-security.md §0. Admin/Reviewer-created profiles keep
+        // today's behavior of going straight to 'published'.
+        status: input.selfServiceUserId ? 'draft' : 'published',
+        user_id: input.selfServiceUserId ?? null,
         education: educationJson,
         avatar_url: input.avatarUrl ?? null,
         created_by: createdBy,

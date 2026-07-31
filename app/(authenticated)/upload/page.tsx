@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation';
 import { PageWrapper } from '../../components/PageWrapper';
 import { useData } from '../../context/DataContext';
 import { getDepartmentsAction, uploadProfilePictureAction } from './actions';
+import { extractText } from '@/lib/parsing/extractClientText';
+import { useRoleGate } from '@/lib/useRoleGate';
+import { isAdminOrAbove } from '@/lib/roles';
 import {
   emptyCvProfile,
   type CvProfile,
@@ -68,54 +71,14 @@ const TEXTAREA_CLS = INPUT_CLS + ' resize-none leading-relaxed';
 const GHOST_BTN =
   'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all cursor-pointer';
 
-// ─── Text extraction helpers ──────────────────────────────────────────────────
-
-async function extractTextFromTxt(file: File): Promise<string> {
-  return file.text();
-}
-
-async function extractTextFromDocx(file: File): Promise<string> {
-  const mammoth = await import('mammoth');
-  const arrayBuffer = await file.arrayBuffer();
-  const result = await mammoth.extractRawText({ arrayBuffer });
-  return result.value;
-}
-
-async function extractTextFromPdf(file: File): Promise<string> {
-  const pdfjsLib = await import('pdfjs-dist');
-  // Use the bundled worker via a CDN pointing to the same version
-  const workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
-  pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
-
-  const arrayBuffer = await file.arrayBuffer();
-  const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  const pages: string[] = [];
-
-  for (let i = 1; i <= pdfDoc.numPages; i++) {
-    const page = await pdfDoc.getPage(i);
-    const textContent = await page.getTextContent();
-    const pageText = textContent.items
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .map((item: any) => item.str as string)
-      .join(' ');
-    pages.push(pageText);
-  }
-
-  return pages.join('\n');
-}
-
-async function extractText(file: File): Promise<string> {
-  const name = file.name.toLowerCase();
-  if (name.endsWith('.pdf')) return extractTextFromPdf(file);
-  if (name.endsWith('.docx')) return extractTextFromDocx(file);
-  return extractTextFromTxt(file);
-}
-
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function UploadPage() {
   const router = useRouter();
   const { addEmployee } = useData();
+  // Employee/CV Reviewer have no profile-creation permission (docs/04-rbac-security.md §2) —
+  // this is the UX guard; RLS + createEmployeeAction's own role check are the real boundary.
+  useRoleGate(isAdminOrAbove);
 
   // ── CV File state ─────────────────────────────────────────────────────────
   const [isDragActive, setIsDragActive] = useState(false);

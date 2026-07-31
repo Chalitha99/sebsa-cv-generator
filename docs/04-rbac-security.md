@@ -11,13 +11,43 @@ substantial features tracked as future phases, not part of this "user access" up
 
 - Pending Profile / Pending Change maker-checker workflow (doc §2, §3) — there is no
   `pending_profiles` table or approve/reject action yet. CV Reviewer's "Approve" permission in
-  the matrix has no concrete implementation to attach to.
+  the matrix has no concrete implementation to attach to. The minimal self-service flow below
+  reuses the existing `profiles.status` draft/published column as a stand-in "Pending Profile" —
+  an Admin publishes it via the existing admin update path, there's no dedicated review queue UI.
 - Retention holds and automated disposal (doc §5) — no retention/hold columns or disposal job.
 - Expanded audit logging for access-control and lifecycle events (doc §7) — `audit_logs` exists
   (Phase 11 in [06-phase-plan.md](./06-phase-plan.md)) but role-grant/lifecycle events aren't
   written to it yet.
-- Self-service employee registration/upload (doc §3 "Provisioning — Employee Self-Service") —
-  accounts are still admin-provisioned only; no signup flow exists.
+- Auth account **creation** for internal roles (Admin, CV Reviewer) is still manual (Supabase
+  Dashboard); only the Employee self-service **profile** path (below) is built.
+
+### Employee self-service profile linking (migration 0018)
+
+After landing the 4-role model, testing surfaced a real gap: no code path ever set
+`profiles.user_id`, so a logged-in `employee`-role account had nothing to see — an empty
+repository and no "own profile," because nothing was ever linked to them. `0018_employee_self_service_profile.sql`
++ `app/onboarding/` close this:
+
+- `(authenticated)/layout.tsx` redirects any `employee`-role user with no linked profile to
+  `/onboarding` (outside the `(authenticated)` route group, so no redirect loop).
+- `/onboarding` reuses the same client-side PDF/DOCX/TXT extraction (`lib/parsing/extractClientText.ts`,
+  shared with `/upload`) and `/api/parse-cv` Gemini extraction, then lets the employee review/
+  correct the top-level fields before submitting.
+- `createOwnProfileAction` (`app/onboarding/actions.ts`) uses the **RLS-bound** server client, not
+  the admin client — the new `profiles_self_insert` policy (role='employee', `user_id = auth.uid()`,
+  `status = 'draft'` only) is the actual enforcement boundary.
+- The resulting profile is `status='draft'`: invisible to the general repository list
+  (`listEmployeeRows` filters `status='published'`) until an Admin/Super Admin publishes it, but
+  visible to the employee themselves via the existing `profiles_select` own-row policy — so they
+  land on `/repository/<their-code>` after submitting, not an empty dashboard.
+- Employees may keep editing their own submission while still `draft` (`profiles_self_update_draft`);
+  once published, further self-edits are blocked (that's the doc's "Pending Change" flow, not built).
+
+**Also fixed while investigating**: `createEmployeeAction` (admin Upload) and `updateEmployeeAction`
+(`update-profile`) both use the service-role admin client (bypasses RLS) but previously checked
+only `if (!user) throw` — no role check — meaning any authenticated user, including `employee`,
+could call them directly and create or edit an arbitrary profile. Both now require
+`isAdminOrAbove(user.role)` before touching the admin client.
 
 ### Two flagged inconsistencies in the source document
 
@@ -147,11 +177,54 @@ the real enforcement boundary. The RLS policy above is what actually blocks a ba
 
 ## 7. Route-level protection (`proxy.ts`, Phase 3)
 
-Unchanged: `proxy.ts` protects `/dashboard`, `/repository`, `/upload`, `/generate`, `/templates`,
-`/settings` by refreshing the Supabase session and redirecting unauthenticated requests to
-`/login`. Role-specific gating happens in-page (Settings' User Access card, Templates' upload/
-delete controls) and in Server Actions — RLS is still the authoritative boundary, never the route
-guard alone.
+`proxy.ts` protects `/dashboard`, `/repository`, `/upload`, `/generate`, `/templates`,
+`/settings`, `/onboarding`, `/update-profile` by refreshing the Supabase session and redirecting
+unauthenticated requests to `/login`. It only checks *authentication*, not role — per-role gating
+happens at the page/nav level (§9) and in Server Actions. RLS is still the authoritative
+boundary, never the route guard or page-level redirect alone.
+
+## 9. Full role-gating pass (nav + page-level, all 4 roles)
+
+Beyond RLS, the UI itself now reflects the permission matrix (§2) so nobody is shown a page or
+button they can't act on:
+
+- **`app/components/Sidebar.tsx`**: nav items are filtered by role. Employee sees a single "My
+  Profile" link (`/repository/<their code>`). CV Reviewer sees Employee Profiles + CV Templates
+  only. Admin/Super Admin keep the full set (Dashboard, Employee Profiles, Create/Update Profile,
+  Customize CVs, CV Templates, Settings).
+- **Server Component pages** (`dashboard`, `repository`, `repository/[id]`, `generate`,
+  `update-profile`) call `getCurrentUser()` and `redirect()` before rendering: Employee always
+  lands on their own profile; CV Reviewer is redirected away from pages with no reviewer
+  permission (Upload, Generate, Update Profile, Settings) to `/repository`.
+- **Client-only pages with no Server wrapper** (`upload`, `templates`, `settings`) use
+  `lib/useRoleGate.ts` (new shared hook) or an inline equivalent to fetch the viewer's role
+  client-side and `router.replace()` away if not permitted. This is a UX guard only — RLS and
+  each Server Action's own role check are the real boundary, exactly as elsewhere in this doc.
+- `repository/[id]`'s "Verify Talent Match" button (routes to `/generate`) and `repository`'s
+  "Add Employee"/delete controls are hidden for viewers who can't use them, not just for Employee.
+
+## 10. Employee self-service: claim vs. create (migration 0019)
+
+0018 covered "create a new profile from scratch." 0019 adds the other half: an Admin may have
+already bulk-added a CV for someone before they ever logged in. On landing at `/onboarding`, the
+system first checks for an *unclaimed* profile (`user_id is null`) whose `email` exactly matches
+the caller's own verified login email (`auth.email()`, read from their JWT — never client input):
+
+- **Match found** → show a confirmation card (name/role/department preview) with "Yes, that's
+  me" / "Not me". Confirming links `profiles.user_id` immediately (`profiles_self_claim` RLS
+  policy) — no extra approval step, since the match is on their own verified email. "Not me"
+  falls through to the normal CV-upload creation flow (0018).
+- **No match** → straight to CV upload, as before.
+
+**Admin-side duplicate prevention**: `createEmployeeAction` (admin Upload path) now checks for an
+existing profile with the same email *before* creating a new one (any status), and refuses with a
+pointer to the existing record instead of silently creating a duplicate.
+
+**Active/Inactive display**: `Employee.isAccountLinked` (derived from `profiles.user_id != null`,
+not a new column) drives an "Active"/"Inactive" badge in the Repository list and detail page —
+distinct from `availability_status` (staffing availability), which is a different, pre-existing
+concept. "Active" means someone has actually logged in and claimed/created this profile;
+"Inactive" means it's still purely an Admin-maintained repository record.
 
 ## 8. Future OAuth (Microsoft SSO)
 

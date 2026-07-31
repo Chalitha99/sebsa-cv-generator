@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createEmployee } from '@/services/employee-service';
+import { getCurrentUser, isAdminOrAbove } from '@/lib/auth';
 import type { CreateEmployeeInput } from '@/types/domain';
 
 /**
@@ -52,16 +53,33 @@ export async function uploadProfilePictureAction(formData: FormData): Promise<st
  * verify the caller is authenticated before we proceed — we still require a valid session.
  */
 export async function createEmployeeAction(input: CreateEmployeeInput): Promise<string> {
-  // 1. Verify the caller has a valid authenticated session (user-scoped client, RLS enforced).
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // 1. Verify the caller is authenticated AND has permission to create profiles on someone
+  //    else's behalf. This uses the service-role client below (bypasses RLS), so this check is
+  //    the actual enforcement boundary — not just a friendlier error message.
+  const user = await getCurrentUser();
   if (!user) throw new Error('Not authenticated.');
+  if (!isAdminOrAbove(user.role)) {
+    throw new Error('Unauthorized: Admin or Super Admin role required. Employees self-register their own profile at /onboarding.');
+  }
 
   // 2. Perform all DB writes using the service-role client that bypasses RLS.
   //    The service-role key is server-only and never sent to the browser.
   const adminClient = createAdminClient();
+
+  // Duplicate check — catches any status (draft/published/archived), not just what a regular
+  // client would see, since we're already on the admin client. Prevents silently creating a
+  // second profile for someone who's already in the repository (bulk-added or self-service).
+  const { data: existing } = await adminClient
+    .from('profiles')
+    .select('employee_code')
+    .eq('email', input.email)
+    .maybeSingle();
+  if (existing) {
+    throw new Error(
+      `A profile already exists for ${input.email} (${existing.employee_code}). Use "Update Profile" instead of creating a new one.`
+    );
+  }
+
   const rowId = await createEmployee(adminClient, input, user.id);
 
   revalidatePath('/repository');

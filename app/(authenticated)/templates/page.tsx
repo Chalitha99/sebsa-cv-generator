@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { PageWrapper } from '../../components/PageWrapper';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { isReviewerOrAbove, type UserRole } from '@/lib/roles';
 import DocxPreview from '../generate/DocxPreview';
@@ -31,6 +32,7 @@ interface Template {
 }
 
 export default function TemplatesPage() {
+  const router = useRouter();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<UserRole>('employee');
@@ -66,7 +68,14 @@ export default function TemplatesPage() {
           .eq('user_id', user.id)
           .maybeSingle();
         if (roleData) {
-          setUserRole(roleData.role as UserRole);
+          const resolvedRole = roleData.role as UserRole;
+          setUserRole(resolvedRole);
+          // Employee has no template access at all (docs/04-rbac-security.md §2) — UX guard
+          // only; templates_reviewer_all RLS is the real boundary.
+          if (!isReviewerOrAbove(resolvedRole)) {
+            router.replace('/dashboard');
+            return;
+          }
         }
       }
     } catch (err) {

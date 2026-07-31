@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { useData } from '../../context/DataContext';
 import { PageWrapper } from '../../components/PageWrapper';
 import { createClient } from '@/lib/supabase/client';
@@ -31,6 +32,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
 };
 
 export default function SettingsPage() {
+  const router = useRouter();
   const { companySettings, updateCompanySettings, notificationSettings, updateNotificationSettings } = useData();
 
   // Settings State
@@ -70,10 +72,16 @@ export default function SettingsPage() {
       const viewerRole = (roleRow?.role as UserRole | undefined) ?? 'employee';
       setCurrentUserRole(viewerRole);
 
-      if (isAdminOrAbove(viewerRole)) {
-        const list = await listUsersAction();
-        setUsers(list);
+      // Settings is entirely an Admin/Super Admin surface (company config, templates picker,
+      // user access) — docs/04-rbac-security.md §2. UX guard only; the User Access card's own
+      // actions (listUsersAction/updateUserRoleAction) are the real boundary.
+      if (!isAdminOrAbove(viewerRole)) {
+        router.replace('/dashboard');
+        return;
       }
+
+      const list = await listUsersAction();
+      setUsers(list);
     } catch (err) {
       console.error('Failed to load user access data:', err);
       setUsersError(err instanceof Error ? err.message : 'Failed to load users.');

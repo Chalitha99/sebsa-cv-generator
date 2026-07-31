@@ -9,10 +9,15 @@ export default async function AuthenticatedLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // Belt-and-braces alongside middleware.ts (which already redirects unauthenticated requests) —
+  // Belt-and-braces alongside proxy.ts (which already redirects unauthenticated requests) —
   // this also gives Sidebar/Header the real session user instead of a Context-stored mock.
   const user = await getCurrentUser();
   if (!user) redirect('/login');
+
+  // Self-service employees have nothing to see in the main app until they've created their own
+  // profile — see docs/04-rbac-security.md §0 and supabase/migrations/0018. /onboarding lives
+  // outside this route group so it doesn't loop back here.
+  if (user.role === 'employee' && !user.hasLinkedProfile) redirect('/onboarding');
 
   return (
     <div className="min-h-screen bg-[#fbf9fb] text-[#1b1b1d] font-sans">
