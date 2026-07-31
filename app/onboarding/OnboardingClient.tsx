@@ -15,6 +15,7 @@ import {
   AlertCircle,
   UserCheck,
   UserX,
+  Clock,
 } from 'lucide-react';
 
 type Status = 'idle' | 'extracting' | 'analyzing' | 'done' | 'error';
@@ -23,12 +24,15 @@ interface OnboardingClientProps {
   userEmail: string;
   departments: { id: string; name: string }[];
   claimableProfile: ClaimableProfile | null;
+  pendingClaim: { employeeCode: string } | null;
 }
 
-export default function OnboardingClient({ userEmail, departments, claimableProfile }: OnboardingClientProps) {
-  // If we found an unclaimed profile matching their email, confirm before falling through to
-  // the "create from scratch" CV-upload flow below.
-  const [mode, setMode] = useState<'claim' | 'create'>(claimableProfile ? 'claim' : 'create');
+export default function OnboardingClient({ userEmail, departments, claimableProfile, pendingClaim }: OnboardingClientProps) {
+  // Priority: an already-submitted claim request > a discoverable match to confirm > create from
+  // scratch. Claiming no longer links immediately — it stages a request a reviewer must approve.
+  const [mode, setMode] = useState<'pending-claim' | 'claim' | 'create'>(
+    pendingClaim ? 'pending-claim' : claimableProfile ? 'claim' : 'create'
+  );
   const [isClaiming, setIsClaiming] = useState(false);
   const [claimError, setClaimError] = useState<string | null>(null);
 
@@ -38,10 +42,11 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
     setClaimError(null);
     try {
       await claimProfileAction(claimableProfile.id);
-      // claimProfileAction redirects to /repository/<code> on success
+      setMode('pending-claim');
     } catch (err) {
-      console.error('Profile claim failed:', err);
-      setClaimError(err instanceof Error ? err.message : 'Failed to link this profile to your account.');
+      console.error('Profile claim request failed:', err);
+      setClaimError(err instanceof Error ? err.message : 'Failed to submit your claim request.');
+    } finally {
       setIsClaiming(false);
     }
   };
@@ -145,6 +150,29 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
     }
   };
 
+  if (mode === 'pending-claim') {
+    const code = claimableProfile?.employeeCode ?? pendingClaim?.employeeCode;
+    return (
+      <PageWrapper className="min-h-screen w-full flex items-center justify-center bg-[#fbf9fb] p-8">
+        <div className="w-full max-w-md">
+          <div className="bg-white p-8 rounded-2xl border border-slate-200/80 shadow-sm text-center">
+            <div className="w-14 h-14 bg-amber-50 rounded-full flex items-center justify-center text-amber-600 mb-5 mx-auto">
+              <Clock className="w-7 h-7" />
+            </div>
+            <h1 className="text-xl font-black tracking-tight text-slate-900 font-sans leading-tight mb-2">
+              Waiting for approval
+            </h1>
+            <p className="text-sm text-slate-500 mb-2">
+              We've asked a Super Admin or CV Reviewer to confirm this profile is yours. You'll
+              get access as soon as it's approved.
+            </p>
+            {code && <p className="text-[10px] font-mono text-slate-400 mt-3">{code}</p>}
+          </div>
+        </div>
+      </PageWrapper>
+    );
+  }
+
   if (mode === 'claim' && claimableProfile) {
     return (
       <PageWrapper className="min-h-screen w-full flex items-center justify-center bg-[#fbf9fb] p-8">
@@ -190,7 +218,7 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
                 className="flex items-center justify-center gap-1.5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl text-xs transition-colors disabled:opacity-40"
               >
                 {isClaiming ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserCheck className="w-4 h-4" />}
-                <span>{isClaiming ? 'Linking...' : "Yes, that's me"}</span>
+                <span>{isClaiming ? 'Requesting...' : "Yes, that's me"}</span>
               </button>
             </div>
           </div>

@@ -4,7 +4,7 @@ import React, { useState, useMemo, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageWrapper } from '../../components/PageWrapper';
 import type { Employee } from '@/types/domain';
-import { isAdminOrAbove, type UserRole } from '@/lib/roles';
+import { isAdminOrAbove, isReviewerOrAbove, type UserRole } from '@/lib/roles';
 import { deleteEmployeeAction } from './actions';
 import {
   Search,
@@ -26,7 +26,10 @@ interface RepositoryClientProps {
 export default function RepositoryClient({ employees, viewerRole }: RepositoryClientProps) {
   const router = useRouter();
   const [isDeleting, startDeleteTransition] = useTransition();
-  const canManageEmployees = isAdminOrAbove(viewerRole);
+  // CV Reviewer can now create profiles too (docs/04-rbac-security.md §13), but editing/deleting
+  // someone else's existing profile stays Admin/Super-Admin-only.
+  const canCreateEmployees = isReviewerOrAbove(viewerRole);
+  const canDeleteEmployees = isAdminOrAbove(viewerRole);
 
   const deleteEmployee = (rowId: string) => {
     startDeleteTransition(async () => {
@@ -125,7 +128,7 @@ export default function RepositoryClient({ employees, viewerRole }: RepositoryCl
             <Filter className="w-4 h-4" />
             <span>Clear Filters</span>
           </button>
-          {canManageEmployees && (
+          {canCreateEmployees && (
             <button
               onClick={handleAddEmployee}
               className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white font-sans text-xs font-black uppercase tracking-wider rounded-full shadow-lg shadow-indigo-600/10 hover:bg-indigo-700 transition-all active:scale-95"
@@ -309,7 +312,7 @@ export default function RepositoryClient({ employees, viewerRole }: RepositoryCl
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        {canManageEmployees && (
+                        {canDeleteEmployees && (
                           <button
                             onClick={() => deleteEmployee(emp.rowId)}
                             disabled={isDeleting}

@@ -59,30 +59,50 @@ export async function findClaimableProfileAction(): Promise<ClaimableProfile | n
 }
 
 /**
- * Links an existing unclaimed profile to the caller's own account. Uses the RLS-bound client —
- * the profiles_self_claim policy (0019) is the real enforcement: it only allows touching a row
- * that is currently unclaimed and matches the caller's own verified email, and only ever sets
- * user_id to the caller's own id.
+ * Requests linking an existing unclaimed profile to the caller's own account — stages the
+ * request (pending_claim_user_id) rather than linking immediately; a Super Admin or CV Reviewer
+ * must approve it (app/(authenticated)/review/actions.ts) before profiles.user_id is actually
+ * set. Uses the RLS-bound client — profiles_self_claim_request (0020) is the real enforcement:
+ * it only allows touching a row that is currently unclaimed and matches the caller's own
+ * verified email, and only ever sets pending_claim_user_id to the caller's own id.
  */
 export async function claimProfileAction(profileId: string): Promise<void> {
   const user = await getCurrentUser();
   if (!user) throw new Error('Not authenticated.');
-  if (user.role !== 'employee') throw new Error('Only Employee accounts can self-claim a profile.');
+  if (user.role !== 'employee') throw new Error('Only Employee accounts can request a profile claim.');
   if (user.hasLinkedProfile) throw new Error('You already have a profile on file.');
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('profiles')
+    .update({ pending_claim_user_id: user.id, updated_at: new Date().toISOString() })
+    .eq('id', profileId)
+    .is('user_id', null);
+
+  if (error) throw error;
+
+  revalidatePath('/onboarding');
+}
+
+/**
+ * Detects a claim request the caller already submitted (pending_claim_user_id = them) so
+ * /onboarding can show a "waiting for approval" screen instead of re-showing the claim card or
+ * looping them back into the create-from-scratch flow.
+ */
+export async function findPendingClaimAction(): Promise<{ employeeCode: string } | null> {
+  const user = await getCurrentUser();
+  if (!user) throw new Error('Not authenticated.');
+  if (user.role !== 'employee' || user.hasLinkedProfile) return null;
 
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('profiles')
-    .update({ user_id: user.id, updated_at: new Date().toISOString() })
-    .eq('id', profileId)
-    .is('user_id', null)
     .select('employee_code')
-    .single();
+    .eq('pending_claim_user_id', user.id)
+    .maybeSingle();
 
   if (error) throw error;
-
-  revalidatePath('/dashboard');
-  redirect(`/repository/${data.employee_code}`);
+  return data ? { employeeCode: data.employee_code as string } : null;
 }
 
 /**

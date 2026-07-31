@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createEmployee } from '@/services/employee-service';
-import { getCurrentUser, isAdminOrAbove } from '@/lib/auth';
+import { getCurrentUser, isReviewerOrAbove } from '@/lib/auth';
 import type { CreateEmployeeInput } from '@/types/domain';
 
 /**
@@ -58,8 +58,8 @@ export async function createEmployeeAction(input: CreateEmployeeInput): Promise<
   //    the actual enforcement boundary — not just a friendlier error message.
   const user = await getCurrentUser();
   if (!user) throw new Error('Not authenticated.');
-  if (!isAdminOrAbove(user.role)) {
-    throw new Error('Unauthorized: Admin or Super Admin role required. Employees self-register their own profile at /onboarding.');
+  if (!isReviewerOrAbove(user.role)) {
+    throw new Error('Unauthorized: Admin, Super Admin, or CV Reviewer role required. Employees self-register their own profile at /onboarding.');
   }
 
   // 2. Perform all DB writes using the service-role client that bypasses RLS.

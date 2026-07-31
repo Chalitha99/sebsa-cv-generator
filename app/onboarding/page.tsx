@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { getDepartmentsAction } from '../(authenticated)/upload/actions';
-import { findClaimableProfileAction } from './actions';
+import { findClaimableProfileAction, findPendingClaimAction } from './actions';
 import OnboardingClient from './OnboardingClient';
 
 export default async function OnboardingPage() {
@@ -12,9 +12,10 @@ export default async function OnboardingPage() {
   // profile) belongs in the main app.
   if (user.role !== 'employee' || user.hasLinkedProfile) redirect('/dashboard');
 
-  const [departments, claimableProfile] = await Promise.all([
+  const [departments, claimableProfile, pendingClaim] = await Promise.all([
     getDepartmentsAction(),
     findClaimableProfileAction(),
+    findPendingClaimAction(),
   ]);
 
   return (
@@ -22,6 +23,7 @@ export default async function OnboardingPage() {
       userEmail={user.email}
       departments={departments}
       claimableProfile={claimableProfile}
+      pendingClaim={pendingClaim}
     />
   );
 }

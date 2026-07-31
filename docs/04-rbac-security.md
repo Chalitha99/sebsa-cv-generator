@@ -6,18 +6,17 @@ Roles updated from the original 2-role MVP (Admin/Employee) to the 4-role model 
 `SEBSA_Access_Control_Retention_Privacy_Protocol.docx` v1.1 ("Draft for Stakeholder Review").
 Implemented in `supabase/migrations/0017_rbac_four_roles.sql`.
 
-**Explicitly out of scope for this change** (the source doc also specifies these; they're
-substantial features tracked as future phases, not part of this "user access" update):
+**Update (0020, demo-readiness pass)**: the maker-checker workflow originally deferred below is
+now built — see §10/§11. What's still explicitly out of scope:
 
-- Pending Profile / Pending Change maker-checker workflow (doc §2, §3) — there is no
-  `pending_profiles` table or approve/reject action yet. CV Reviewer's "Approve" permission in
-  the matrix has no concrete implementation to attach to. The minimal self-service flow below
-  reuses the existing `profiles.status` draft/published column as a stand-in "Pending Profile" —
-  an Admin publishes it via the existing admin update path, there's no dedicated review queue UI.
 - Retention holds and automated disposal (doc §5) — no retention/hold columns or disposal job.
 - Expanded audit logging for access-control and lifecycle events (doc §7) — `audit_logs` exists
-  (Phase 11 in [06-phase-plan.md](./06-phase-plan.md)) but role-grant/lifecycle events aren't
-  written to it yet.
+  (Phase 11 in [06-phase-plan.md](./06-phase-plan.md)) but role-grant/lifecycle/approval events
+  aren't written to it yet — `/review` approvals aren't currently logged anywhere but the
+  `updated_at` timestamp on the affected profile.
+- Structured experience/education editing in the self-service "Update My Profile" flow
+  (`/my-profile`) — it only proposes changes to role/department/skills. Re-uploading a CV via
+  `/onboarding` is still create-only, not an edit path.
 - Auth account **creation** for internal roles (Admin, CV Reviewer) is still manual (Supabase
   Dashboard); only the Employee self-service **profile** path (below) is built.
 
@@ -232,3 +231,49 @@ Unchanged from the original design — Supabase Auth supports adding an Azure AD
 without schema changes. The source doc's §3 states internal roles (Admin, CV Reviewer) should be
 linked to corporate SSO identity with no local passwords once SSO exists; today all roles
 authenticate via Supabase email/password, consistent with [01-spec-alignment.md](./01-spec-alignment.md) §2.
+
+## 11. Self-service signup (`/signup`)
+
+New: `app/signup/page.tsx` calls `supabase.auth.signUp()` directly (no admin action involved —
+anyone can create an account, same as any consumer SaaS signup). Every new account gets
+`role='employee'` via the existing `handle_new_user()` trigger (0002) — there is no way to
+self-register as Admin/Super Admin/CV Reviewer, matching the source doc's provisioning model
+(§3: privileged roles are always provisioned by an existing Super Admin/Admin). If the Supabase
+project has email confirmation enabled, the signup page shows a "check your email" screen instead
+of a session; login proceeds normally once confirmed. This is deliberately provider-agnostic — an
+Azure AD button can be added to both `/login` and `/signup` later without touching this flow.
+
+## 12. Full maker-checker workflow (migration 0020)
+
+Three independent approval gates, all reviewed from one page (`/review`, Super Admin/Admin/CV
+Reviewer only — `app/(authenticated)/review/`):
+
+| Gate | Employee action | Storage | Approve | Reject |
+|---|---|---|---|---|
+| New profile | Create from scratch at `/onboarding` (0018) | `profiles.status = 'draft'` | `status → 'published'` | delete the draft row |
+| Account claim | "Yes, that's me" at `/onboarding` on an Admin-bulk-added profile (0019/0020) | `profiles.pending_claim_user_id` | `user_id ← pending_claim_user_id`, clear pending | clear `pending_claim_user_id` |
+| Profile edit | "Update My Profile" at `/my-profile`, published profiles only | `profiles.pending_change` (jsonb: role/department/skills) | merge into live columns via `applyProfileChange()`, clear pending | clear `pending_change`/`pending_change_submitted_at` |
+
+Approve/reject actions (`app/(authenticated)/review/actions.ts`) use the service-role admin
+client with a `isReviewerOrAbove()` check as the enforcement boundary — the same established
+pattern as `createEmployeeAction`/`updateEmployeeAction`/`listUsersAction`, chosen because the
+approval logic (merging a partial JSON patch into specific columns without touching unrelated
+child tables — see `applyProfileChange()`'s doc comment on why it can't reuse
+`updateEmployeeRow`) isn't expressible as a simple RLS row policy the way the *staging* writes
+(`profiles_self_claim_request`, `profiles_self_propose_change`) are.
+
+**Onboarding state machine** (`app/onboarding/page.tsx` computes all three checks server-side on
+every load): pending claim request already submitted → waiting screen; else an unclaimed profile
+matches their email → confirm card ("yes"/"not me"); else → CV upload create-from-scratch form.
+This ordering prevents an infinite bounce between `/onboarding` and the confirm card after
+requesting a claim — `hasLinkedProfile` stays false until approval, but the pending-claim check
+takes priority over re-showing the claim card.
+
+## 13. CV Reviewer can now create profiles
+
+Per explicit product direction (this demo-readiness pass), CV Reviewer gained profile-creation
+rights — `createEmployeeAction`'s gate changed from `isAdminOrAbove` to `isReviewerOrAbove`, and
+`profiles_admin_insert` (0017) was replaced by `profiles_reviewer_insert` (0020). This is a
+deliberate widening beyond the source document's literal matrix (which gives CV Reviewer no
+profile-creation permission, only "Approve") — CV Reviewer editing/deleting other people's
+existing profiles is still Admin/Super-Admin-only, unchanged.

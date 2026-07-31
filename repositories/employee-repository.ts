@@ -20,7 +20,7 @@ const LIST_SELECT = `
 
 const DETAIL_SELECT = `
   ${LIST_SELECT},
-  education,
+  education, status, pending_change, pending_change_submitted_at,
   experiences ( company, role_title, employment_type, start_date, end_date, is_current, description, display_order ),
   projects ( name, description, tags, display_order ),
   certifications ( name, issuer, issued_date )
@@ -221,6 +221,59 @@ async function insertCertifications(
 
   const { error } = await supabase.from('certifications').insert(rows);
   if (error) throw error;
+}
+
+/** Full replace — clears existing profile_skills links first. Used for skill edits, which are a
+ *  complete replacement list, not a partial patch. */
+export async function replaceProfileSkills(
+  supabase: SupabaseClient,
+  profileId: string,
+  skillNames: string[]
+): Promise<void> {
+  const { error: clearError } = await supabase.from('profile_skills').delete().eq('profile_id', profileId);
+  if (clearError) throw clearError;
+  if (skillNames.length > 0) {
+    await linkSkills(supabase, profileId, skillNames);
+  }
+}
+
+export interface ProfileCoreChange {
+  role: string;
+  department: string;
+  skills: string[];
+}
+
+/**
+ * Applies an approved employee self-edit (docs/04-rbac-security.md §10/0020) — only the flat
+ * role/department/skills fields the self-service "Update My Profile" form exposes. Deliberately
+ * does NOT touch experiences/projects/certifications like createEmployeeRow/updateEmployeeRow do
+ * — those weren't part of the proposed change, and clearing+not-reinserting them would silently
+ * wipe the employee's existing structured CV data.
+ */
+export async function applyProfileChange(
+  supabase: SupabaseClient,
+  profileId: string,
+  change: ProfileCoreChange,
+  updatedBy: string
+): Promise<void> {
+  const { data: dept } = await supabase
+    .from('departments')
+    .select('id')
+    .eq('name', change.department)
+    .maybeSingle();
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({
+      role_title: change.role,
+      department_id: dept?.id ?? null,
+      updated_by: updatedBy,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', profileId);
+  if (error) throw error;
+
+  await replaceProfileSkills(supabase, profileId, change.skills);
 }
 
 async function linkSkills(supabase: SupabaseClient, profileId: string, skillNames: string[]) {

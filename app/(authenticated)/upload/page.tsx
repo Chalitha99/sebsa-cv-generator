@@ -7,7 +7,7 @@ import { useData } from '../../context/DataContext';
 import { getDepartmentsAction, uploadProfilePictureAction } from './actions';
 import { extractText } from '@/lib/parsing/extractClientText';
 import { useRoleGate } from '@/lib/useRoleGate';
-import { isAdminOrAbove } from '@/lib/roles';
+import { isReviewerOrAbove } from '@/lib/roles';
 import {
   emptyCvProfile,
   type CvProfile,
@@ -78,7 +78,7 @@ export default function UploadPage() {
   const { addEmployee } = useData();
   // Employee/CV Reviewer have no profile-creation permission (docs/04-rbac-security.md §2) —
   // this is the UX guard; RLS + createEmployeeAction's own role check are the real boundary.
-  useRoleGate(isAdminOrAbove);
+  useRoleGate(isReviewerOrAbove);
 
   // ── CV File state ─────────────────────────────────────────────────────────
   const [isDragActive, setIsDragActive] = useState(false);

@@ -21,7 +21,9 @@ import {
   ExternalLink,
   Code2,
   Cpu,
-  BadgeCheck
+  BadgeCheck,
+  Clock,
+  PenLine,
 } from 'lucide-react';
 
 interface EmployeeProfileClientProps {
@@ -93,13 +95,44 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
   return (
     <PageWrapper className="p-8">
       {/* Breadcrumb / Back button */}
-      <button
-        onClick={handleBack}
-        className="flex items-center gap-2 text-xs font-black text-slate-500 hover:text-slate-900 uppercase tracking-wider mb-6 group cursor-pointer"
-      >
-        <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
-        <span>Back to Repository</span>
-      </button>
+      <div className="flex items-center justify-between mb-6">
+        <button
+          onClick={handleBack}
+          className="flex items-center gap-2 text-xs font-black text-slate-500 hover:text-slate-900 uppercase tracking-wider group cursor-pointer"
+        >
+          <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
+          <span>Back to Repository</span>
+        </button>
+
+        {viewerRole === 'employee' && employee.status === 'published' && !employee.hasPendingChange && (
+          <button
+            onClick={() => router.push('/my-profile')}
+            className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-wide transition-colors"
+          >
+            <PenLine className="w-3.5 h-3.5" />
+            <span>Edit Profile</span>
+          </button>
+        )}
+      </div>
+
+      {/* Review status banners */}
+      {employee.status === 'draft' && (
+        <div className="mb-6 flex items-center gap-2.5 px-4 py-3 bg-amber-50 border border-amber-200/60 rounded-xl text-amber-700">
+          <Clock className="w-4 h-4 shrink-0" />
+          <p className="text-xs font-semibold">
+            This profile is pending review by a Super Admin or CV Reviewer — it won't appear in the
+            general repository until approved.
+          </p>
+        </div>
+      )}
+      {employee.hasPendingChange && (
+        <div className="mb-6 flex items-center gap-2.5 px-4 py-3 bg-amber-50 border border-amber-200/60 rounded-xl text-amber-700">
+          <Clock className="w-4 h-4 shrink-0" />
+          <p className="text-xs font-semibold">
+            A proposed update to this profile is pending review.
+          </p>
+        </div>
+      )}
 
       {/* Two Column Dashboard Grid */}
       <div className="grid grid-cols-12 gap-8">

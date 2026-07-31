@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { updateSession } from '@/lib/supabase/middleware';
 
-const PROTECTED_PREFIXES = ['/dashboard', '/repository', '/upload', '/generate', '/templates', '/settings', '/onboarding', '/update-profile'];
+const PROTECTED_PREFIXES = ['/dashboard', '/repository', '/upload', '/generate', '/templates', '/settings', '/onboarding', '/update-profile', '/my-profile', '/review'];
 
 export async function proxy(request: NextRequest) {
   const { supabaseResponse, user } = await updateSession(request);
@@ -17,7 +17,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
-  if (pathname === '/login' && user) {
+  if ((pathname === '/login' || pathname === '/signup') && user) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 

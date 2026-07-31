@@ -17,6 +17,7 @@ import {
   Sparkles,
   Users,
   User,
+  ClipboardCheck,
   LogOut
 } from 'lucide-react';
 
@@ -35,22 +36,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ user }) => {
     router.refresh();
   };
 
-  // Nav visibility follows the permission matrix (docs/04-rbac-security.md §2): Employee only
-  // ever has their own profile; CV Reviewer can view profiles and manage CV templates but can't
-  // create/edit profiles or generate CVs; Admin/Super Admin keep the full set.
+  // Nav visibility follows the permission matrix (docs/04-rbac-security.md §2/§10): Employee only
+  // ever has their own profile; CV Reviewer can view profiles, create profiles, manage CV
+  // templates, and review pending approvals, but can't edit others' profiles or generate CVs;
+  // Admin/Super Admin keep the full set.
   const navItems = user.role === 'employee'
     ? [{ name: 'My Profile', path: `/repository/${user.employeeCode}`, icon: User }]
     : [
         ...(isAdminOrAbove(user.role) ? [{ name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard }] : []),
         { name: 'Employee Profiles', path: '/repository', icon: FolderOpen },
+        ...(isReviewerOrAbove(user.role) ? [{ name: 'Create Profile', path: '/upload', icon: CloudUpload }] : []),
         ...(isAdminOrAbove(user.role)
           ? [
-              { name: 'Create Profile', path: '/upload', icon: CloudUpload },
               { name: 'Update Profile', path: '/update-profile', icon: Users },
               { name: 'Customize CVs', path: '/generate', icon: BrainCircuit },
             ]
           : []),
         ...(isReviewerOrAbove(user.role) ? [{ name: 'CV Templates', path: '/templates', icon: FileSpreadsheet }] : []),
+        ...(isReviewerOrAbove(user.role) ? [{ name: 'Pending Approvals', path: '/review', icon: ClipboardCheck }] : []),
       ];
 
   return (

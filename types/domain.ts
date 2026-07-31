@@ -50,6 +50,9 @@ export interface Employee {
   avatar: string;
   /** True once this profile is linked to a real login (self-claimed or self-registered). */
   isAccountLinked: boolean;
+  /** Only populated by getEmployeeByCode (detail view) — listEmployees always returns 'published'. */
+  status?: 'draft' | 'published' | 'archived';
+  hasPendingChange?: boolean;
 
   // Legacy optional fields (populated from Supabase for existing employees)
   experience?: EmployeeExperience[];

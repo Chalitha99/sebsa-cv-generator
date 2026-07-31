@@ -168,6 +168,8 @@ export async function getEmployeeByCode(
     cvCertifications: cvCertifications.length > 0 ? cvCertifications : undefined,
     cvAcademic: cvAcademic.length > 0 ? cvAcademic : undefined,
     currentPosition: (row as any).role_title ?? undefined,
+    status: (row as any).status ?? undefined,
+    hasPendingChange: (row as any).pending_change != null,
   };
   emp.avatar = await getSignedAvatarUrl(supabase, emp.avatar);
   return emp;
