@@ -13,7 +13,7 @@ import {
   listTemplatesAction,
   saveGeneratedCvAction,
 } from './actions';
-import { exportToPdf, exportToDocx } from '@/lib/cvExport';
+import { exportToPdf, exportTemplatedDocx } from '@/lib/cvExport';
 import {
   BrainCircuit,
   Sparkles,
@@ -208,15 +208,17 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
   };
 
   const handleDownloadDocx = async () => {
-    if (!tailoredCv) return;
+    if (!tailoredCv || !selectedTemplateId) return;
     try {
-      await exportToDocx(
-        'cv-preview-root',
+      await exportTemplatedDocx(
+        selectedTemplateId,
+        tailoredCv,
+        selectedEmployee?.avatar,
         `${(tailoredCv.name ?? 'CV').replace(/\s+/g, '_')}_Tailored_CV`
       );
     } catch (err) {
-      console.error(err);
-      alert('Could not export to DOCX.');
+      console.error('DOCX export failed:', err);
+      alert(err instanceof Error ? err.message : 'Could not export to DOCX.');
     }
   };
 
@@ -227,8 +229,9 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
         'cv-preview-root',
         `${(tailoredCv.name ?? 'CV').replace(/\s+/g, '_')}_Tailored_CV`
       );
-    } catch {
-      alert('Could not export to PDF. Try adjusting layout styling.');
+    } catch (err) {
+      console.error('PDF export failed:', err);
+      alert(err instanceof Error ? `Could not export to PDF: ${err.message}` : 'Could not export to PDF.');
     }
   };
 

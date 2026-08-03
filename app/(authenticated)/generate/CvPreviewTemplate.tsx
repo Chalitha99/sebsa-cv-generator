@@ -25,16 +25,26 @@ export default function CvPreviewTemplate({ cv, onChange }: CvPreviewTemplatePro
   return (
     <div
       id="cv-preview-root"
-      className="w-full max-w-[800px] mx-auto bg-white border border-slate-200 shadow-xl rounded-xl font-sans text-slate-800 leading-relaxed text-sm select-text"
-      style={{ minHeight: '1120px' }}
+      // Deliberately inline styles only, no Tailwind/utility classes — this node (and everything
+      // Handlebars renders inside it) is screenshotted by html2canvas for PDF export, and
+      // Tailwind v4's default palette is oklch(), which html2canvas 1.x cannot parse (it throws
+      // and PDF export silently fails). See lib/templates/cvTemplate.ts's header comment.
+      style={{
+        width: '100%',
+        maxWidth: '800px',
+        margin: '0 auto',
+        minHeight: '1120px',
+        backgroundColor: '#ffffff',
+        border: '1px solid #E2E8F0',
+        borderRadius: '12px',
+        boxShadow: '0 10px 25px rgba(0,0,0,0.08)',
+        fontFamily: "'Segoe UI', Arial, sans-serif",
+        fontSize: '14px',
+        color: '#2D3748',
+      }}
       contentEditable
       suppressContentEditableWarning
       dangerouslySetInnerHTML={{ __html: compiledHtml }}
-      onBlur={(e) => {
-        // If we still want to notify parents that editing happened, we can trigger onChange here
-        // However, extracting the specific JSON changes from the raw HTML is complex.
-        // For now, the user edits the HTML directly, and the export functions grab the DOM HTML.
-      }}
     />
   );
 }

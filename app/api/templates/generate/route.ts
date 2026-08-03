@@ -1,104 +1,22 @@
 import { NextResponse } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { getTemplateById } from '@/services/template-service';
 import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
-import ImageModule from 'docxtemplater-image-module-free';
-
-function mapCvToTemplateData(cv: any, imageBuffer?: Buffer) {
-  return {
-    fullName: cv.name || '',
-    name: cv.name || '',
-    jobTitle: cv.currentPosition || '',
-    currentPosition: cv.currentPosition || '',
-    title: cv.currentPosition || '',
-    objective: cv.summary || '',
-    summary: cv.summary || '',
-    skills: Array.isArray(cv.skillsAligned)
-      ? cv.skillsAligned.map((s: string) => ({ name: s }))
-      : [],
-    skillsAligned: Array.isArray(cv.skillsAligned)
-      ? cv.skillsAligned.map((s: string) => ({ name: s }))
-      : [],
-    experience: Array.isArray(cv.experience)
-      ? cv.experience.map((e: any) => ({
-          position: e.position || '',
-          company: e.company || '',
-          period: e.period || '',
-          description: Array.isArray(e.tasks)
-            ? e.tasks.map((t: string) => `• ${t}`).join('\n')
-            : (e.description || ''),
-          tasks: Array.isArray(e.tasks) ? e.tasks.map((t: string) => ({ task: t })) : [],
-          tasksList: Array.isArray(e.tasks)
-            ? e.tasks.map((t: string) => `• ${t}`).join('\n')
-            : '',
-        }))
-      : [],
-    education: Array.isArray(cv.academic)
-      ? cv.academic.map((a: any) => ({
-          degree: a.qualification || '',
-          qualification: a.qualification || '',
-          institution: a.institution || '',
-          year: a.period || '',
-          period: a.period || '',
-        }))
-      : [],
-    academic: Array.isArray(cv.academic)
-      ? cv.academic.map((a: any) => ({
-          degree: a.qualification || '',
-          qualification: a.qualification || '',
-          institution: a.institution || '',
-          year: a.period || '',
-          period: a.period || '',
-        }))
-      : [],
-    projects: Array.isArray(cv.specialProjects)
-      ? cv.specialProjects.map((p: any) => ({
-          projectName: p.title || '',
-          title: p.title || '',
-          projectDescription: p.brief || '',
-          brief: p.brief || '',
-        }))
-      : [],
-    specialProjects: Array.isArray(cv.specialProjects)
-      ? cv.specialProjects.map((p: any) => ({
-          projectName: p.title || '',
-          title: p.title || '',
-          projectDescription: p.brief || '',
-          brief: p.brief || '',
-        }))
-      : [],
-    certifications: Array.isArray(cv.certifications)
-      ? cv.certifications.map((c: any) => ({
-          certificateName: c.name || '',
-          name: c.name || '',
-          issuer: c.issuer || '',
-          year: c.year || '',
-        }))
-      : [],
-    ...(imageBuffer ? { profileImage: imageBuffer } : {}),
-  };
-}
-
-/**
- * Fetches an image from a URL and returns it as a Buffer.
- * Returns null if the URL is invalid, inaccessible, or not an image.
- */
-async function fetchImageBuffer(url: string): Promise<Buffer | null> {
-  try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) return null;
-    const contentType = res.headers.get('content-type') ?? '';
-    if (!contentType.startsWith('image/')) return null;
-    const ab = await res.arrayBuffer();
-    return Buffer.from(ab);
-  } catch {
-    return null;
-  }
-}
+import { createAdminClient } from '@/lib/supabase/admin';
+import { getCurrentUser, isAdminOrAbove } from '@/lib/auth';
+import { getTemplateById } from '@/services/template-service';
+import { mapCvToTemplateData, fetchImageBuffer, createImageModule } from '@/lib/templates/mapCvToTemplateData';
 
 export async function POST(request: Request) {
   try {
+    // Generating a customized CV is Admin/Super Admin only (docs/04-rbac-security.md §2) — CV
+    // Reviewer can view but not create generated CVs. This route previously had no auth check
+    // at all.
+    const user = await getCurrentUser();
+    if (!user) return NextResponse.json({ error: 'Not authenticated.' }, { status: 401 });
+    if (!isAdminOrAbove(user.role)) {
+      return NextResponse.json({ error: 'Unauthorized: Admin or Super Admin role required.' }, { status: 403 });
+    }
+
     const { templateId, tailoredCv, avatarUrl } = await request.json();
 
     if (!templateId) {
@@ -141,42 +59,22 @@ export async function POST(request: Request) {
       imageBuffer = await fetchImageBuffer(avatarUrl);
     }
 
-    // 4. Build docxtemplater with optional image module
+    // 4. Build docxtemplater with optional image module. Delimiters MUST be explicit — the
+    //    library defaults to single-brace `{ }`, but the admin upload UI (and the reference
+    //    SEBSA template) use double-brace `{{ }}` placeholders.
     const zip = new PizZip(templateBuffer);
 
-    const modules: any[] = [];
-    if (imageBuffer) {
-      const imgBuf = imageBuffer; // capture for closure
-      const imageModule = new ImageModule({
-        centered: false,
-        setParser(placeHolderContent: string) {
-          if (placeHolderContent === 'profileImage') {
-            return {
-              type: 'placeholder',
-              value: 'profileImage',
-              module: 'open-xml-templating/docxtemplater-image-module',
-              centered: false,
-            };
-          }
-          return null;
-        },
-        getImage(tagValue: any) {
-          // For {{profileImage}}, tagValue will be the buffer we pass
-          return imgBuf;
-        },
-        getSize() {
-          // Return width x height in EMUs (English Metric Units).
-          // 914400 EMU = 1 inch. We use 1.2 in × 1.2 in as default portrait size.
-          return [914400 * 1.2, 914400 * 1.2];
-        },
-      });
-      modules.push(imageModule);
-    }
+    const modules = imageBuffer ? [createImageModule(imageBuffer)] : [];
 
     const doc = new Docxtemplater(zip, {
       paragraphLoop: true,
       linebreaks: true,
+      delimiters: { start: '{{', end: '}}' },
       modules,
+      // Without this, a tag with no value (e.g. {{profileImage}} when the employee has no
+      // avatar) renders the literal text "undefined" instead of nothing — confirmed via a
+      // render test against the real reference template.
+      nullGetter: () => '',
     });
 
     const mappedData = mapCvToTemplateData(tailoredCv, imageBuffer ?? undefined);
@@ -195,11 +93,9 @@ export async function POST(request: Request) {
         'Content-Disposition': `attachment; filename="${(tailoredCv.name ?? 'CV').replace(/\s+/g, '_')}_Tailored_CV.docx"`,
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error generating DOCX:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to generate DOCX' },
-      { status: 500 }
-    );
+    const message = error instanceof Error ? error.message : 'Failed to generate DOCX';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

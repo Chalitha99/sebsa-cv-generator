@@ -3,7 +3,8 @@
 import { revalidatePath } from 'next/cache';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getCurrentUser, isReviewerOrAbove, type CurrentUser } from '@/lib/auth';
-import { applyProfileChange, type ProfileCoreChange } from '@/repositories/employee-repository';
+import { updateEmployee } from '@/services/employee-service';
+import type { CreateEmployeeInput } from '@/types/domain';
 
 export type PendingItemType = 'new_profile' | 'claim' | 'change';
 
@@ -14,7 +15,7 @@ export interface PendingItem {
   email: string;
   type: PendingItemType;
   submittedAt: string;
-  proposedChange?: ProfileCoreChange;
+  proposedChange?: CreateEmployeeInput;
 }
 
 async function requireReviewer(): Promise<CurrentUser> {
@@ -81,7 +82,7 @@ export async function listPendingItemsAction(): Promise<PendingItem[]> {
         email: row.email,
         type: 'change',
         submittedAt: row.pending_change_submitted_at ?? row.created_at,
-        proposedChange: row.pending_change as ProfileCoreChange,
+        proposedChange: row.pending_change as CreateEmployeeInput,
       });
     }
   }
@@ -148,7 +149,13 @@ export async function rejectClaimAction(profileId: string): Promise<void> {
   revalidateAll();
 }
 
-/** Merges a proposed edit (role/department/skills only — see applyProfileChange) into the live profile. */
+/**
+ * Merges a proposed edit into the live profile. pending_change is a complete CreateEmployeeInput
+ * (proposeProfileChangeAction fills in the immutable name/email server-side, see
+ * app/(authenticated)/my-profile/actions.ts) — updateEmployee() does a full replace of
+ * experiences/projects/certifications/skills, which is correct here because the self-edit form
+ * always submits the complete current+edited state, never a partial patch.
+ */
 export async function approveChangeAction(profileId: string): Promise<void> {
   const user = await requireReviewer();
   const adminClient = createAdminClient();
@@ -159,10 +166,10 @@ export async function approveChangeAction(profileId: string): Promise<void> {
     .eq('id', profileId)
     .single();
   if (fetchError) throw fetchError;
-  const change = row.pending_change as ProfileCoreChange | null;
+  const change = row.pending_change as CreateEmployeeInput | null;
   if (!change) throw new Error('No pending change on this profile.');
 
-  await applyProfileChange(adminClient, profileId, change, user.id);
+  await updateEmployee(adminClient, profileId, change, user.id);
 
   const { error } = await adminClient
     .from('profiles')

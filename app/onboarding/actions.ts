@@ -17,6 +17,7 @@ export interface OnboardingSubmission {
   cvAcademic?: CreateEmployeeInput['cvAcademic'];
   specialProjects?: CreateEmployeeInput['specialProjects'];
   cvCertifications?: CreateEmployeeInput['cvCertifications'];
+  avatarUrl?: string;
 }
 
 export interface ClaimableProfile {
@@ -135,6 +136,7 @@ export async function createOwnProfileAction(input: OnboardingSubmission): Promi
       cvAcademic: input.cvAcademic,
       specialProjects: input.specialProjects,
       cvCertifications: input.cvCertifications,
+      avatarUrl: input.avatarUrl,
       selfServiceUserId: user.id,
     },
     user.id
