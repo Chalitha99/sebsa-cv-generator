@@ -118,9 +118,10 @@ export async function createEmployeeRow(
         department_id: dept?.id ?? null,
         // Self-service submissions start as 'draft' (not searchable/usable) until an Admin
         // reviews them — see docs/04-rbac-security.md §0. Admin/Reviewer-created profiles keep
-        // today's behavior of going straight to 'published'.
+        // today's behavior of going straight to 'published', whether or not an account was
+        // linked (linkedUserId, §14) — the Admin's own action doesn't need self-approval.
         status: input.selfServiceUserId ? 'draft' : 'published',
-        user_id: input.selfServiceUserId ?? null,
+        user_id: input.selfServiceUserId ?? input.linkedUserId ?? null,
         education: educationJson,
         avatar_url: input.avatarUrl ?? null,
         created_by: createdBy,

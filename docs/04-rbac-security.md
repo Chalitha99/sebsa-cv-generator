@@ -280,3 +280,83 @@ rights — `createEmployeeAction`'s gate changed from `isAdminOrAbove` to `isRev
 deliberate widening beyond the source document's literal matrix (which gives CV Reviewer no
 profile-creation permission, only "Approve") — CV Reviewer editing/deleting other people's
 existing profiles is still Admin/Super-Admin-only, unchanged.
+
+## 14. Admin-initiated account provisioning (invite email, replaces claim-first UX)
+
+Problem: when an Admin/Super Admin/CV Reviewer adds an employee via `/upload`, the resulting
+profile previously had no linked Auth account — the employee had to separately sign up at
+`/signup`, land on `/onboarding`, spot their own profile in the unclaimed list, and request a
+claim that then needed a *second* approval from a reviewer (§10/§12). That's two humans and an
+extra approval step just to get someone logged in.
+
+Fix: `createEmployeeAction` (`app/(authenticated)/upload/actions.ts`) now calls
+`provisionEmployeeAccount()` (`lib/auth/provisionAccount.ts`) right after the duplicate-profile
+check, using `adminClient.auth.admin.inviteUserByEmail(email, { redirectTo })`. This:
+
+- Creates a real Auth account for the employee (no password ever generated or emailed — Supabase
+  sends a secure one-time link).
+- Sets the new profile's `user_id` directly (`linkedUserId` on `CreateEmployeeInput`, distinct
+  from `selfServiceUserId` — see `types/domain.ts`) so the profile is linked and `published`
+  immediately, no approval step needed. An Admin adding someone doesn't need to self-approve
+  their own action.
+- If `inviteUserByEmail` reports the email is already registered (the employee self-registered
+  first, or was already invited by an earlier upload), looks up and links to that existing
+  account instead of erroring.
+- Never blocks profile creation on failure (e.g. email sending misconfigured) — logs the error
+  server-side and falls through to today's unlinked-profile behavior, so the old self-service
+  claim flow (§10, migrations 0019/0020) still works as a fallback.
+
+**Invite landing flow**: the emailed link points at Supabase's own verify endpoint, which
+redirects to `app/auth/callback/route.ts` with a PKCE `code` param. That route handler exchanges
+it for a session (`exchangeCodeForSession`) and forwards to `/auth/set-password`
+(`app/auth/set-password/page.tsx`), where the employee sets their own password
+(`supabase.auth.updateUser({ password })`) and lands on `/dashboard`. `/auth/callback` is
+deliberately excluded from `PROTECTED_PREFIXES` in `proxy.ts` (it's what *establishes* the
+session); `/auth/set-password` is included.
+
+**Setup requirement**: `${NEXT_PUBLIC_APP_URL}/auth/callback` must be added to Supabase Dashboard
+→ Authentication → URL Configuration → Redirect URLs, or Supabase rejects the invite redirect.
+`NEXT_PUBLIC_APP_URL` defaults to `http://localhost:3000` (`lib/env.ts`) and must be set to the
+real deployed origin in production. Supabase's default email sending works out of the box for
+testing (low rate limits); a custom SMTP provider (e.g. Resend) can optionally be configured under
+Authentication → Emails → SMTP Settings for reliable delivery — that's a dashboard setting, not
+application code, and is independent of this change.
+
+**Explicitly out of scope for this pass**: role-specific in-app/email notifications beyond the
+invite itself (e.g. notifying reviewers when something needs approval) — the employee's original
+ask included this, but it was scoped down to account provisioning only.
+
+## 15. Employees can preview and download their own CV
+
+Previously the only way to get a real, template-formatted export was the Admin/Super Admin-only
+"Customize CVs" wizard (`/generate`) — the "Structured CV Preview" card on `/repository/[id]`
+(`EmployeeProfileClient.tsx`) was pure decoration: a static mockup with `Download PDF`/`Print CV`
+buttons that just showed an `alert()`. Since an Employee visiting `/generate` is redirected
+straight to their own `/repository/[employeeCode]` page (`app/(authenticated)/generate/page.tsx`),
+there was no path at all for an Employee to get an actual document out of the system.
+
+Fix: `EmployeeProfileClient.tsx` now builds a real `TailoredCv` directly from the profile already
+loaded on the page (`lib/templates/buildTailoredCvFromEmployee.ts` — no AI tailoring step, no
+customer/opportunity context, just today's profile data verbatim) and reuses the same rendering
+and export machinery as the Admin wizard:
+
+- Clicking the preview thumbnail (or the toolbar buttons) opens a modal rendering the real
+  `CvPreviewTemplate` (the same Handlebars component/DOM node the Admin wizard's Step 3 uses).
+- **Download PDF** screenshots that node via `exportToPdf` (`lib/cvExport.ts`) — works with zero
+  configuration, no uploaded DOCX template required.
+- **Download DOCX** calls `exportTemplatedDocx`, which posts to `/api/templates/generate` and
+  fills the first available template from `listTemplatesAction()`. If no template has been
+  uploaded yet (`/templates`, Admin/Super Admin/CV Reviewer), the button explains that instead of
+  silently failing.
+
+This is available to whoever can already view the page — an Employee viewing their own profile,
+or an Admin/Reviewer/Super Admin viewing anyone's — since page-level access is already the real
+boundary (RLS `profiles_select`, §4) and this feature adds no new data exposure.
+
+**`/api/templates/generate` auth widened**: this route previously required `isAdminOrAbove`. It's
+a stateless render service — it takes a `tailoredCv` JSON blob the caller already possesses and
+fills a template with it; it doesn't read any profile data from the database itself (the template
+file and, optionally, an avatar image URL are the only things it fetches). Restricting it to
+Admin/Super Admin was blocking this feature for no real security benefit, so the check was
+relaxed to "any authenticated user" — the actual data boundary is still enforced upstream, at
+whichever RLS-scoped query produced the `Employee`/`TailoredCv` in the first place.
