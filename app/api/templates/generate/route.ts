@@ -2,20 +2,18 @@ import { NextResponse } from 'next/server';
 import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { getCurrentUser, isAdminOrAbove } from '@/lib/auth';
+import { getCurrentUser } from '@/lib/auth';
 import { getTemplateById } from '@/services/template-service';
 import { mapCvToTemplateData, fetchImageBuffer, createImageModule } from '@/lib/templates/mapCvToTemplateData';
 
 export async function POST(request: Request) {
   try {
-    // Generating a customized CV is Admin/Super Admin only (docs/04-rbac-security.md §2) — CV
-    // Reviewer can view but not create generated CVs. This route previously had no auth check
-    // at all.
+    // This is a stateless render service, not a data-access endpoint — the caller already has
+    // `tailoredCv` in hand (either from the Admin/Super Admin "Customize CVs" wizard, or an
+    // Employee rendering their own already-RLS-scoped profile at /repository/[id] — see
+    // docs/04-rbac-security.md §15), so any authenticated user may call it. Just require a session.
     const user = await getCurrentUser();
     if (!user) return NextResponse.json({ error: 'Not authenticated.' }, { status: 401 });
-    if (!isAdminOrAbove(user.role)) {
-      return NextResponse.json({ error: 'Unauthorized: Admin or Super Admin role required.' }, { status: 403 });
-    }
 
     const { templateId, tailoredCv, avatarUrl } = await request.json();
 

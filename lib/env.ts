@@ -9,6 +9,11 @@ const envSchema = z.object({
   AI_PROVIDER: z.preprocess(emptyToUndefined, z.enum(['gemini', 'claude']).default('gemini')),
   GEMINI_API_KEY: z.preprocess(emptyToUndefined, z.string().optional()),
   CLAUDE_API_KEY: z.preprocess(emptyToUndefined, z.string().optional()),
+  // Absolute origin used to build the invite-email redirect link (app/(authenticated)/upload/actions.ts
+  // -> lib/auth/provisionAccount.ts) since Server Actions have no reliable window.location. Must
+  // also be added to Supabase Dashboard -> Authentication -> URL Configuration -> Redirect URLs
+  // as `${NEXT_PUBLIC_APP_URL}/auth/callback`, or Supabase will reject the invite redirect.
+  NEXT_PUBLIC_APP_URL: z.preprocess(emptyToUndefined, z.string().url().default('http://localhost:3000')),
 });
 
 /**
@@ -23,6 +28,7 @@ export const env = envSchema.parse({
   AI_PROVIDER: process.env.AI_PROVIDER,
   GEMINI_API_KEY: process.env.GEMINI_API_KEY,
   CLAUDE_API_KEY: process.env.CLAUDE_API_KEY,
+  NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
 });
 
 export function requireEnv<K extends keyof typeof env>(key: K): NonNullable<(typeof env)[K]> {

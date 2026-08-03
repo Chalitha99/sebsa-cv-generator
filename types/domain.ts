@@ -90,4 +90,9 @@ export interface CreateEmployeeInput {
   // reviewer-created profiles never set this and stay 'published' immediately, matching existing
   // behavior (docs/04-rbac-security.md §0.2 — full maker-checker review isn't built yet).
   selfServiceUserId?: string;
+
+  // Set by createEmployeeAction (docs/04-rbac-security.md §14) after provisioning/inviting an
+  // Auth account for an Admin/Reviewer-added employee. Unlike selfServiceUserId, this does NOT
+  // force status='draft' — an Admin adding someone doesn't need to self-approve their own action.
+  linkedUserId?: string;
 }

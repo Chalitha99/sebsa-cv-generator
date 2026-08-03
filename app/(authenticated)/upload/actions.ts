@@ -5,7 +5,14 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createEmployee } from '@/services/employee-service';
 import { getCurrentUser, isReviewerOrAbove } from '@/lib/auth';
+import { provisionEmployeeAccount } from '@/lib/auth/provisionAccount';
 import type { CreateEmployeeInput } from '@/types/domain';
+
+export interface CreateEmployeeResult {
+  rowId: string;
+  /** True if a fresh Auth account was created and an invite email sent to this employee. */
+  accountInvited: boolean;
+}
 
 /**
  * Uploads a profile picture to the `profile-pictures` Supabase Storage bucket.
@@ -52,7 +59,7 @@ export async function uploadProfilePictureAction(formData: FormData): Promise<st
  * `skills`, and `profile_skills` are bypassed. The anon/user client is only used to
  * verify the caller is authenticated before we proceed — we still require a valid session.
  */
-export async function createEmployeeAction(input: CreateEmployeeInput): Promise<string> {
+export async function createEmployeeAction(input: CreateEmployeeInput): Promise<CreateEmployeeResult> {
   // 1. Verify the caller is authenticated AND has permission to create profiles on someone
   //    else's behalf. This uses the service-role client below (bypasses RLS), so this check is
   //    the actual enforcement boundary — not just a friendlier error message.
@@ -80,11 +87,25 @@ export async function createEmployeeAction(input: CreateEmployeeInput): Promise<
     );
   }
 
-  const rowId = await createEmployee(adminClient, input, user.id);
+  // 3. Provision (or link to an existing) Auth account and email an invite link — see
+  //    docs/04-rbac-security.md §14. Never blocks profile creation: if provisioning fails (e.g.
+  //    email sending misconfigured), the profile is still created unlinked and the employee can
+  //    fall back to the self-service claim flow at /onboarding.
+  let linkedUserId: string | undefined;
+  let accountInvited = false;
+  try {
+    const provisionResult = await provisionEmployeeAccount(adminClient, input.email);
+    linkedUserId = provisionResult.userId;
+    accountInvited = provisionResult.invited;
+  } catch (err) {
+    console.error(`Failed to provision an account for ${input.email}, creating an unlinked profile instead:`, err);
+  }
+
+  const rowId = await createEmployee(adminClient, { ...input, linkedUserId }, user.id);
 
   revalidatePath('/repository');
   revalidatePath('/dashboard');
-  return rowId;
+  return { rowId, accountInvited };
 }
 
 /**

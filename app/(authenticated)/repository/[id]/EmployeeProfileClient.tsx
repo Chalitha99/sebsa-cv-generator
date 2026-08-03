@@ -1,11 +1,16 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageWrapper } from '../../../components/PageWrapper';
 import type { Employee } from '@/types/domain';
 import type { CvExperienceEntry } from '@/lib/cvTypes';
 import { isAdminOrAbove, type UserRole } from '@/lib/roles';
+import CvPreviewTemplate from '../../generate/CvPreviewTemplate';
+import { listTemplatesAction } from '../../generate/actions';
+import type { Template } from '@/services/template-service';
+import { buildTailoredCvFromEmployee } from '@/lib/templates/buildTailoredCvFromEmployee';
+import { exportToPdf, exportTemplatedDocx } from '@/lib/cvExport';
 import {
   ArrowLeft,
   Mail,
@@ -16,7 +21,9 @@ import {
   GraduationCap,
   Sparkles,
   Download,
-  Printer,
+  FileType2,
+  Eye,
+  Loader2,
   ChevronRight,
   ExternalLink,
   Code2,
@@ -24,6 +31,7 @@ import {
   BadgeCheck,
   Clock,
   PenLine,
+  X,
 } from 'lucide-react';
 
 interface EmployeeProfileClientProps {
@@ -38,6 +46,63 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
 
   const handleBack = () => {
     router.push('/repository');
+  };
+
+  // ── Preview & export the actual CV template (docs/04-rbac-security.md §15) ─────────────────
+  // Available to whoever can view this page — most usefully an Employee viewing/downloading
+  // their own CV, but also lets Admins/Reviewers grab a quick copy without the full "Customize
+  // CVs" wizard. No AI tailoring here — just the employee's current profile data as-is.
+  const [showPreview, setShowPreview] = useState(false);
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(true);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [downloadingDocx, setDownloadingDocx] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    listTemplatesAction()
+      .then((list) => {
+        if (!cancelled) setTemplates(list);
+      })
+      .catch((err) => console.error('Failed to load CV templates:', err))
+      .finally(() => {
+        if (!cancelled) setTemplatesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const tailoredCv = useMemo(() => buildTailoredCvFromEmployee(employee), [employee]);
+  const activeTemplate = templates[0] ?? null;
+  const exportFilename = `${employee.name.replace(/\s+/g, '_')}_CV`;
+
+  const handleDownloadPdf = async () => {
+    setDownloadingPdf(true);
+    try {
+      await exportToPdf('cv-preview-root', exportFilename);
+    } catch (err) {
+      console.error('PDF export failed:', err);
+      alert(err instanceof Error ? `Could not export to PDF: ${err.message}` : 'Could not export to PDF.');
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
+  const handleDownloadDocx = async () => {
+    if (!activeTemplate) {
+      alert('No CV template has been configured yet — ask an Admin to upload one under CV Templates.');
+      return;
+    }
+    setDownloadingDocx(true);
+    try {
+      await exportTemplatedDocx(activeTemplate.id, tailoredCv, employee.avatar, exportFilename);
+    } catch (err) {
+      console.error('DOCX export failed:', err);
+      alert(err instanceof Error ? err.message : 'Could not export to DOCX.');
+    } finally {
+      setDownloadingDocx(false);
+    }
   };
 
   // ── Prefer structured CV fields; fall back to legacy or demo data ─────────
@@ -399,9 +464,17 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
               <span>Structured CV Preview</span>
             </h4>
 
-            {/* Structured Page widget mockup container */}
-            <div className="cv-preview-container bg-[#f5f3f5] rounded-xl border border-slate-200/80 overflow-hidden flex flex-col text-slate-700 font-sans p-4 mb-4 select-none relative group">
-              <div className="absolute inset-0 bg-slate-900/5 group-hover:bg-slate-900/0 transition-colors duration-300 pointer-events-none"></div>
+            {/* Structured Page widget mockup container — click to open the real template preview */}
+            <button
+              type="button"
+              onClick={() => setShowPreview(true)}
+              className="cv-preview-container text-left bg-[#f5f3f5] rounded-xl border border-slate-200/80 overflow-hidden flex flex-col text-slate-700 font-sans p-4 mb-4 relative group cursor-pointer"
+            >
+              <div className="absolute inset-0 bg-slate-900/5 group-hover:bg-slate-900/10 transition-colors duration-300 pointer-events-none flex items-center justify-center">
+                <span className="opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900/80 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full flex items-center gap-1.5">
+                  <Eye className="w-3 h-3" /> View Full Preview
+                </span>
+              </div>
 
               {/* Document Header mockup */}
               <div className="pb-3 border-b border-slate-300">
@@ -453,28 +526,80 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
                 <span>CV-AI Verified Profile</span>
                 <span>Page 1 of 1</span>
               </div>
-            </div>
+            </button>
 
             {/* Actions panel */}
             <div className="grid grid-cols-2 gap-3">
               <button
-                onClick={() => alert(`Simulated PDF Download: ${employee.name}_Structured_CV.pdf`)}
-                className="flex items-center justify-center gap-1.5 py-3 border border-slate-200 text-slate-700 font-semibold rounded-xl text-xs hover:bg-slate-50 transition-colors active:scale-95 cursor-pointer"
+                type="button"
+                onClick={handleDownloadPdf}
+                disabled={downloadingPdf}
+                className="flex items-center justify-center gap-1.5 py-3 border border-slate-200 text-slate-700 font-semibold rounded-xl text-xs hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed transition-colors active:scale-95 cursor-pointer"
               >
-                <Download className="w-4 h-4" />
+                {downloadingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                 <span>Download PDF</span>
               </button>
               <button
-                onClick={() => alert(`Simulated Printing: ${employee.name}_Structured_CV`)}
-                className="flex items-center justify-center gap-1.5 py-3 border border-slate-200 text-slate-700 font-semibold rounded-xl text-xs hover:bg-slate-50 transition-colors active:scale-95 cursor-pointer"
+                type="button"
+                onClick={handleDownloadDocx}
+                disabled={downloadingDocx || templatesLoading}
+                className="flex items-center justify-center gap-1.5 py-3 border border-slate-200 text-slate-700 font-semibold rounded-xl text-xs hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed transition-colors active:scale-95 cursor-pointer"
               >
-                <Printer className="w-4 h-4" />
-                <span>Print CV</span>
+                {downloadingDocx ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileType2 className="w-4 h-4" />}
+                <span>Download DOCX</span>
               </button>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Full CV Template Preview Modal */}
+      {showPreview && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-6">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-200">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
+              <div>
+                <h4 className="text-sm font-black text-slate-800">CV Preview — {employee.name}</h4>
+                <p className="text-[11px] text-slate-450 font-medium mt-0.5">
+                  {activeTemplate
+                    ? `Rendered against the current profile data — download uses the "${activeTemplate.name}" template.`
+                    : 'Rendered against the current profile data. No DOCX template is configured yet, so only PDF export is available.'}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleDownloadPdf}
+                  disabled={downloadingPdf}
+                  className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 text-slate-700 font-bold rounded-lg text-[11px] hover:bg-slate-50 disabled:opacity-60 transition-colors cursor-pointer"
+                >
+                  {downloadingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5 text-rose-500" />}
+                  <span>PDF</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownloadDocx}
+                  disabled={downloadingDocx || templatesLoading}
+                  className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 text-slate-700 font-bold rounded-lg text-[11px] hover:bg-slate-50 disabled:opacity-60 transition-colors cursor-pointer"
+                >
+                  {downloadingDocx ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileType2 className="w-3.5 h-3.5 text-blue-500" />}
+                  <span>DOCX</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowPreview(false)}
+                  className="p-1.5 hover:bg-slate-200/65 rounded-lg text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            <div className="p-6 overflow-y-auto bg-slate-100 flex-1 flex justify-center">
+              <CvPreviewTemplate cv={tailoredCv} />
+            </div>
+          </div>
+        </div>
+      )}
     </PageWrapper>
   );
 }

@@ -62,9 +62,9 @@ interface DataContextType {
   addActivity: (activity: Omit<Activity, 'id' | 'time'>) => void;
   /**
    * Persists a new employee to Supabase via the upload/actions.ts server action.
-   * Returns the new profile's row ID.
+   * Returns the new profile's row ID and whether an account-invite email was sent.
    */
-  addEmployee: (payload: NewEmployeePayload) => Promise<string>;
+  addEmployee: (payload: NewEmployeePayload) => Promise<{ rowId: string; accountInvited: boolean }>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -147,7 +147,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
    * Calls the server action to persist the new employee. Dynamically imported to avoid bundling
    * server-only modules in the client bundle.
    */
-  const addEmployee = useCallback(async (payload: NewEmployeePayload): Promise<string> => {
+  const addEmployee = useCallback(async (payload: NewEmployeePayload): Promise<{ rowId: string; accountInvited: boolean }> => {
     // Dynamically import the server action to avoid bundling 'use server' code in the client chunk
     const { createEmployeeAction } = await import('@/app/(authenticated)/upload/actions');
 
@@ -155,7 +155,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .flatMap((e) => e.tasks)
       .slice(0, 0); // tasks are not skills; keep skills list from form
 
-    const rowId = await createEmployeeAction({
+    const { rowId, accountInvited } = await createEmployeeAction({
       name: payload.name,
       email: payload.email,
       role: payload.role,
@@ -173,7 +173,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     addActivity({
       type: 'upload',
       title: 'CV Parsed & Imported',
-      desc: `AI parsed and imported ${payload.name}'s CV into the repository.`,
+      desc: accountInvited
+        ? `AI parsed and imported ${payload.name}'s CV into the repository. An account invite was emailed to ${payload.email}.`
+        : `AI parsed and imported ${payload.name}'s CV into the repository.`,
       status: 'SUCCESS',
       user: {
         name: payload.name,
@@ -181,7 +183,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       },
     });
 
-    return rowId;
+    return { rowId, accountInvited };
   }, []);
 
   return (

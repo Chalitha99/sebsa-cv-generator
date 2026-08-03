@@ -1,7 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { updateSession } from '@/lib/supabase/middleware';
 
-const PROTECTED_PREFIXES = ['/dashboard', '/repository', '/upload', '/generate', '/templates', '/settings', '/onboarding', '/update-profile', '/my-profile', '/review'];
+// /auth/callback is deliberately excluded — it must stay publicly reachable since it's the one
+// establishing the session (invite/magic links land here before the user has ever logged in).
+const PROTECTED_PREFIXES = ['/dashboard', '/repository', '/upload', '/generate', '/templates', '/settings', '/onboarding', '/update-profile', '/my-profile', '/review', '/auth/set-password'];
 
 export async function proxy(request: NextRequest) {
   const { supabaseResponse, user } = await updateSession(request);
