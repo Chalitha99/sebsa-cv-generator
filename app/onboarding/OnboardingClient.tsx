@@ -3,8 +3,10 @@
 import React, { useRef, useState } from 'react';
 import { PageWrapper } from '../components/PageWrapper';
 import { extractText } from '@/lib/parsing/extractClientText';
-import { emptyCvProfile, type CvProfile } from '@/lib/cvTypes';
+import type { CvProfile } from '@/lib/cvTypes';
+import ProfileFieldsEditor, { emptyProfileFieldsValue, type ProfileFieldsValue } from '../components/ProfileFieldsEditor';
 import { createOwnProfileAction, claimProfileAction, type ClaimableProfile } from './actions';
+import { uploadProfilePictureAction } from '../(authenticated)/upload/actions';
 import {
   CloudUpload,
   FileText,
@@ -16,9 +18,14 @@ import {
   UserCheck,
   UserX,
   Clock,
+  FilePlus2,
+  PenLine,
+  ImageIcon,
+  ArrowLeft,
 } from 'lucide-react';
 
-type Status = 'idle' | 'extracting' | 'analyzing' | 'done' | 'error';
+type Mode = 'pending-claim' | 'claim' | 'choose' | 'upload' | 'manual';
+type ExtractStatus = 'idle' | 'extracting' | 'analyzing' | 'done' | 'error';
 
 interface OnboardingClientProps {
   userEmail: string;
@@ -28,11 +35,7 @@ interface OnboardingClientProps {
 }
 
 export default function OnboardingClient({ userEmail, departments, claimableProfile, pendingClaim }: OnboardingClientProps) {
-  // Priority: an already-submitted claim request > a discoverable match to confirm > create from
-  // scratch. Claiming no longer links immediately — it stages a request a reviewer must approve.
-  const [mode, setMode] = useState<'pending-claim' | 'claim' | 'create'>(
-    pendingClaim ? 'pending-claim' : claimableProfile ? 'claim' : 'create'
-  );
+  const [mode, setMode] = useState<Mode>(pendingClaim ? 'pending-claim' : claimableProfile ? 'claim' : 'choose');
   const [isClaiming, setIsClaiming] = useState(false);
   const [claimError, setClaimError] = useState<string | null>(null);
 
@@ -51,19 +54,46 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
     }
   };
 
-  const [status, setStatus] = useState<Status>('idle');
+  // ── CV upload + parse (only used in 'upload' mode) ────────────────────────
+  const [status, setStatus] = useState<ExtractStatus>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [droppedFile, setDroppedFile] = useState<{ name: string; size: string } | null>(null);
   const [isDragActive, setIsDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [profile, setProfile] = useState<CvProfile>(emptyCvProfile());
-  const [role, setRole] = useState('');
-  const [department, setDepartment] = useState(departments[0]?.name ?? '');
-  const [skillsRaw, setSkillsRaw] = useState('');
+  // ── Profile picture (both 'upload' and 'manual' modes) ────────────────────
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  // ── The profile being built — shared shape for both upload-parsed and manual entry ──
+  const [profileValue, setProfileValue] = useState<ProfileFieldsValue>(
+    emptyProfileFieldsValue({ department: departments[0]?.name ?? '' })
+  );
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const handleAvatarChange = async (file: File) => {
+    setAvatarFile(file);
+    setAvatarPreview(URL.createObjectURL(file));
+    setAvatarError(null);
+    setAvatarUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const url = await uploadProfilePictureAction(formData);
+      setAvatarUrl(url);
+    } catch (err) {
+      console.error('Profile picture upload failed:', err);
+      setAvatarError(err instanceof Error ? err.message : 'Failed to upload photo.');
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
 
   const processFile = async (file: File) => {
     const sizeStr = (file.size / (1024 * 1024)).toFixed(1) + ' MB';
@@ -93,8 +123,15 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
         throw new Error((body as { error?: string }).error ?? `Server error ${res.status}`);
       }
       const parsed = (await res.json()) as CvProfile;
-      setProfile(parsed);
-      setRole(parsed.currentPosition || '');
+      setProfileValue((prev) => ({
+        ...prev,
+        name: parsed.name || prev.name,
+        role: parsed.currentPosition || prev.role,
+        experience: parsed.experience,
+        academic: parsed.academic,
+        specialProjects: parsed.specialProjects,
+        certifications: parsed.certifications,
+      }));
       setStatus('done');
     } catch (err) {
       console.error('CV parsing failed:', err);
@@ -125,24 +162,20 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
     setIsSubmitting(true);
     setSubmitError(null);
 
-    const skills = skillsRaw
-      .split(',')
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-
     try {
       await createOwnProfileAction({
-        name: profile.name,
-        role,
-        department,
-        skills,
-        currentPosition: profile.currentPosition,
-        cvExperience: profile.experience,
-        cvAcademic: profile.academic,
-        specialProjects: profile.specialProjects,
-        cvCertifications: profile.certifications,
+        name: profileValue.name,
+        role: profileValue.role,
+        department: profileValue.department,
+        skills: profileValue.skills,
+        currentPosition: profileValue.role,
+        cvExperience: profileValue.experience,
+        cvAcademic: profileValue.academic,
+        specialProjects: profileValue.specialProjects,
+        cvCertifications: profileValue.certifications,
+        avatarUrl: avatarUrl ?? undefined,
       });
-      // createOwnProfileAction redirects to /dashboard on success
+      // createOwnProfileAction redirects on success
     } catch (err) {
       console.error('Self-service profile creation failed:', err);
       setSubmitError(err instanceof Error ? err.message : 'Failed to submit your profile.');
@@ -150,6 +183,43 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
     }
   };
 
+  // ── Reusable: profile picture picker ───────────────────────────────────────
+  const AvatarPicker = (
+    <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex items-center gap-4">
+      <div className="w-16 h-16 rounded-full border-2 border-slate-200 bg-slate-50 overflow-hidden shrink-0 flex items-center justify-center">
+        {avatarPreview ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={avatarPreview} alt="Profile" className="w-full h-full object-cover" />
+        ) : (
+          <ImageIcon className="w-6 h-6 text-slate-300" />
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-bold text-slate-700">Profile Picture</p>
+        <p className="text-[11px] text-slate-400 mt-0.5">
+          {avatarUploading ? 'Uploading...' : avatarUrl ? 'Uploaded' : "Not extracted from your CV — add one now (optional)."}
+        </p>
+        {avatarError && <p className="text-[11px] text-rose-600 mt-1">{avatarError}</p>}
+      </div>
+      <input
+        type="file"
+        ref={avatarInputRef}
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => e.target.files?.[0] && handleAvatarChange(e.target.files[0])}
+      />
+      <button
+        type="button"
+        onClick={() => avatarInputRef.current?.click()}
+        disabled={avatarUploading}
+        className="px-3.5 py-2 border border-slate-200 hover:bg-slate-50 rounded-lg text-[11px] font-bold text-slate-600 transition-colors disabled:opacity-40 shrink-0"
+      >
+        {avatarUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Choose Photo'}
+      </button>
+    </div>
+  );
+
+  // ── Pending claim (already requested) ──────────────────────────────────────
   if (mode === 'pending-claim') {
     const code = claimableProfile?.employeeCode ?? pendingClaim?.employeeCode;
     return (
@@ -173,6 +243,7 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
     );
   }
 
+  // ── Claim confirmation ──────────────────────────────────────────────────────
   if (mode === 'claim' && claimableProfile) {
     return (
       <PageWrapper className="min-h-screen w-full flex items-center justify-center bg-[#fbf9fb] p-8">
@@ -204,7 +275,7 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
-                onClick={() => setMode('create')}
+                onClick={() => setMode('choose')}
                 disabled={isClaiming}
                 className="flex items-center justify-center gap-1.5 py-3 border border-slate-200 text-slate-600 font-bold rounded-xl text-xs hover:bg-slate-50 transition-colors disabled:opacity-40"
               >
@@ -227,22 +298,115 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
     );
   }
 
+  // ── Choose: upload a CV, or create manually ─────────────────────────────────
+  if (mode === 'choose') {
+    return (
+      <PageWrapper className="min-h-screen w-full flex items-center justify-center bg-[#fbf9fb] p-8">
+        <div className="w-full max-w-2xl">
+          <div className="mb-8 text-center">
+            <h1 className="text-3xl font-black tracking-tight text-slate-900 font-sans leading-none">
+              Welcome — let's set up your profile
+            </h1>
+            <p className="text-sm font-medium text-slate-500 mt-2">
+              An Admin will review your profile before it appears in the company repository.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-6">
+            <button
+              type="button"
+              onClick={() => setMode('upload')}
+              className="bg-white p-8 rounded-2xl border border-slate-200/80 shadow-sm text-center hover:border-indigo-300 hover:shadow-md transition-all"
+            >
+              <div className="w-14 h-14 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-600 mb-4 mx-auto">
+                <CloudUpload className="w-7 h-7" />
+              </div>
+              <h5 className="text-sm font-black text-slate-800 mb-1.5">Upload my CV</h5>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                We'll extract your details automatically — review and correct before submitting.
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('manual')}
+              className="bg-white p-8 rounded-2xl border border-slate-200/80 shadow-sm text-center hover:border-indigo-300 hover:shadow-md transition-all"
+            >
+              <div className="w-14 h-14 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-600 mb-4 mx-auto">
+                <PenLine className="w-7 h-7" />
+              </div>
+              <h5 className="text-sm font-black text-slate-800 mb-1.5">Create manually</h5>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Don't have a CV handy? Fill in your details yourself instead.
+              </p>
+            </button>
+          </div>
+        </div>
+      </PageWrapper>
+    );
+  }
+
+  // ── Manual entry: skip straight to the shared review form ───────────────────
+  if (mode === 'manual') {
+    return (
+      <PageWrapper className="p-8">
+        <button
+          onClick={() => setMode('choose')}
+          className="flex items-center gap-2 text-xs font-black text-slate-500 hover:text-slate-900 uppercase tracking-wider mb-6"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Back</span>
+        </button>
+        <div className="max-w-xl mx-auto">
+          <div className="mb-6">
+            <h2 className="text-2xl font-black tracking-tight text-slate-900 font-sans leading-none flex items-center gap-2">
+              <FilePlus2 className="w-6 h-6 text-indigo-600" /> Create Your Profile
+            </h2>
+            <p className="text-sm font-medium text-slate-500 mt-2">
+              Fill in your details below. An Admin will review it before it appears in the repository.
+            </p>
+          </div>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            {AvatarPicker}
+            <ProfileFieldsEditor value={profileValue} onChange={setProfileValue} departments={departments} nameEditable />
+            {submitError && (
+              <p className="text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200/60 rounded-lg px-3 py-2">
+                {submitError}
+              </p>
+            )}
+            <button
+              type="submit"
+              disabled={isSubmitting || !profileValue.name || !profileValue.role}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-sans text-xs font-black uppercase tracking-wider px-6 py-3.5 rounded-xl shadow-md active:scale-95 transition-transform flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <span>{isSubmitting ? 'Submitting...' : 'Submit for Review'}</span>
+              {!isSubmitting && <ArrowRight className="w-4 h-4" />}
+            </button>
+          </form>
+        </div>
+      </PageWrapper>
+    );
+  }
+
+  // ── Upload CV mode ────────────────────────────────────────────────────────
   return (
-    <PageWrapper className="min-h-screen w-full flex items-center justify-center bg-[#fbf9fb] p-8">
-      <div className="w-full max-w-2xl">
-        <div className="mb-8 text-center">
+    <PageWrapper className="p-8">
+      <button
+        onClick={() => setMode('choose')}
+        className="flex items-center gap-2 text-xs font-black text-slate-500 hover:text-slate-900 uppercase tracking-wider mb-6"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        <span>Back</span>
+      </button>
+      <div className="max-w-2xl mx-auto">
+        <div className="mb-8">
           <h1 className="text-3xl font-black tracking-tight text-slate-900 font-sans leading-none">
-            Welcome — let's set up your profile
+            Upload your CV
           </h1>
           <p className="text-sm font-medium text-slate-500 mt-2">
-            Upload your CV to create your profile. An Admin will review it before it appears in
-            the company repository — you can still view your own submission any time from your
-            account.
+            An Admin will review your profile before it appears in the company repository.
           </p>
         </div>
 
         <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col gap-6">
-          {/* File drop zone */}
           <div
             onDragEnter={handleDrag}
             onDragOver={handleDrag}
@@ -257,20 +421,13 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
                 : 'border-slate-200 bg-slate-50/50 cursor-default'
             }`}
           >
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              accept=".pdf,.docx,.txt"
-              className="hidden"
-            />
+            <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".pdf,.docx,.txt" className="hidden" />
             <div className="w-14 h-14 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-600 mb-4">
               <CloudUpload className="w-6.5 h-6.5" />
             </div>
             <h5 className="text-sm font-bold text-slate-800 mb-1">Drag & drop your CV here</h5>
             <p className="text-xs text-slate-400 max-w-[220px] leading-relaxed">
-              or <span className="text-indigo-600 font-semibold underline">browse local files</span>.
-              Supports PDF, DOCX, TXT.
+              or <span className="text-indigo-600 font-semibold underline">browse local files</span>. Supports PDF, DOCX, TXT.
             </p>
           </div>
 
@@ -307,7 +464,6 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
             </p>
           )}
 
-          {/* Review form — only once parsing is done */}
           {status === 'done' && (
             <form onSubmit={handleSubmit} className="flex flex-col gap-4 pt-2 border-t border-slate-100">
               <div className="flex items-center gap-1.5 text-[11px] font-black text-indigo-600 uppercase tracking-wide">
@@ -315,82 +471,14 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
                 <span>Review before submitting</span>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Full Name</label>
-                <input
-                  type="text"
-                  required
-                  value={profile.name}
-                  onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200/80 rounded-xl px-4 py-2.5 text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all text-slate-700"
-                />
-              </div>
+              {AvatarPicker}
 
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Work Email</label>
-                <input
-                  type="email"
-                  disabled
-                  value={userEmail}
-                  className="w-full bg-slate-100 border border-slate-200/80 rounded-xl px-4 py-2.5 text-xs font-semibold text-slate-400"
-                />
+                <input type="email" disabled value={userEmail} className="w-full bg-slate-100 border border-slate-200/80 rounded-xl px-4 py-2.5 text-xs font-semibold text-slate-400" />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Current Role</label>
-                  <input
-                    type="text"
-                    required
-                    value={role}
-                    onChange={(e) => setRole(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200/80 rounded-xl px-4 py-2.5 text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all text-slate-700"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Department</label>
-                  <select
-                    value={department}
-                    onChange={(e) => setDepartment(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200/80 rounded-xl px-4 py-2.5 text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all text-slate-700"
-                  >
-                    {departments.map((d) => (
-                      <option key={d.id} value={d.name}>
-                        {d.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <div className="flex justify-between items-baseline">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Core Skills</label>
-                  <span className="text-[10px] text-slate-400">Comma separated</span>
-                </div>
-                <input
-                  type="text"
-                  placeholder="e.g. React, TypeScript, Project Management"
-                  value={skillsRaw}
-                  onChange={(e) => setSkillsRaw(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200/80 rounded-xl px-4 py-2.5 text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all text-slate-700"
-                />
-              </div>
-
-              {profile.experience.length > 0 && (
-                <div className="p-3 border border-slate-200 rounded-xl bg-slate-50/50">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                    Detected experience ({profile.experience.length})
-                  </p>
-                  <ul className="space-y-1">
-                    {profile.experience.map((exp, i) => (
-                      <li key={i} className="text-xs text-slate-600">
-                        <span className="font-bold text-slate-800">{exp.position}</span> — {exp.company}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+              <ProfileFieldsEditor value={profileValue} onChange={setProfileValue} departments={departments} nameEditable />
 
               {submitError && (
                 <p className="text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200/60 rounded-lg px-3 py-2">

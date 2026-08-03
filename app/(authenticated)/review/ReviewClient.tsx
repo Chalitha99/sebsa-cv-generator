@@ -108,12 +108,20 @@ export default function ReviewClient({ initialItems }: ReviewClientProps) {
                       {item.email} · <span className="font-mono">{item.employeeCode}</span>
                     </p>
                     {item.type === 'change' && item.proposedChange && (
-                      <p className="text-[11px] text-slate-500 mt-1.5">
-                        Proposed: <span className="font-semibold text-slate-700">{item.proposedChange.role}</span> ·{' '}
-                        {item.proposedChange.department} ·{' '}
-                        {item.proposedChange.skills.slice(0, 4).join(', ')}
-                        {item.proposedChange.skills.length > 4 ? '…' : ''}
-                      </p>
+                      <>
+                        <p className="text-[11px] text-slate-500 mt-1.5">
+                          Proposed: <span className="font-semibold text-slate-700">{item.proposedChange.role}</span> ·{' '}
+                          {item.proposedChange.department} ·{' '}
+                          {item.proposedChange.skills.slice(0, 4).join(', ')}
+                          {item.proposedChange.skills.length > 4 ? '…' : ''}
+                        </p>
+                        <p className="text-[10px] text-slate-400 mt-1">
+                          {item.proposedChange.cvExperience?.length ?? 0} experience ·{' '}
+                          {item.proposedChange.cvAcademic?.length ?? 0} education ·{' '}
+                          {item.proposedChange.specialProjects?.length ?? 0} projects ·{' '}
+                          {item.proposedChange.cvCertifications?.length ?? 0} certifications
+                        </p>
+                      </>
                     )}
                   </div>
                 </div>

@@ -6,12 +6,15 @@
  *
  * Usage:
  *   await exportToPdf('cv-preview-root', 'JohnDoe_CV')
- *   await exportToDocx(tailoredCv, 'JohnDoe_CV')
+ *   await exportTemplatedDocx(templateId, tailoredCv, avatarUrl, 'JohnDoe_CV')
  */
 
 import type { TailoredCv } from '@/app/(authenticated)/generate/types';
 
 // ─── PDF Export ───────────────────────────────────────────────────────────────
+// Screenshots #cv-preview-root (the live Handlebars preview, lib/templates/cvTemplate.ts) via
+// html2canvas and tiles it across A4 pages. Requires that element and everything inside it to
+// use inline styles only — see CvPreviewTemplate.tsx's comment on why (oklch()).
 
 export async function exportToPdf(elementId: string, filename: string): Promise<void> {
   const element = document.getElementById(elementId);
@@ -23,7 +26,7 @@ export async function exportToPdf(elementId: string, filename: string): Promise<
   ]);
 
   const canvas = await html2canvas(element, {
-    scale: 2,          // 2× for sharper output
+    scale: 2, // 2x for sharper output
     useCORS: true,
     logging: false,
     backgroundColor: '#ffffff',
@@ -55,30 +58,29 @@ export async function exportToPdf(elementId: string, filename: string): Promise<
   pdf.save(`${filename}.pdf`);
 }
 
-export async function exportToDocx(elementId: string, filename: string): Promise<void> {
-  const element = document.getElementById(elementId);
-  if (!element) throw new Error(`Element #${elementId} not found in DOM.`);
+// ─── DOCX Export ──────────────────────────────────────────────────────────────
+// Fills the actual uploaded master DOCX template (docxtemplater, server-side) rather than
+// converting scraped HTML — this is what preserves real Word formatting. See
+// app/api/templates/generate/route.ts.
 
-  // Get the modified HTML from the preview element
-  const htmlContent = element.innerHTML;
-
-  // Call our new API route to convert HTML to DOCX
-  const response = await fetch('/api/export-docx', {
+export async function exportTemplatedDocx(
+  templateId: string,
+  tailoredCv: TailoredCv,
+  avatarUrl: string | null | undefined,
+  filename: string
+): Promise<void> {
+  const response = await fetch('/api/templates/generate', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ html: htmlContent }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ templateId, tailoredCv, avatarUrl: avatarUrl ?? undefined }),
   });
 
   if (!response.ok) {
-    throw new Error('Failed to generate DOCX file from server.');
+    const body = await response.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error ?? 'Failed to generate DOCX file from the template.');
   }
 
-  // The API returns a blob representing the docx
   const blob = await response.blob();
-
-  // Dynamically import file-saver to keep client bundle small
   const { saveAs } = await import('file-saver');
   saveAs(blob, `${filename}.docx`);
 }

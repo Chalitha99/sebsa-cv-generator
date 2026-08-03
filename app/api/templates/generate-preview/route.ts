@@ -1,106 +1,11 @@
 import { NextResponse } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { getTemplateById } from '@/services/template-service';
 import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
-import ImageModule from 'docxtemplater-image-module-free';
 import { randomUUID } from 'crypto';
-
-/**
- * Maps a tailored CV object to the flat/nested data structure expected by
- * docxtemplater placeholders in the DOCX template.
- */
-function mapCvToTemplateData(cv: any, imageBuffer?: Buffer) {
-  return {
-    fullName: cv.name || '',
-    name: cv.name || '',
-    jobTitle: cv.currentPosition || '',
-    currentPosition: cv.currentPosition || '',
-    title: cv.currentPosition || '',
-    objective: cv.summary || '',
-    summary: cv.summary || '',
-    skills: Array.isArray(cv.skillsAligned)
-      ? cv.skillsAligned.map((s: string) => ({ name: s }))
-      : [],
-    skillsAligned: Array.isArray(cv.skillsAligned)
-      ? cv.skillsAligned.map((s: string) => ({ name: s }))
-      : [],
-    experience: Array.isArray(cv.experience)
-      ? cv.experience.map((e: any) => ({
-          position: e.position || '',
-          company: e.company || '',
-          period: e.period || '',
-          description: Array.isArray(e.tasks)
-            ? e.tasks.map((t: string) => `• ${t}`).join('\n')
-            : (e.description || ''),
-          tasks: Array.isArray(e.tasks) ? e.tasks.map((t: string) => ({ task: t })) : [],
-          tasksList: Array.isArray(e.tasks)
-            ? e.tasks.map((t: string) => `• ${t}`).join('\n')
-            : '',
-        }))
-      : [],
-    education: Array.isArray(cv.academic)
-      ? cv.academic.map((a: any) => ({
-          degree: a.qualification || '',
-          qualification: a.qualification || '',
-          institution: a.institution || '',
-          year: a.period || '',
-          period: a.period || '',
-        }))
-      : [],
-    academic: Array.isArray(cv.academic)
-      ? cv.academic.map((a: any) => ({
-          degree: a.qualification || '',
-          qualification: a.qualification || '',
-          institution: a.institution || '',
-          year: a.period || '',
-          period: a.period || '',
-        }))
-      : [],
-    projects: Array.isArray(cv.specialProjects)
-      ? cv.specialProjects.map((p: any) => ({
-          projectName: p.title || '',
-          title: p.title || '',
-          projectDescription: p.brief || '',
-          brief: p.brief || '',
-        }))
-      : [],
-    specialProjects: Array.isArray(cv.specialProjects)
-      ? cv.specialProjects.map((p: any) => ({
-          projectName: p.title || '',
-          title: p.title || '',
-          projectDescription: p.brief || '',
-          brief: p.brief || '',
-        }))
-      : [],
-    certifications: Array.isArray(cv.certifications)
-      ? cv.certifications.map((c: any) => ({
-          certificateName: c.name || '',
-          name: c.name || '',
-          issuer: c.issuer || '',
-          year: c.year || '',
-        }))
-      : [],
-    ...(imageBuffer ? { profileImage: imageBuffer } : {}),
-  };
-}
-
-/**
- * Fetches an image from a public URL and returns it as a Buffer.
- * Returns null if the URL is unreachable, times out, or is not an image.
- */
-async function fetchImageBuffer(url: string): Promise<Buffer | null> {
-  try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) return null;
-    const contentType = res.headers.get('content-type') ?? '';
-    if (!contentType.startsWith('image/')) return null;
-    const ab = await res.arrayBuffer();
-    return Buffer.from(ab);
-  } catch {
-    return null;
-  }
-}
+import { createAdminClient } from '@/lib/supabase/admin';
+import { getCurrentUser, isAdminOrAbove } from '@/lib/auth';
+import { getTemplateById } from '@/services/template-service';
+import { mapCvToTemplateData, fetchImageBuffer, createImageModule } from '@/lib/templates/mapCvToTemplateData';
 
 /**
  * POST /api/templates/generate-preview
@@ -108,16 +13,22 @@ async function fetchImageBuffer(url: string): Promise<Buffer | null> {
  * Body: { templateId: string, tailoredCv: object, avatarUrl?: string }
  *
  * 1. Downloads the original DOCX template from Supabase Storage.
- * 2. Fills all placeholders with tailoredCv data (same logic as /api/templates/generate).
+ * 2. Fills all placeholders with tailoredCv data (mapCvToTemplateData — same as /api/templates/generate).
  * 3. Uploads the filled DOCX to cv-templates/previews/<uuid>.docx (temporary path).
  * 4. Creates a 10-minute signed URL for the uploaded preview file.
  * 5. Returns { signedUrl, previewPath } so the client can embed it in an iframe
- *    via Microsoft Office Online Viewer.
+ *    via Microsoft Office Online Viewer (GeneratedCvPreview.tsx).
  *
  * The previewPath is ephemeral — files accumulate in the previews/ prefix and
- * can be purged periodically via a scheduled cleanup job.
+ * can be purged periodically via a scheduled cleanup job (not implemented yet).
  */
 export async function POST(request: Request) {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: 'Not authenticated.' }, { status: 401 });
+  if (!isAdminOrAbove(user.role)) {
+    return NextResponse.json({ error: 'Unauthorized: Admin or Super Admin role required.' }, { status: 403 });
+  }
+
   const adminClient = createAdminClient();
 
   try {
@@ -166,38 +77,15 @@ export async function POST(request: Request) {
 
     // ── 4. Fill template placeholders via docxtemplater ──────────────────────
     const zip = new PizZip(templateBuffer);
-
-    const modules: any[] = [];
-    if (imageBuffer) {
-      const imgBuf = imageBuffer;
-      const imageModule = new ImageModule({
-        centered: false,
-        setParser(placeHolderContent: string) {
-          if (placeHolderContent === 'profileImage') {
-            return {
-              type: 'placeholder',
-              value: 'profileImage',
-              module: 'open-xml-templating/docxtemplater-image-module',
-              centered: false,
-            };
-          }
-          return null;
-        },
-        getImage() {
-          return imgBuf;
-        },
-        getSize() {
-          // 1.2 in × 1.2 in expressed in EMUs (914 400 EMU = 1 inch)
-          return [914400 * 1.2, 914400 * 1.2];
-        },
-      });
-      modules.push(imageModule);
-    }
+    const modules = imageBuffer ? [createImageModule(imageBuffer)] : [];
 
     const doc = new Docxtemplater(zip, {
       paragraphLoop: true,
       linebreaks: true,
+      delimiters: { start: '{{', end: '}}' },
       modules,
+      // See app/api/templates/generate/route.ts for why this is needed.
+      nullGetter: () => '',
     });
 
     const mappedData = mapCvToTemplateData(tailoredCv, imageBuffer ?? undefined);
@@ -246,11 +134,9 @@ export async function POST(request: Request) {
       signedUrl: signedData.signedUrl,
       previewPath, // Returned for optional client-side or scheduled cleanup
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('generate-preview: unhandled error', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to generate the CV preview' },
-      { status: 500 }
-    );
+    const message = error instanceof Error ? error.message : 'Failed to generate the CV preview';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

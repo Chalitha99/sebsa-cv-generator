@@ -7,18 +7,21 @@ Roles updated from the original 2-role MVP (Admin/Employee) to the 4-role model 
 Implemented in `supabase/migrations/0017_rbac_four_roles.sql`.
 
 **Update (0020, demo-readiness pass)**: the maker-checker workflow originally deferred below is
-now built — see §10/§11. What's still explicitly out of scope:
+now built — see §10/§11. **Update (post-demo polish)**: "Update My Profile" now covers every
+field except name/work email (was role/department/skills only) — see §11's revised table; and
+`/onboarding` gained a "Create manually" path for employees with no CV to upload, plus profile
+picture capture (CV parsing never extracts a photo). What's still explicitly out of scope:
 
 - Retention holds and automated disposal (doc §5) — no retention/hold columns or disposal job.
 - Expanded audit logging for access-control and lifecycle events (doc §7) — `audit_logs` exists
   (Phase 11 in [06-phase-plan.md](./06-phase-plan.md)) but role-grant/lifecycle/approval events
   aren't written to it yet — `/review` approvals aren't currently logged anywhere but the
   `updated_at` timestamp on the affected profile.
-- Structured experience/education editing in the self-service "Update My Profile" flow
-  (`/my-profile`) — it only proposes changes to role/department/skills. Re-uploading a CV via
-  `/onboarding` is still create-only, not an edit path.
 - Auth account **creation** for internal roles (Admin, CV Reviewer) is still manual (Supabase
   Dashboard); only the Employee self-service **profile** path (below) is built.
+- Email confirmation on `/signup` is a Supabase project setting, not app code — left as-is
+  pending a decision on when to turn it off (relevant once Microsoft SSO replaces it as the
+  identity proof).
 
 ### Employee self-service profile linking (migration 0018)
 
@@ -252,7 +255,7 @@ Reviewer only — `app/(authenticated)/review/`):
 |---|---|---|---|---|
 | New profile | Create from scratch at `/onboarding` (0018) | `profiles.status = 'draft'` | `status → 'published'` | delete the draft row |
 | Account claim | "Yes, that's me" at `/onboarding` on an Admin-bulk-added profile (0019/0020) | `profiles.pending_claim_user_id` | `user_id ← pending_claim_user_id`, clear pending | clear `pending_claim_user_id` |
-| Profile edit | "Update My Profile" at `/my-profile`, published profiles only | `profiles.pending_change` (jsonb: role/department/skills) | merge into live columns via `applyProfileChange()`, clear pending | clear `pending_change`/`pending_change_submitted_at` |
+| Profile edit | "Update My Profile" at `/my-profile`, published profiles only — every field except name/work email | `profiles.pending_change` (jsonb: a full `CreateEmployeeInput`, with name/email filled in server-side from the current row so they can never be tampered with) | merge into live columns + full replace of experiences/projects/certifications/skills via `updateEmployee()`, clear pending | clear `pending_change`/`pending_change_submitted_at` |
 
 Approve/reject actions (`app/(authenticated)/review/actions.ts`) use the service-role admin
 client with a `isReviewerOrAbove()` check as the enforcement boundary — the same established
