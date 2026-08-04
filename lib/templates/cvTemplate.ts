@@ -5,61 +5,55 @@
  * or html2canvas throws and PDF export silently fails (see docs/04-rbac-security.md history —
  * Tailwind v4's default palette is oklch(), which html2canvas 1.x cannot parse).
  *
- * Layout mirrors the SEBSA-branded reference template (two-column: Objective + Academic on the
- * left, Experience + Special Projects on the right, Skills + Certifications full-width below).
- * Field names are exactly TailoredCv's (app/(authenticated)/generate/types.ts) — no renaming —
- * since CvSectionEditor.tsx edits that same shape directly.
+ * Visual design mirrors the SEBSA reference template: portrait photo beside a stacked
+ * logo/name/title header, a purple divider bar, and gradient "notch corner" section labels
+ * (Objective + Academic + Skills + Certifications on the left; Experience + Special Projects
+ * on the right). Field names are exactly TailoredCv's (app/(authenticated)/generate/types.ts) —
+ * no renaming — since CvSectionEditor.tsx edits that same shape directly.
  */
 export const cvTemplateSource = `
-<div style="font-family: 'Segoe UI', Arial, sans-serif; color: #2D3748; line-height: 1.55; max-width: 800px; margin: 0 auto; padding: 32px; background-color: #ffffff;">
-  <!-- Header: photo, name/title, brand logo -->
+<div style="font-family: 'Segoe UI', Arial, sans-serif; color: #262626; line-height: 1.55; max-width: 800px; margin: 0 auto; padding: 32px; background-color: #ffffff;">
+  <!-- Header: photo, then logo/name/title/degree stacked beside it -->
   <table style="width: 100%; border-collapse: collapse; margin-bottom: 18px;">
     <tr>
-      <td style="width: 92px; vertical-align: top;">
+      <td style="width: 100px; vertical-align: top;">
         {{#if avatar}}
-        <img src="{{avatar}}" alt="{{name}}" style="width: 80px; height: 80px; border-radius: 8px; border: 2px solid #8FD3E8; object-fit: cover; display: block;" />
+        <img src="{{avatar}}" alt="{{name}}" style="width: 85px; height: 105px; border-radius: 6px; border: 2px solid #8FD3E8; object-fit: cover; display: block;" />
         {{else}}
-        <div style="width: 80px; height: 80px; border-radius: 8px; border: 2px solid #E2E8F0; background-color: #F7FAFC;"></div>
+        <div style="width: 85px; height: 105px; border-radius: 6px; border: 2px solid #E2E8F0; background-color: #F7FAFC;"></div>
         {{/if}}
       </td>
-      <td style="vertical-align: top; padding-left: 4px;">
-        <h1 style="color: #1A202C; font-size: 26px; font-weight: 800; margin: 0 0 4px 0;">{{name}}</h1>
-        <h2 style="color: #4B2E83; font-size: 14px; font-weight: 700; margin: 0 0 4px 0; text-transform: uppercase; letter-spacing: 0.6px;">{{currentPosition}}</h2>
+      <td style="vertical-align: top; padding-left: 6px;">
+        <img src="/images/seb-logo-1.png" alt="SEBSA" style="width: 100px; height: auto; display: block; margin-bottom: 8px;" />
+        <h1 style="color: #262626; font-size: 24px; font-weight: 800; margin: 0 0 4px 0;">{{name}}</h1>
+        <h2 style="color: #028BDE; font-size: 13px; font-weight: 700; margin: 0 0 4px 0; text-transform: uppercase; letter-spacing: 0.6px;">{{currentPosition}}</h2>
         {{#if academic.[0].qualification}}
-        <p style="color: #718096; font-size: 12px; margin: 0;">{{academic.[0].qualification}}</p>
+        <p style="color: #7F7F7F; font-size: 12px; margin: 0;">{{academic.[0].qualification}}</p>
         {{/if}}
-        {{#if customerName}}
-        <p style="color: #A0AEC0; font-size: 11px; font-style: italic; margin: 6px 0 0 0;">
-          Customized for: <span style="font-weight: 600; color: #718096;">{{customerName}}</span>
-        </p>
-        {{/if}}
-      </td>
-      <td style="width: 130px; text-align: right; vertical-align: top;">
-        <img src="/images/seb-logo-1.png" alt="SEBSA" style="width: 110px; height: auto;" />
       </td>
     </tr>
   </table>
-  <div style="height: 3px; background-color: #4B2E83; margin-bottom: 20px; border-radius: 2px;"></div>
+  <div style="height: 3px; background-color: #481484; margin-bottom: 20px; border-radius: 2px;"></div>
 
   <!-- Two-column body -->
   <table style="width: 100%; border-collapse: collapse;">
     <tr>
-      <!-- Left column: Objective + Academic -->
+      <!-- Left column: Objective + Academic + Skills + Certifications -->
       <td style="width: 34%; vertical-align: top; padding-right: 18px;">
         {{#if summary}}
         <div style="margin-bottom: 22px;">
-          <div style="background-color: #4B2E83; color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; padding: 6px 12px; border-radius: 4px; margin-bottom: 10px;">Objective</div>
-          <p style="font-size: 12px; margin: 0; color: #4A5568; text-align: justify;">{{summary}}</p>
+          <div style="display: block; width: 100%; box-sizing: border-box; background: linear-gradient(to right, #7650E1, #4E1C90); color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; padding: 6px 16px; border-radius: 10px 0 10px 0; margin-bottom: 10px;">Objective</div>
+          <p style="font-size: 12px; margin: 0; color: #404040; text-align: justify;">{{summary}}</p>
         </div>
         {{/if}}
 
         {{#if academic}}
         <div style="margin-bottom: 22px;">
-          <div style="background-color: #4B2E83; color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; padding: 6px 12px; border-radius: 4px; margin-bottom: 10px;">Academic</div>
+          <div style="display: block; width: 100%; box-sizing: border-box; background: linear-gradient(to right, #7650E1, #4E1C90); color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; padding: 6px 16px; border-radius: 10px 0 10px 0; margin-bottom: 10px;">Academic</div>
           {{#each academic}}
           <div style="margin-bottom: 12px;">
-            <p style="font-size: 12.5px; font-weight: 700; color: #2D3748; margin: 0;">{{qualification}}</p>
-            <p style="font-size: 11.5px; color: #718096; margin: 2px 0 0 0;">{{institution}} ({{period}})</p>
+            <p style="font-size: 12.5px; font-weight: 700; color: #262626; margin: 0;">{{qualification}}</p>
+            <p style="font-size: 11.5px; color: #7F7F7F; margin: 2px 0 0 0;">{{institution}} ({{period}})</p>
           </div>
           {{/each}}
         </div>
@@ -67,10 +61,10 @@ export const cvTemplateSource = `
 
         {{#if skillsAligned}}
         <div style="margin-bottom: 22px;">
-          <div style="background-color: #4B2E83; color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; padding: 6px 12px; border-radius: 4px; margin-bottom: 10px;">Skills</div>
-          <div style="font-size: 11.5px; color: #4A5568; line-height: 2;">
+          <div style="display: block; width: 100%; box-sizing: border-box; background: linear-gradient(to right, #7650E1, #4E1C90); color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; padding: 6px 16px; border-radius: 10px 0 10px 0; margin-bottom: 10px;">Skills</div>
+          <div style="font-size: 11.5px; color: #404040; line-height: 2;">
             {{#each skillsAligned}}
-              <span style="display: inline-block; background-color: #EEF2FF; color: #4B2E83; padding: 3px 9px; margin: 0 4px 4px 0; border-radius: 4px; font-weight: 600;">{{this}}</span>
+              <span style="display: inline-block; background-color: #F3EEFC; color: #4E1C90; padding: 3px 9px; margin: 0 4px 4px 0; border-radius: 4px; font-weight: 600;">{{this}}</span>
             {{/each}}
           </div>
         </div>
@@ -78,11 +72,11 @@ export const cvTemplateSource = `
 
         {{#if certifications}}
         <div style="margin-bottom: 22px;">
-          <div style="background-color: #4B2E83; color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; padding: 6px 12px; border-radius: 4px; margin-bottom: 10px;">Certifications</div>
+          <div style="display: block; width: 100%; box-sizing: border-box; background: linear-gradient(to right, #7650E1, #4E1C90); color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; padding: 6px 16px; border-radius: 10px 0 10px 0; margin-bottom: 10px;">Certifications</div>
           {{#each certifications}}
           <div style="margin-bottom: 10px;">
-            <p style="font-size: 12px; font-weight: 700; color: #2D3748; margin: 0;">{{name}}</p>
-            <p style="font-size: 11px; color: #718096; margin: 2px 0 0 0;">{{issuer}}{{#if year}} — {{year}}{{/if}}</p>
+            <p style="font-size: 12px; font-weight: 700; color: #262626; margin: 0;">{{name}}</p>
+            <p style="font-size: 11px; color: #7F7F7F; margin: 2px 0 0 0;">{{issuer}}{{#if year}} — {{year}}{{/if}}</p>
           </div>
           {{/each}}
         </div>
@@ -90,27 +84,23 @@ export const cvTemplateSource = `
       </td>
 
       <!-- Right column: Experience + Special Projects -->
-      <td style="width: 66%; vertical-align: top; padding-left: 18px; border-left: 1px solid #E2E8F0;">
+      <td style="width: 66%; vertical-align: top; padding-left: 18px;">
         {{#if experience}}
         <div style="margin-bottom: 22px;">
-          <div style="background-color: #4B2E83; color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; padding: 6px 12px; border-radius: 4px; margin-bottom: 12px;">Experience</div>
+          <div style="display: block; width: 100%; box-sizing: border-box; background: linear-gradient(to right, #7650E1, #4E1C90); color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; padding: 6px 16px; border-radius: 10px 0 10px 0; margin-bottom: 12px;">Experience</div>
           {{#each experience}}
-          <div style="margin-bottom: 16px;">
-            <table style="width: 100%; border-collapse: collapse; margin-bottom: 4px;">
-              <tr>
-                <td style="font-size: 13px; font-weight: 700; color: #2D3748;">
-                  {{position}} <span style="font-weight: 400; color: #718096;">— {{company}}</span>
-                </td>
-                <td style="text-align: right; font-size: 11px; font-weight: 600; color: #A0AEC0; font-style: italic; white-space: nowrap;">
-                  ({{period}})
-                </td>
-              </tr>
-            </table>
-            <ul style="margin: 0; padding-left: 16px; font-size: 12px; color: #4A5568;">
+          <div style="margin-bottom: 14px;">
+            <p style="font-size: 13px; margin: 0 0 4px 0;">
+              <span style="font-weight: 700; color: #262626;">{{position}} — {{company}}</span>
+              <span style="font-weight: 600; color: #7F7F7F; font-style: italic;"> ({{period}})</span>
+            </p>
+            {{#if tasks}}
+            <ul style="margin: 0; padding-left: 18px; font-size: 12px; color: #404040; list-style: disc; list-style-position: outside;">
               {{#each tasks}}
               <li style="margin-bottom: 3px; text-align: justify;">{{this}}</li>
               {{/each}}
             </ul>
+            {{/if}}
           </div>
           {{/each}}
         </div>
@@ -118,13 +108,14 @@ export const cvTemplateSource = `
 
         {{#if specialProjects}}
         <div style="margin-bottom: 22px;">
-          <div style="background-color: #4B2E83; color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; padding: 6px 12px; border-radius: 4px; margin-bottom: 12px;">Special Projects</div>
-          {{#each specialProjects}}
-          <div style="margin-bottom: 14px;">
-            <p style="font-size: 13px; font-weight: 700; color: #2D3748; margin: 0 0 3px 0;">{{title}}</p>
-            <p style="font-size: 12px; margin: 0; color: #4A5568; text-align: justify;">{{brief}}</p>
-          </div>
-          {{/each}}
+          <div style="display: block; width: 100%; box-sizing: border-box; background: linear-gradient(to right, #7650E1, #4E1C90); color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; padding: 6px 16px; border-radius: 10px 0 10px 0; margin-bottom: 12px;">Special Projects</div>
+          <ul style="margin: 0; padding-left: 18px; font-size: 12px; color: #404040; list-style: disc; list-style-position: outside;">
+            {{#each specialProjects}}
+            <li style="margin-bottom: 10px; text-align: justify;">
+              <span style="font-weight: 700; color: #262626;">{{title}}</span> - {{brief}}
+            </li>
+            {{/each}}
+          </ul>
         </div>
         {{/if}}
       </td>
