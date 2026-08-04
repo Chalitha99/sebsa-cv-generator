@@ -5,7 +5,6 @@ import { FileText } from 'lucide-react';
 import type { TailoredCv } from './types';
 import {
   SectionCard,
-  SkillsSection,
   ExperienceSection,
   ProjectsSection,
   EducationSection,
@@ -55,7 +54,6 @@ interface CvSectionEditorProps {
 export default function CvSectionEditor({ cv, onChange }: CvSectionEditorProps) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
     summary: true,
-    skills: true,
     experience: true,
     projects: false,
     education: false,
@@ -74,14 +72,6 @@ export default function CvSectionEditor({ cv, onChange }: CvSectionEditorProps) 
         expanded={expanded.summary}
         onToggle={() => toggle('summary')}
         onChange={(summary) => patch({ summary })}
-      />
-
-      <SkillsSection
-        label="Aligned Skills"
-        skills={cv.skillsAligned}
-        expanded={expanded.skills}
-        onToggle={() => toggle('skills')}
-        onChange={(skillsAligned) => patch({ skillsAligned })}
       />
 
       <ExperienceSection

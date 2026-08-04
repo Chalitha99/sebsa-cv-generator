@@ -33,12 +33,11 @@ export default function CvPreviewTemplate({ cv, onChange }: CvPreviewTemplatePro
         width: '100%',
         maxWidth: '800px',
         margin: '0 auto',
-        minHeight: '1120px',
         backgroundColor: '#ffffff',
         border: '1px solid #E2E8F0',
         borderRadius: '12px',
         boxShadow: '0 10px 25px rgba(0,0,0,0.08)',
-        fontFamily: "'Segoe UI', Arial, sans-serif",
+        fontFamily: "'Poppins', 'Segoe UI', Arial, sans-serif",
         fontSize: '14px',
         color: '#2D3748',
       }}

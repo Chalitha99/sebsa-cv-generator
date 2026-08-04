@@ -26,8 +26,6 @@ export function mapCvToTemplateData(cv: TailoredCv, imageBuffer?: Buffer) {
     title: cv.currentPosition || '',
     objective: cv.summary || '',
     summary: cv.summary || '',
-    skills: Array.isArray(cv.skillsAligned) ? cv.skillsAligned.map((s) => ({ name: s })) : [],
-    skillsAligned: Array.isArray(cv.skillsAligned) ? cv.skillsAligned.map((s) => ({ name: s })) : [],
     experience: Array.isArray(cv.experience)
       ? cv.experience.map((e) => ({
           position: e.position || '',
