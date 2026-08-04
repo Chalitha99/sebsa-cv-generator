@@ -7,13 +7,20 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getCurrentUser, isReviewerOrAbove } from '@/lib/auth';
 import { listTemplates, uploadTemplate, deleteTemplate } from '@/services/template-service';
 import { getSavedGeneratedCv, saveGeneratedCv } from '@/services/generated-cv-service';
+import { getEmployeeByCode } from '@/services/employee-service';
 import type { Employee } from '@/types/domain';
 import type { TailoredCv } from './types';
 
 const SYSTEM_PROMPT = `You are an expert AI recruiter and resume writer.
 Your job is to tailor the candidate's CV to match the customer opportunity description and requirements.
 Integrate the user's specific refinement request to further adjust the details.
-Return ONLY structured JSON matching the provided schema. Do not fabric details not present or reasonably inferred from the candidate's original history, but frame their achievements using key terminology from the requirements.`;
+
+STRICT RULES — you MUST follow these without exception:
+1. DO NOT change, paraphrase, rename, or modify the candidate's academic qualifications in any way. Return academic data exactly as provided in the input profile.
+2. DO NOT change, paraphrase, or modify any experience "position" (job title). Only rewrite the tasks/responsibilities listed under each position to align with customer requirements.
+3. DO NOT fabricate details not present or reasonably inferred from the candidate's original history, but frame their achievements using key terminology from the requirements.
+
+Return ONLY structured JSON matching the provided schema.`;
 
 const TAILORED_CV_SCHEMA = {
   type: Type.OBJECT,
@@ -21,22 +28,18 @@ const TAILORED_CV_SCHEMA = {
     name: { type: Type.STRING },
     currentPosition: { type: Type.STRING },
     summary: { type: Type.STRING, description: "A tailored executive summary matching the opportunity and instructions." },
-    skillsAligned: {
-      type: Type.ARRAY,
-      items: { type: Type.STRING },
-      description: "List of key competencies aligned with opportunity demands."
-    },
     experience: {
       type: Type.ARRAY,
       items: {
         type: Type.OBJECT,
         properties: {
-          position: { type: Type.STRING },
+          position: { type: Type.STRING, description: "MUST be identical to the original position title — do not modify." },
           company: { type: Type.STRING },
           period: { type: Type.STRING },
           tasks: {
             type: Type.ARRAY,
-            items: { type: Type.STRING }
+            items: { type: Type.STRING },
+            description: "Rewrite these task descriptions to align with customer requirements."
           }
         },
         required: ['position', 'company', 'period', 'tasks']
@@ -44,6 +47,7 @@ const TAILORED_CV_SCHEMA = {
     },
     academic: {
       type: Type.ARRAY,
+      description: "Return this EXACTLY as provided in the input — do not modify any academic entry.",
       items: {
         type: Type.OBJECT,
         properties: {
@@ -56,6 +60,7 @@ const TAILORED_CV_SCHEMA = {
     },
     specialProjects: {
       type: Type.ARRAY,
+      description: "Customize project descriptions to highlight relevance to the customer requirement.",
       items: {
         type: Type.OBJECT,
         properties: {
@@ -67,6 +72,7 @@ const TAILORED_CV_SCHEMA = {
     },
     certifications: {
       type: Type.ARRAY,
+      description: "Certifications may be reordered or their descriptions lightly enhanced for relevance.",
       items: {
         type: Type.OBJECT,
         properties: {
@@ -78,7 +84,7 @@ const TAILORED_CV_SCHEMA = {
       }
     }
   },
-  required: ['name', 'currentPosition', 'summary', 'skillsAligned', 'experience', 'academic', 'specialProjects', 'certifications']
+  required: ['name', 'currentPosition', 'summary', 'experience', 'academic', 'specialProjects', 'certifications']
 };
 
 export async function customizeCvAction(
@@ -96,15 +102,27 @@ export async function customizeCvAction(
 
   const ai = new GoogleGenAI({ apiKey });
 
+  const supabase = await createClient();
+  const fullEmployee = await getEmployeeByCode(supabase, employee.employeeCode);
+  if (!fullEmployee) {
+    throw new Error(`Employee profile for code ${employee.employeeCode} not found.`);
+  }
+
+  // Capture the original (locked) academic and position data BEFORE the AI call.
+  // These will be re-injected after the AI response to guarantee they haven't been modified.
+  const originalAcademic = fullEmployee.cvAcademic ?? [];
+  const originalExperiencePositions = (fullEmployee.cvExperience || fullEmployee.experience || []).map(
+    (exp) => ('position' in exp ? (exp as { position: string }).position : (exp as { role: string }).role)
+  );
+
   // Map employee into a cleaner input context
   const originalProfile = {
-    name: employee.name,
-    currentPosition: employee.currentPosition || employee.role,
-    skills: employee.skills,
-    experience: employee.cvExperience || employee.experience || [],
-    academic: employee.cvAcademic || [],
-    specialProjects: employee.specialProjects || [],
-    certifications: employee.cvCertifications || [],
+    name: fullEmployee.name,
+    currentPosition: fullEmployee.currentPosition || fullEmployee.role,
+    experience: fullEmployee.cvExperience || fullEmployee.experience || [],
+    academic: originalAcademic,
+    specialProjects: fullEmployee.specialProjects || [],
+    certifications: fullEmployee.cvCertifications || [],
   };
 
   const promptContent = `
@@ -118,7 +136,7 @@ Preferred Requirements / Job Specs: ${preferredExp}
 Chat Customization History:
 ${chatHistory.map((h) => `${h.role === 'user' ? 'User Instruction' : 'AI Response Summary'}: ${h.content}`).join('\n')}
 
-${newInstruction ? `Latest User Refinement Request: "${newInstruction}"` : 'Initial Customization: Tailor the CV summary, skills list, and experiences to highlight the mandatory and preferred skills above.'}
+${newInstruction ? `Latest User Refinement Request: "${newInstruction}"` : 'Initial Customization: Tailor the CV summary and experience task descriptions to highlight the mandatory and preferred skills above. DO NOT change academic qualifications or experience position titles.'}
 `;
 
   try {
@@ -139,6 +157,34 @@ ${newInstruction ? `Latest User Refinement Request: "${newInstruction}"` : 'Init
 
     const parsed = JSON.parse(response.text ?? '{}') as TailoredCv;
     parsed.customerName = customerName;
+
+    // ── LOCK 1: Academic qualifications — always restore from original profile data ──
+    // Even if the LLM ignored the instruction and modified them, we replace with the
+    // exact data from the employee's profiles table education column.
+    parsed.academic = originalAcademic;
+
+    // ── LOCK 2: Experience position titles — restore original position per entry ──
+    // The LLM may only change tasks; position titles are fixed from the source profile.
+    if (Array.isArray(parsed.experience)) {
+      parsed.experience = parsed.experience.map((exp, idx) => ({
+        ...exp,
+        position: originalExperiencePositions[idx] ?? exp.position,
+      }));
+    } else {
+      parsed.experience = [];
+    }
+
+    if (!Array.isArray(parsed.specialProjects)) {
+      parsed.specialProjects = [];
+    }
+
+    if (!Array.isArray(parsed.certifications)) {
+      parsed.certifications = [];
+    }
+
+    // Remove skills (no skills section in CV)
+    parsed.skillsAligned = [];
+
     return parsed;
   } catch (error) {
     console.error('customizeCvAction failed:', error);

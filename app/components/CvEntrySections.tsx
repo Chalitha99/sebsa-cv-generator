@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Hash, Briefcase, Lightbulb, GraduationCap, Award, Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Hash, Briefcase, Lightbulb, GraduationCap, Award, Plus, Trash2, ChevronDown, ChevronUp, Lock } from 'lucide-react';
 import type { CvExperienceEntry, CvAcademicEntry, CvProjectEntry, CvCertificationEntry } from '@/lib/cvTypes';
 
 /**
@@ -174,15 +174,23 @@ export function ExperienceSection({
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
+
+          {/* Position — READ-ONLY: locked from profile, not customizable */}
+          <div className="space-y-1">
+            <div className="flex items-center gap-1.5">
               <label className="text-[10px] font-bold text-slate-500 uppercase block">Position / Title</label>
-              <input type="text" value={exp.position} onChange={(e) => updateEntry(idx, { position: e.target.value })} placeholder="e.g. Senior Software Engineer" className={inputCls} />
+              <span className="flex items-center gap-0.5 text-[9px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">
+                <Lock className="w-2.5 h-2.5" /> Locked
+              </span>
             </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-slate-500 uppercase block">Company / Organisation</label>
-              <input type="text" value={exp.company} onChange={(e) => updateEntry(idx, { company: e.target.value })} placeholder="e.g. Acme Corp" className={inputCls} />
+            <div className="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-600 select-none">
+              {exp.position || <span className="text-slate-400 italic">No position set</span>}
             </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-slate-500 uppercase block">Company / Organisation</label>
+            <input type="text" value={exp.company} onChange={(e) => updateEntry(idx, { company: e.target.value })} placeholder="e.g. Acme Corp" className={inputCls} />
           </div>
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-slate-500 uppercase block">Period</label>
@@ -250,11 +258,17 @@ export function ProjectsSection({
   );
 }
 
+/**
+ * EducationSection — READ-ONLY display.
+ * Academic qualifications come directly from the employee profile (profiles table education
+ * column) and must not be changed during CV customization. The onChange prop is kept in the
+ * signature for API compatibility but is never called here.
+ */
 export function EducationSection({
   academic,
   expanded,
   onToggle,
-  onChange,
+  onChange: _onChange,
 }: {
   academic: CvAcademicEntry[];
   expanded: boolean;
@@ -263,33 +277,43 @@ export function EducationSection({
 }) {
   return (
     <SectionCard label="Education" icon={GraduationCap} count={academic.length} expanded={expanded} onToggle={onToggle}>
+      {/* Lock notice */}
+      <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg">
+        <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+        <p className="text-[10px] font-bold text-amber-700 leading-snug">
+          Academic qualifications are sourced directly from the employee profile and cannot be modified during CV customization.
+        </p>
+      </div>
+
+      {academic.length === 0 && (
+        <p className="text-xs text-slate-400 italic">No academic qualifications on record.</p>
+      )}
+
       {academic.map((edu, idx) => (
-        <div key={idx} className="border border-slate-200 rounded-xl p-4 space-y-3 bg-slate-50/30">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Education {idx + 1}</span>
-            <button type="button" onClick={() => onChange(academic.filter((_, i) => i !== idx))} className="text-rose-400 hover:text-rose-600 transition-colors cursor-pointer">
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
+        <div key={idx} className="border border-slate-200 rounded-xl p-4 space-y-3 bg-slate-50/50">
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Education {idx + 1}</span>
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-slate-500 uppercase block">Qualification / Degree</label>
-            <input type="text" value={edu.qualification} onChange={(e) => onChange(academic.map((a, i) => (i === idx ? { ...a, qualification: e.target.value } : a)))} placeholder="e.g. BSc (Hons) Computer Science" className={inputCls} />
+            <div className="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-700">
+              {edu.qualification || <span className="text-slate-400 italic">—</span>}
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-slate-500 uppercase block">Institution</label>
-              <input type="text" value={edu.institution} onChange={(e) => onChange(academic.map((a, i) => (i === idx ? { ...a, institution: e.target.value } : a)))} placeholder="e.g. University of Colombo" className={inputCls} />
+              <div className="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-700">
+                {edu.institution || <span className="text-slate-400 italic">—</span>}
+              </div>
             </div>
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-slate-500 uppercase block">Period</label>
-              <input type="text" value={edu.period} onChange={(e) => onChange(academic.map((a, i) => (i === idx ? { ...a, period: e.target.value } : a)))} placeholder="e.g. 2015 – 2019" className={inputCls} />
+              <div className="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-700">
+                {edu.period || <span className="text-slate-400 italic">—</span>}
+              </div>
             </div>
           </div>
         </div>
       ))}
-      <button type="button" onClick={() => onChange([...academic, { qualification: '', institution: '', period: '' }])} className={dottedAddBtnCls}>
-        <Plus className="w-3.5 h-3.5" /> Add Education Entry
-      </button>
     </SectionCard>
   );
 }
