@@ -160,53 +160,7 @@ export default function SettingsPage() {
       <div className="grid grid-cols-12 gap-8">
         {/* Left Column: Company & Template settings (Span 7) */}
         <div className="col-span-12 lg:col-span-7 flex flex-col gap-6">
-          {/* Template Management card */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col gap-4">
-            <div className="flex items-center gap-2 pb-1.5 border-b border-slate-100">
-              <LayoutGrid className="w-5 h-5 text-indigo-600" />
-              <h4 className="font-sans text-xs font-black uppercase tracking-widest text-slate-400">
-                Active CV Template Configurations
-              </h4>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {templatesList.map((tmpl) => {
-                const isActive = activeTmpl === tmpl.name;
-                return (
-                  <button
-                    key={tmpl.name}
-                    type="button"
-                    onClick={() => setActiveTmpl(tmpl.name)}
-                    className={`p-4 rounded-xl text-left border flex flex-col justify-between h-[130px] transition-all cursor-pointer ${
-                      isActive
-                        ? 'border-indigo-600 bg-indigo-50/20 shadow-sm'
-                        : 'border-slate-200 bg-slate-50/50 hover:bg-slate-50'
-                    }`}
-                  >
-                    <div>
-                      <h5 className="text-xs font-black text-slate-800 uppercase tracking-wide">
-                        {tmpl.name}
-                      </h5>
-                      <p className="text-[10px] text-slate-500 mt-1.5 leading-relaxed">
-                        {tmpl.desc}
-                      </p>
-                    </div>
-
-                    <span className={`text-[9px] font-black uppercase ${
-                      isActive ? 'text-indigo-600' : 'text-slate-400'
-                    }`}>
-                      {isActive ? '● Selected Active' : 'Configure Layout'}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column: Notifications & User control (Span 5) */}
-        <div className="col-span-12 lg:col-span-5 flex flex-col gap-6">
-          {/* Notification toggles card */}
+                {/* Notification toggles card */}
           <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col gap-4.5">
             <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
               <BellRing className="w-5 h-5 text-indigo-600" />
@@ -336,6 +290,10 @@ export default function SettingsPage() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Right Column (Span 5) — reserved for future settings cards */}
+        <div className="col-span-12 lg:col-span-5 flex flex-col gap-6">
         </div>
       </div>
     </PageWrapper>

@@ -16,14 +16,16 @@ import {
   Trash2,
   ChevronLeft,
   ChevronRight,
+  UserCircle,
 } from 'lucide-react';
 
 interface RepositoryClientProps {
   employees: Employee[];
   viewerRole: UserRole;
+  departments: { id: string; name: string }[];
 }
 
-export default function RepositoryClient({ employees, viewerRole }: RepositoryClientProps) {
+export default function RepositoryClient({ employees, viewerRole, departments }: RepositoryClientProps) {
   const router = useRouter();
   const [isDeleting, startDeleteTransition] = useTransition();
   // CV Reviewer can now create profiles too (docs/04-rbac-security.md §13), but editing/deleting
@@ -41,8 +43,6 @@ export default function RepositoryClient({ employees, viewerRole }: RepositoryCl
   // Search and Filtering State
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDept, setSelectedDept] = useState('All Departments');
-  const [selectedExp, setSelectedExp] = useState('Experience Level');
-  const [selectedSkill, setSelectedSkill] = useState('Core Skills');
 
   // Stats Calculations
   const stats = useMemo(() => {
@@ -55,44 +55,24 @@ export default function RepositoryClient({ employees, viewerRole }: RepositoryCl
   // Dynamic Filtering Logic
   const filteredEmployees = useMemo(() => {
     return employees.filter((emp) => {
-      // 1. Search term match (Name, email, position, skills)
+      // 1. Search term match (Name, email, position)
       const matchesSearch =
         emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         emp.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        emp.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        emp.skills.some((s) => s.toLowerCase().includes(searchTerm.toLowerCase()));
+        emp.role.toLowerCase().includes(searchTerm.toLowerCase());
 
       // 2. Department match
       const matchesDept =
         selectedDept === 'All Departments' ||
         emp.department.toLowerCase() === selectedDept.toLowerCase();
 
-      // 3. Experience filter simulation
-      let matchesExp = true;
-      if (selectedExp !== 'Experience Level') {
-        if (selectedExp.includes('Senior') || selectedExp.includes('Leadership')) {
-          matchesExp = emp.role.toLowerCase().includes('senior') || emp.role.toLowerCase().includes('director') || emp.role.toLowerCase().includes('architect');
-        } else if (selectedExp.includes('Mid-Level')) {
-          matchesExp = !emp.role.toLowerCase().includes('senior') && !emp.role.toLowerCase().includes('director') && !emp.role.toLowerCase().includes('junior');
-        } else if (selectedExp.includes('Junior')) {
-          matchesExp = emp.role.toLowerCase().includes('junior');
-        }
-      }
-
-      // 4. Skills match
-      const matchesSkill =
-        selectedSkill === 'Core Skills' ||
-        emp.skills.some((s) => s.toLowerCase().includes(selectedSkill.toLowerCase()));
-
-      return matchesSearch && matchesDept && matchesExp && matchesSkill;
+      return matchesSearch && matchesDept;
     });
-  }, [employees, searchTerm, selectedDept, selectedExp, selectedSkill]);
+  }, [employees, searchTerm, selectedDept]);
 
   const handleClearFilters = () => {
     setSearchTerm('');
     setSelectedDept('All Departments');
-    setSelectedExp('Experience Level');
-    setSelectedSkill('Core Skills');
   };
 
   const handleAddEmployee = () => {
@@ -148,7 +128,7 @@ export default function RepositoryClient({ employees, viewerRole }: RepositoryCl
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Search by name, email, or skills..."
+              placeholder="Search by name, email, or role..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full bg-white border border-slate-200 rounded-lg text-xs py-2.5 pl-9 pr-4 focus:ring-2 focus:ring-slate-500/10 focus:border-slate-400 focus:outline-none"
@@ -160,41 +140,10 @@ export default function RepositoryClient({ employees, viewerRole }: RepositoryCl
               onChange={(e) => setSelectedDept(e.target.value)}
               className="w-full bg-white border border-slate-200 rounded-lg text-xs py-2.5 px-3 focus:ring-2 focus:ring-slate-500/10 focus:border-slate-400 focus:outline-none"
             >
-              <option>All Departments</option>
-              <option>Engineering</option>
-              <option>Product Management</option>
-              <option>Design</option>
-              <option>Marketing</option>
-              <option>Finance</option>
-              <option>Intelligence</option>
-            </select>
-          </div>
-          <div className="w-[180px]">
-            <select
-              value={selectedExp}
-              onChange={(e) => setSelectedExp(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-lg text-xs py-2.5 px-3 focus:ring-2 focus:ring-slate-500/10 focus:border-slate-400 focus:outline-none"
-            >
-              <option>Experience Level</option>
-              <option>Junior (0-2 yrs)</option>
-              <option>Mid-Level (3-5 yrs)</option>
-              <option>Senior (5+ yrs)</option>
-              <option>Leadership (10+ yrs)</option>
-            </select>
-          </div>
-          <div className="w-[180px]">
-            <select
-              value={selectedSkill}
-              onChange={(e) => setSelectedSkill(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-lg text-xs py-2.5 px-3 focus:ring-2 focus:ring-slate-500/10 focus:border-slate-400 focus:outline-none"
-            >
-              <option>Core Skills</option>
-              <option>React</option>
-              <option>TypeScript</option>
-              <option>Python</option>
-              <option>Figma</option>
-              <option>SEO</option>
-              <option>Kubernetes</option>
+              <option value="All Departments">All Departments</option>
+              {departments.map((dept) => (
+                <option key={dept.id} value={dept.name}>{dept.name}</option>
+              ))}
             </select>
           </div>
         </div>
@@ -205,10 +154,8 @@ export default function RepositoryClient({ employees, viewerRole }: RepositoryCl
             <thead>
               <tr className="bg-slate-50/80 border-b border-slate-200/80">
                 <th className="py-4 px-6 text-xs font-bold uppercase text-slate-500 tracking-wider">Employee</th>
-                <th className="py-4 px-6 text-xs font-bold uppercase text-slate-500 tracking-wider">ID</th>
                 <th className="py-4 px-6 text-xs font-bold uppercase text-slate-500 tracking-wider">Position</th>
                 <th className="py-4 px-6 text-xs font-bold uppercase text-slate-500 tracking-wider">Department</th>
-                <th className="py-4 px-6 text-xs font-bold uppercase text-slate-500 tracking-wider">Skills</th>
                 <th className="py-4 px-6 text-xs font-bold uppercase text-slate-500 tracking-wider">Last Updated</th>
                 <th className="py-4 px-6 text-xs font-bold uppercase text-slate-500 tracking-wider">Account</th>
                 <th className="py-4 px-6 text-xs font-bold uppercase text-slate-500 tracking-wider text-right">Actions</th>
@@ -225,11 +172,17 @@ export default function RepositoryClient({ employees, viewerRole }: RepositoryCl
                     {/* User profile with headshot */}
                     <td className="py-4 px-6">
                       <div className="flex items-center gap-3">
-                        <img
-                          src={getAvatarSrc(emp)}
-                          alt={emp.name}
-                          className="w-10 h-10 rounded-full border border-slate-200 object-cover"
-                        />
+                        {emp.avatar && !emp.avatar.includes('unsplash.com') ? (
+                          <img
+                            src={getAvatarSrc(emp)}
+                            alt={emp.name}
+                            className="w-10 h-10 rounded-full border border-slate-200 object-cover"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full border border-slate-200 bg-slate-100 flex items-center justify-center shrink-0">
+                            <UserCircle className="w-6 h-6 text-slate-400" />
+                          </div>
+                        )}
                         <div>
                           <p className="font-sans text-xs font-black text-slate-800 leading-tight">
                             {emp.name}
@@ -239,11 +192,6 @@ export default function RepositoryClient({ employees, viewerRole }: RepositoryCl
                           </p>
                         </div>
                       </div>
-                    </td>
-
-                    {/* EMP ID with monospace formatting */}
-                    <td className="py-4 px-6 text-[11px] font-mono text-slate-500">
-                      {emp.id}
                     </td>
 
                     {/* Position */}
@@ -264,25 +212,6 @@ export default function RepositoryClient({ employees, viewerRole }: RepositoryCl
                       }`}>
                         {emp.department}
                       </span>
-                    </td>
-
-                    {/* Skills cloud list */}
-                    <td className="py-4 px-6">
-                      <div className="flex flex-wrap gap-1.5 max-w-[240px]">
-                        {emp.skills.slice(0, 3).map((skill, index) => (
-                          <span
-                            key={index}
-                            className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-500 font-sans text-[9px] font-bold uppercase tracking-wider"
-                          >
-                            {skill}
-                          </span>
-                        ))}
-                        {emp.skills.length > 3 && (
-                          <span className="text-[9px] font-bold text-slate-400">
-                            +{emp.skills.length - 3}
-                          </span>
-                        )}
-                      </div>
                     </td>
 
                     {/* Last updated date */}
@@ -328,7 +257,7 @@ export default function RepositoryClient({ employees, viewerRole }: RepositoryCl
                 ))
               ) : (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center">
+                  <td colSpan={6} className="py-12 text-center">
                     <p className="text-sm font-medium text-slate-400">
                       No candidate profile records match your search criteria.
                     </p>

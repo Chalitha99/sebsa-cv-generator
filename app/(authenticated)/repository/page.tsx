@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { listEmployees } from '@/services/employee-service';
 import { getCurrentUser } from '@/lib/auth';
 import RepositoryClient from './RepositoryClient';
+import { getDepartmentsAction } from '@/app/(authenticated)/upload/actions';
 
 export default async function RepositoryPage() {
   const user = await getCurrentUser();
@@ -13,7 +14,10 @@ export default async function RepositoryPage() {
   if (user.role === 'employee') redirect(`/repository/${user.employeeCode}`);
 
   const supabase = await createClient();
-  const employees = await listEmployees(supabase);
+  const [employees, departments] = await Promise.all([
+    listEmployees(supabase),
+    getDepartmentsAction(),
+  ]);
 
-  return <RepositoryClient employees={employees} viewerRole={user.role} />;
+  return <RepositoryClient employees={employees} viewerRole={user.role} departments={departments} />;
 }

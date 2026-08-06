@@ -8,7 +8,7 @@ import {
 export async function getSavedGeneratedCv(
   supabase: SupabaseClient,
   profileId: string,
-  templateId: string
+  templateId: string | null
 ): Promise<Record<string, any> | null> {
   const row = await getLatestGeneratedCvRow(supabase, profileId, templateId);
   return row ? row.content : null;
@@ -18,7 +18,7 @@ export async function saveGeneratedCv(
   supabase: SupabaseClient,
   params: {
     profileId: string;
-    templateId: string;
+    templateId: string | null;
     content: Record<string, any>;
     userId: string;
   }

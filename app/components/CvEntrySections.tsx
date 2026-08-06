@@ -259,31 +259,43 @@ export function ProjectsSection({
 }
 
 /**
- * EducationSection — READ-ONLY display.
- * Academic qualifications come directly from the employee profile (profiles table education
- * column) and must not be changed during CV customization. The onChange prop is kept in the
- * signature for API compatibility but is never called here.
+ * EducationSection — supports both editable (onboarding/profile creation) and read-only
+ * (CV customization in Generate flow) modes via the `readOnly` prop.
+ *
+ * readOnly=true (default): shows a lock notice; fields are displayed as static divs.
+ * readOnly=false: users can add/edit/remove education entries (used in onboarding & my-profile).
+ *
+ * The onChange prop is kept in the signature for both modes; when readOnly=true it is never called.
  */
 export function EducationSection({
   academic,
   expanded,
   onToggle,
-  onChange: _onChange,
+  onChange,
+  readOnly = true,
 }: {
   academic: CvAcademicEntry[];
   expanded: boolean;
   onToggle: () => void;
   onChange: (v: CvAcademicEntry[]) => void;
+  readOnly?: boolean;
 }) {
+  const updateEntry = (idx: number, patch: Partial<CvAcademicEntry>) =>
+    onChange(academic.map((e, i) => (i === idx ? { ...e, ...patch } : e)));
+  const removeEntry = (idx: number) => onChange(academic.filter((_, i) => i !== idx));
+  const addEntry = () => onChange([...academic, { qualification: '', institution: '', period: '' }]);
+
   return (
     <SectionCard label="Education" icon={GraduationCap} count={academic.length} expanded={expanded} onToggle={onToggle}>
-      {/* Lock notice */}
-      <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg">
-        <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-        <p className="text-[10px] font-bold text-amber-700 leading-snug">
-          Academic qualifications are sourced directly from the employee profile and cannot be modified during CV customization.
-        </p>
-      </div>
+      {/* Lock notice — only shown in read-only (CV customization) mode */}
+      {readOnly && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg">
+          <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+          <p className="text-[10px] font-bold text-amber-700 leading-snug">
+            Academic qualifications are sourced directly from the employee profile and cannot be modified during CV customization.
+          </p>
+        </div>
+      )}
 
       {academic.length === 0 && (
         <p className="text-xs text-slate-400 italic">No academic qualifications on record.</p>
@@ -291,29 +303,54 @@ export function EducationSection({
 
       {academic.map((edu, idx) => (
         <div key={idx} className="border border-slate-200 rounded-xl p-4 space-y-3 bg-slate-50/50">
-          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Education {idx + 1}</span>
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Education {idx + 1}</span>
+            {!readOnly && (
+              <button type="button" onClick={() => removeEntry(idx)} className="text-rose-400 hover:text-rose-600 transition-colors cursor-pointer" aria-label="Remove education entry">
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-slate-500 uppercase block">Qualification / Degree</label>
-            <div className="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-700">
-              {edu.qualification || <span className="text-slate-400 italic">—</span>}
-            </div>
+            {readOnly ? (
+              <div className="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-700">
+                {edu.qualification || <span className="text-slate-400 italic">—</span>}
+              </div>
+            ) : (
+              <input type="text" value={edu.qualification} onChange={(e) => updateEntry(idx, { qualification: e.target.value })} placeholder="e.g. BSc Computer Science" className={inputCls} />
+            )}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-slate-500 uppercase block">Institution</label>
-              <div className="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-700">
-                {edu.institution || <span className="text-slate-400 italic">—</span>}
-              </div>
+              {readOnly ? (
+                <div className="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-700">
+                  {edu.institution || <span className="text-slate-400 italic">—</span>}
+                </div>
+              ) : (
+                <input type="text" value={edu.institution} onChange={(e) => updateEntry(idx, { institution: e.target.value })} placeholder="e.g. University of Colombo" className={inputCls} />
+              )}
             </div>
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-slate-500 uppercase block">Period</label>
-              <div className="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-700">
-                {edu.period || <span className="text-slate-400 italic">—</span>}
-              </div>
+              {readOnly ? (
+                <div className="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-700">
+                  {edu.period || <span className="text-slate-400 italic">—</span>}
+                </div>
+              ) : (
+                <input type="text" value={edu.period} onChange={(e) => updateEntry(idx, { period: e.target.value })} placeholder="e.g. 2016 – 2020" className={inputCls} />
+              )}
             </div>
           </div>
         </div>
       ))}
+
+      {!readOnly && (
+        <button type="button" onClick={addEntry} className={dottedAddBtnCls}>
+          <Plus className="w-3.5 h-3.5" /> Add Education Entry
+        </button>
+      )}
     </SectionCard>
   );
 }

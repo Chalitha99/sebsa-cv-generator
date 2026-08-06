@@ -111,9 +111,7 @@ export default function ReviewClient({ initialItems }: ReviewClientProps) {
                       <>
                         <p className="text-[11px] text-slate-500 mt-1.5">
                           Proposed: <span className="font-semibold text-slate-700">{item.proposedChange.role}</span> ·{' '}
-                          {item.proposedChange.department} ·{' '}
-                          {item.proposedChange.skills.slice(0, 4).join(', ')}
-                          {item.proposedChange.skills.length > 4 ? '…' : ''}
+                          {item.proposedChange.department}
                         </p>
                         <p className="text-[10px] text-slate-400 mt-1">
                           {item.proposedChange.cvExperience?.length ?? 0} experience ·{' '}

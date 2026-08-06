@@ -7,31 +7,24 @@ import type { Employee } from '@/types/domain';
 import type { CvExperienceEntry } from '@/lib/cvTypes';
 import { isAdminOrAbove, type UserRole } from '@/lib/roles';
 import CvPreviewTemplate from '../../generate/CvPreviewTemplate';
-import { listTemplatesAction } from '../../generate/actions';
-import type { Template } from '@/services/template-service';
 import { buildTailoredCvFromEmployee } from '@/lib/templates/buildTailoredCvFromEmployee';
-import { exportToPdf, exportTemplatedDocx } from '@/lib/cvExport';
+import { exportToPdf } from '@/lib/cvExport';
 import {
   ArrowLeft,
   Mail,
-  MapPin,
-  Briefcase,
   Layers,
   Award,
   GraduationCap,
   Sparkles,
   Download,
-  FileType2,
   Eye,
   Loader2,
-  ChevronRight,
   ExternalLink,
-  Code2,
-  Cpu,
   BadgeCheck,
   Clock,
   PenLine,
   X,
+  UserCircle,
 } from 'lucide-react';
 
 interface EmployeeProfileClientProps {
@@ -53,28 +46,9 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
   // their own CV, but also lets Admins/Reviewers grab a quick copy without the full "Customize
   // CVs" wizard. No AI tailoring here — just the employee's current profile data as-is.
   const [showPreview, setShowPreview] = useState(false);
-  const [templates, setTemplates] = useState<Template[]>([]);
-  const [templatesLoading, setTemplatesLoading] = useState(true);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
-  const [downloadingDocx, setDownloadingDocx] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    listTemplatesAction()
-      .then((list) => {
-        if (!cancelled) setTemplates(list);
-      })
-      .catch((err) => console.error('Failed to load CV templates:', err))
-      .finally(() => {
-        if (!cancelled) setTemplatesLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const tailoredCv = useMemo(() => buildTailoredCvFromEmployee(employee), [employee]);
-  const activeTemplate = templates[0] ?? null;
   const exportFilename = `${employee.name.replace(/\s+/g, '_')}_CV`;
 
   const handleDownloadPdf = async () => {
@@ -86,22 +60,6 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
       alert(err instanceof Error ? `Could not export to PDF: ${err.message}` : 'Could not export to PDF.');
     } finally {
       setDownloadingPdf(false);
-    }
-  };
-
-  const handleDownloadDocx = async () => {
-    if (!activeTemplate) {
-      alert('No CV template has been configured yet — ask an Admin to upload one under CV Templates.');
-      return;
-    }
-    setDownloadingDocx(true);
-    try {
-      await exportTemplatedDocx(activeTemplate.id, tailoredCv, employee.avatar, exportFilename);
-    } catch (err) {
-      console.error('DOCX export failed:', err);
-      alert(err instanceof Error ? err.message : 'Could not export to DOCX.');
-    } finally {
-      setDownloadingDocx(false);
     }
   };
 
@@ -136,7 +94,7 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
     {
       name: 'Project Delta-Prime',
       desc: 'Re-engineering product structure with serverless technologies.',
-      tags: employee.skills.slice(0, 2),
+      tags: [],
     },
     {
       name: 'Hyperion core analytics',
@@ -208,8 +166,12 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
             {/* Ambient visual overlay */}
             <div className="absolute right-0 top-0 w-32 h-32 bg-indigo-50 rounded-full blur-3xl pointer-events-none"></div>
 
-            <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden shrink-0 border border-slate-200">
-              <img src={employee.avatar} alt={employee.name} className="w-full h-full object-cover" />
+            <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden shrink-0 border border-slate-200 flex items-center justify-center bg-slate-100">
+              {employee.avatar && !employee.avatar.includes('unsplash.com') ? (
+                <img src={employee.avatar} alt={employee.name} className="w-full h-full object-cover" />
+              ) : (
+                <UserCircle className="w-16 h-16 text-slate-300" />
+              )}
             </div>
 
             <div className="flex-1 min-w-0 flex flex-col justify-between">
@@ -230,14 +192,6 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
                 </p>
 
                 <div className="flex flex-wrap gap-y-2 gap-x-4 mt-3 text-slate-500 font-sans text-xs">
-                  <div className="flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                    <span>{employee.location || 'San Francisco, CA'}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Briefcase className="w-3.5 h-3.5 text-slate-400" />
-                    <span>{employee.experienceYears || '5+ Years Experience'}</span>
-                  </div>
                   <div className="flex items-center gap-1.5">
                     <Mail className="w-3.5 h-3.5 text-slate-400" />
                     <span>{employee.email}</span>
@@ -348,7 +302,7 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
                   {/* Special Projects — prefer structured, fall back to legacy */}
                   <div>
                     <h4 className="text-xs font-black uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-1.5">
-                      <Code2 className="w-4 h-4 text-slate-500" />
+                      <Layers className="w-4 h-4 text-slate-500" />
                       <span>Key Portfolios & Projects</span>
                     </h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -439,24 +393,6 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
 
         {/* Right 4 Columns: Interactive PDF mock widget */}
         <div className="col-span-12 lg:col-span-4 flex flex-col gap-6">
-          {/* Skills Checklist card */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
-            <h4 className="font-sans text-xs font-black uppercase tracking-widest text-slate-400 mb-4">
-              Validated Skills Cloud
-            </h4>
-            <div className="flex flex-wrap gap-2">
-              {employee.skills.map((skill, index) => (
-                <div
-                  key={index}
-                  className="px-3 py-1.5 rounded bg-slate-50 border border-slate-200 text-slate-600 text-xs font-semibold flex items-center gap-1.5 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-900 transition-colors"
-                >
-                  <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full"></span>
-                  <span>{skill}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
           {/* Structured Original CV Previewer Card */}
           <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col">
             <h4 className="font-sans text-xs font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-1.5">
@@ -464,72 +400,29 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
               <span>Structured CV Preview</span>
             </h4>
 
-            {/* Structured Page widget mockup container — click to open the real template preview */}
+            {/* CV Template thumbnail — click to open the real template preview */}
             <button
               type="button"
               onClick={() => setShowPreview(true)}
-              className="cv-preview-container text-left bg-[#f5f3f5] rounded-xl border border-slate-200/80 overflow-hidden flex flex-col text-slate-700 font-sans p-4 mb-4 relative group cursor-pointer"
+              className="w-full relative group cursor-pointer rounded-xl overflow-hidden border border-slate-200/80 mb-4 bg-slate-50"
+              style={{ height: '220px' }}
             >
-              <div className="absolute inset-0 bg-slate-900/5 group-hover:bg-slate-900/10 transition-colors duration-300 pointer-events-none flex items-center justify-center">
+              <div className="absolute inset-0 bg-slate-900/5 group-hover:bg-slate-900/15 transition-colors duration-300 pointer-events-none flex items-center justify-center z-10">
                 <span className="opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900/80 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full flex items-center gap-1.5">
                   <Eye className="w-3 h-3" /> View Full Preview
                 </span>
               </div>
-
-              {/* Document Header mockup */}
-              <div className="pb-3 border-b border-slate-300">
-                <p className="text-[14px] font-black tracking-tight text-slate-900 leading-none uppercase">
-                  {employee.name}
-                </p>
-                <p className="text-[9px] font-bold text-slate-500 mt-1 uppercase tracking-wide">
-                  {employee.role} • {employee.department}
-                </p>
-              </div>
-
-              {/* Document Sections */}
-              <div className="mt-3 space-y-3 flex-1 overflow-hidden">
-                <div>
-                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
-                    Executive Summary
-                  </p>
-                  <p className="text-[7px] text-slate-600 leading-snug mt-1 italic">
-                    "Driven professional offering structured development and analytical operations. Proven track record managing cloud architectures and visual interfaces to align product workflows."
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
-                    Primary Experience
-                  </p>
-                  <div className="mt-1 space-y-1">
-                    <p className="text-[7px] font-black text-slate-800">
-                      {experience[0]?.role} — {experience[0]?.company}
-                    </p>
-                    <p className="text-[6.5px] text-slate-500 leading-relaxed">
-                      "Executed high scalability designs reducing operational overhead significantly. Realigned standard system components to secure automated cloud orchestration pipelines."
-                    </p>
-                  </div>
-                </div>
-
-                <div>
-                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
-                    Technology & Skills
-                  </p>
-                  <p className="text-[7.5px] font-semibold text-indigo-700 font-mono mt-0.5 leading-normal">
-                    {employee.skills.join(' • ')}
-                  </p>
-                </div>
-              </div>
-
-              {/* Watermark badge */}
-              <div className="mt-3 pt-2.5 border-t border-slate-200 flex justify-between items-center text-[7px] font-bold text-slate-400">
-                <span>CV-AI Verified Profile</span>
-                <span>Page 1 of 1</span>
+              {/* Scaled-down live CV template preview */}
+              <div
+                className="pointer-events-none absolute top-0 left-0 origin-top-left"
+                style={{ transform: 'scale(0.28)', width: '357%', transformOrigin: 'top left' }}
+              >
+                <CvPreviewTemplate cv={tailoredCv} />
               </div>
             </button>
 
-            {/* Actions panel */}
-            <div className="grid grid-cols-2 gap-3">
+            {/* Actions panel — PDF only */}
+            <div className="grid grid-cols-1 gap-3">
               <button
                 type="button"
                 onClick={handleDownloadPdf}
@@ -538,15 +431,6 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
               >
                 {downloadingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                 <span>Download PDF</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleDownloadDocx}
-                disabled={downloadingDocx || templatesLoading}
-                className="flex items-center justify-center gap-1.5 py-3 border border-slate-200 text-slate-700 font-semibold rounded-xl text-xs hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed transition-colors active:scale-95 cursor-pointer"
-              >
-                {downloadingDocx ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileType2 className="w-4 h-4" />}
-                <span>Download DOCX</span>
               </button>
             </div>
           </div>
@@ -561,9 +445,7 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
               <div>
                 <h4 className="text-sm font-black text-slate-800">CV Preview — {employee.name}</h4>
                 <p className="text-[11px] text-slate-450 font-medium mt-0.5">
-                  {activeTemplate
-                    ? `Rendered against the current profile data — download uses the "${activeTemplate.name}" template.`
-                    : 'Rendered against the current profile data. No DOCX template is configured yet, so only PDF export is available.'}
+                  Rendered against the current profile data.
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -575,15 +457,6 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
                 >
                   {downloadingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5 text-rose-500" />}
                   <span>PDF</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDownloadDocx}
-                  disabled={downloadingDocx || templatesLoading}
-                  className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 text-slate-700 font-bold rounded-lg text-[11px] hover:bg-slate-50 disabled:opacity-60 transition-colors cursor-pointer"
-                >
-                  {downloadingDocx ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileType2 className="w-3.5 h-3.5 text-blue-500" />}
-                  <span>DOCX</span>
                 </button>
                 <button
                   type="button"

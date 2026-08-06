@@ -100,7 +100,6 @@ export default function UploadPage() {
   // ── Extra flat fields required by Supabase that are not in CvProfile ──────
   const [email, setEmail] = useState('');
   const [department, setDepartment] = useState('');
-  const [skillsRaw, setSkillsRaw] = useState('');
 
   // ── Departments loaded from DB ────────────────────────────────────────────
   const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
@@ -284,11 +283,6 @@ export default function UploadPage() {
     setSubmitError(null);
     setIsSubmitting(true);
 
-    const skills = skillsRaw
-      .split(',')
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-
     try {
       // Upload profile image first if provided
       let avatarUrl: string | undefined;
@@ -303,7 +297,7 @@ export default function UploadPage() {
         email,
         role: profile.currentPosition,
         department,
-        skills,
+        skills: [],
         cvProfile: profile,
         avatarUrl,
       });
@@ -322,7 +316,6 @@ export default function UploadPage() {
     setErrorMsg(null);
     setProfile(emptyCvProfile());
     setEmail('');
-    setSkillsRaw('');
     setSubmitError(null);
     setProfileImageFile(null);
     setProfileImagePreview(null);
@@ -625,17 +618,6 @@ export default function UploadPage() {
                     ))
                   )}
                 </select>
-              </div>
-              <div className="sm:col-span-2">
-                <FieldLabel hint="Comma separated">Skills</FieldLabel>
-                <input
-                  type="text"
-                  placeholder="e.g. React, TypeScript, Node.js"
-                  value={skillsRaw}
-                  onChange={(e) => setSkillsRaw(e.target.value)}
-                  disabled={status !== 'done'}
-                  className={INPUT_CLS}
-                />
               </div>
             </div>
 

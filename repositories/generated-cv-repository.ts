@@ -4,7 +4,7 @@ export interface GeneratedCvRow {
   id: string;
   profile_id: string;
   opportunity_id: string | null;
-  template_id: string;
+  template_id: string | null;
   status: 'draft' | 'in_review' | 'approved' | 'exported';
   content: Record<string, any>;
   ai_highlights: Record<string, any>;
@@ -21,16 +21,22 @@ export interface GeneratedCvRow {
 export async function getLatestGeneratedCvRow(
   supabase: SupabaseClient,
   profileId: string,
-  templateId: string
+  templateId: string | null
 ): Promise<GeneratedCvRow | null> {
-  const { data, error } = await supabase
+  let query = supabase
     .from('generated_cvs')
     .select('*')
     .eq('profile_id', profileId)
-    .eq('template_id', templateId)
     .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(1);
+
+  if (templateId !== null) {
+    query = query.eq('template_id', templateId);
+  } else {
+    query = query.is('template_id', null);
+  }
+
+  const { data, error } = await query.maybeSingle();
 
   if (error) throw error;
   return data as GeneratedCvRow | null;

@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
 import type { CurrentUser } from '@/lib/auth';
-import { Search, Bell, ChevronDown } from 'lucide-react';
+import { Search, Bell, ChevronDown, UserCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 interface HeaderProps {
@@ -90,9 +90,13 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
           <div
             onClick={() => router.push('/settings')}
-            className="w-10 h-10 rounded-full border-2 border-slate-200 overflow-hidden shadow-sm cursor-pointer hover:border-slate-400 transition-colors duration-300"
+            className="w-10 h-10 rounded-full border-2 border-slate-200 overflow-hidden shadow-sm cursor-pointer hover:border-slate-400 transition-colors duration-300 bg-slate-100 flex items-center justify-center shrink-0"
           >
-            <img src={user.avatarUrl} alt={user.fullName} className="w-full h-full object-cover" />
+            {user.avatarUrl && !user.avatarUrl.includes('unsplash.com') ? (
+              <img src={user.avatarUrl} alt={user.fullName} className="w-full h-full object-cover" />
+            ) : (
+              <UserCircle className="w-6 h-6 text-slate-400" />
+            )}
           </div>
         </div>
       </div>
