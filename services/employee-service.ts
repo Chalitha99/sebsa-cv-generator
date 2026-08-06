@@ -21,13 +21,6 @@ function formatDate(value: string | null | undefined): string {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapSkills(row: any): string[] {
-  return ((row.profile_skills ?? []) as Array<{ skills: { name: string } | null }>)
-    .map((ps) => ps.skills?.name)
-    .filter((name): name is string => Boolean(name));
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapListRow(row: any): Employee {
   return {
     rowId: row.id,
@@ -41,7 +34,7 @@ function mapListRow(row: any): Employee {
     experienceYears:
       row.years_experience != null ? `${row.years_experience}+ Years Experience` : undefined,
     department: row.departments?.name ?? 'Unassigned',
-    skills: mapSkills(row),
+    skills: [],
     lastUpdated: formatDate(row.updated_at),
     avatar: row.avatar_url ?? DEFAULT_AVATAR,
     isAccountLinked: row.user_id != null,

@@ -130,7 +130,6 @@ export default function UpdateProfileClient({
   const [profile, setProfile] = useState<CvProfile>(emptyCvProfile());
   const [email, setEmail] = useState('');
   const [department, setDepartment] = useState('');
-  const [skillsRaw, setSkillsRaw] = useState('');
 
   // Profile photo states
   const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
@@ -157,7 +156,6 @@ export default function UpdateProfileClient({
       setActiveProfile(null);
       setProfile(emptyCvProfile());
       setEmail('');
-      setSkillsRaw('');
       setProfileImagePreview(null);
       setProfileImageFile(null);
       return;
@@ -179,7 +177,6 @@ export default function UpdateProfileClient({
           });
           setEmail(detailedEmp.email);
           setDepartment(detailedEmp.department);
-          setSkillsRaw(detailedEmp.skills.join(', '));
           setProfileImagePreview(detailedEmp.avatar);
           setProfileImageFile(null); // Keep null to flag no changes yet
         }
@@ -233,14 +230,13 @@ export default function UpdateProfileClient({
 
       const parsed = (await res.json()) as CvProfile;
       setProfile(parsed);
-      setSkillsRaw(skillsRaw ? `${skillsRaw}, ${parsed.name} skills` : ''); // fallback or append if parsed includes them
       setCvStatus('done');
     } catch (err) {
       console.error('CV parsing failed:', err);
       setCvStatus('error');
       setCvErrorMsg(err instanceof Error ? err.message : 'AI parsing failed. Please try again.');
     }
-  }, [skillsRaw]);
+  }, []);
 
   const handleCvDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -356,11 +352,6 @@ export default function UpdateProfileClient({
     setSaveError(null);
     setIsSaving(true);
 
-    const skills = skillsRaw
-      .split(',')
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-
     try {
       let avatarUrl: string | undefined;
       // Upload new image if selected
@@ -375,7 +366,7 @@ export default function UpdateProfileClient({
         email,
         role: profile.currentPosition,
         department,
-        skills,
+        skills: [],
         cvExperience: profile.experience,
         cvAcademic: profile.academic,
         specialProjects: profile.specialProjects,
@@ -642,16 +633,6 @@ export default function UpdateProfileClient({
                       </option>
                     ))}
                   </select>
-                </div>
-                <div className="sm:col-span-2">
-                  <FieldLabel hint="Comma separated">Skills</FieldLabel>
-                  <input
-                    type="text"
-                    placeholder="e.g. React, TypeScript, Node.js"
-                    value={skillsRaw}
-                    onChange={(e) => setSkillsRaw(e.target.value)}
-                    className={INPUT_CLS}
-                  />
                 </div>
               </div>
 

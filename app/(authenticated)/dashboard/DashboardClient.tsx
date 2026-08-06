@@ -7,61 +7,42 @@ import { PageWrapper } from '../../components/PageWrapper';
 import type { Employee } from '@/types/domain';
 import {
   Users,
-  FolderSync,
   Sparkles,
-  Zap,
-  MousePointerClick,
-  ChevronRight,
-  TrendingUp,
-  FileUp,
-  Database,
-  PenTool,
-  Grid,
   AlertTriangle,
   History,
   FileCheck,
-  TrendingDown
 } from 'lucide-react';
 
 interface DashboardClientProps {
   employees: Employee[];
+  generatedCvCount: number;
 }
 
-export default function DashboardClient({ employees }: DashboardClientProps) {
+export default function DashboardClient({ employees, generatedCvCount }: DashboardClientProps) {
   const router = useRouter();
   const { activities } = useData();
 
   // Dynamic statistics calculations
   const totalEmployeesCount = employees.length;
-  const storedCVs = 3700 + totalEmployeesCount; // Dynamic offset
 
   const kpis = [
     {
       title: 'Total Employees',
       value: totalEmployeesCount.toLocaleString(),
-      badge: '+12.4%',
-      badgeType: 'positive',
       icon: Users,
-      color: 'from-sky-500/10 to-sky-500/5',
-      textColor: 'text-sky-600',
+      gradient: 'from-purple-800 via-violet-900 to-slate-950',
+      iconBg: 'bg-white/15',
+      iconColor: 'text-purple-200',
+      labelColor: 'text-violet-200',
     },
     {
-      title: 'CVs Stored',
-      value: storedCVs.toLocaleString(),
-      badge: 'Global',
-      badgeType: 'neutral',
-      icon: Database,
-      color: 'from-indigo-500/10 to-indigo-500/5',
-      textColor: 'text-indigo-600',
-    },
-    {
-      title: 'Customer CVs Generated',
-      value: '842',
-      badge: 'High Value',
-      badgeType: 'highlight',
+      title: 'Generated CV count',
+      value: generatedCvCount.toLocaleString(),
       icon: Sparkles,
-      color: 'from-amber-500/10 to-amber-500/5',
-      textColor: 'text-amber-600',
+      gradient: 'from-indigo-900 to-slate-950',
+      iconBg: 'bg-white/10',
+      iconColor: 'text-sky-300',
+      labelColor: 'text-indigo-300',
     },
   ];
 
@@ -74,130 +55,46 @@ export default function DashboardClient({ employees }: DashboardClientProps) {
             Intelligence Dashboard
           </h2>
           <p className="text-sm font-medium text-slate-500 mt-2">
-            Welcome back. Here is an autonomous snapshot of your enterprise HR data.
+            Welcome back! Here's a snapshot of users, CVs, templates, opportunities, and key system metrics.
           </p>
         </div>
-        <button
-          onClick={() => router.push('/generate')}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white font-sans text-xs font-black uppercase tracking-wider px-6 py-3.5 rounded-full shadow-lg shadow-indigo-600/10 active:scale-95 transition-all flex items-center gap-2 self-start sm:self-auto"
-        >
-          <Zap className="w-4 h-4 text-white fill-white/20" />
-          <span>New AI Request</span>
-        </button>
       </div>
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6 mb-8">
         {kpis.map((kpi, idx) => {
           const Icon = kpi.icon;
           return (
             <div
               key={idx}
-              className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm relative overflow-hidden group hover:border-slate-400 transition-all duration-300"
+              className={`bg-gradient-to-br ${kpi.gradient} text-white p-5 rounded-2xl shadow-xl relative overflow-hidden group border border-slate-800 hover:shadow-2xl hover:scale-[1.02] hover:-translate-y-0.5 transition-all duration-300 cursor-pointer`}
             >
               <div className="flex justify-between items-start mb-4">
-                <div className={`p-3 bg-gradient-to-tr ${kpi.color} rounded-xl`}>
-                  <Icon className={`w-5 h-5 ${kpi.textColor}`} />
+                <div className={`p-3 ${kpi.iconBg} rounded-xl animate-pulse`}>
+                  <Icon className={`w-5 h-5 ${kpi.iconColor} animate-pulse`} />
                 </div>
-                {kpi.badgeType === 'positive' && (
-                  <span className="text-[11px] font-black uppercase tracking-widest text-emerald-700 bg-emerald-50 border border-emerald-200/50 px-2.5 py-1 rounded-full">
-                    {kpi.badge}
-                  </span>
-                )}
-                {kpi.badgeType === 'neutral' && (
-                  <span className="text-[11px] font-black uppercase tracking-widest text-indigo-700 bg-indigo-50 border border-indigo-200/50 px-2.5 py-1 rounded-full">
-                    {kpi.badge}
-                  </span>
-                )}
-                {kpi.badgeType === 'highlight' && (
-                  <span className="text-[11px] font-black uppercase tracking-widest text-amber-700 bg-amber-50 border border-amber-200/50 px-2.5 py-1 rounded-full">
-                    {kpi.badge}
-                  </span>
-                )}
               </div>
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">
+              <p className={`text-xs font-bold ${kpi.labelColor} uppercase tracking-widest mb-1.5`}>
                 {kpi.title}
               </p>
-              <h3 className="text-3xl font-black text-slate-900 tracking-tight font-sans">
+              <h3 className="text-3xl font-black text-white tracking-tight font-sans">
                 {kpi.value}
               </h3>
-              <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-sky-500 to-indigo-500 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300" />
             </div>
           );
         })}
-
-        {/* Processing/Active AI Request Card */}
-        <div className="bg-gradient-to-br from-indigo-900 to-slate-950 text-white p-6 rounded-2xl shadow-xl relative overflow-hidden group border border-slate-800">
-          <div className="flex justify-between items-start mb-4">
-            <div className="p-3 bg-white/10 rounded-xl">
-              <Zap className="w-5 h-5 text-sky-300 animate-bounce" />
-            </div>
-            <span className="text-[11px] font-black uppercase tracking-widest text-sky-300 bg-sky-500/20 border border-sky-400/30 px-2.5 py-1 rounded-full animate-pulse">
-              Processing
-            </span>
-          </div>
-          <p className="text-xs font-bold text-indigo-300 uppercase tracking-widest mb-1.5">
-            Active AI Requests
-          </p>
-          <h3 className="text-3xl font-black text-white tracking-tight font-sans flex items-baseline gap-2">
-            45 <span className="text-sm font-semibold opacity-70">active</span>
-          </h3>
-        </div>
       </div>
 
       {/* Bento Grid Content */}
       <div className="grid grid-cols-12 gap-8">
-        {/* Left Bento: Quick Actions (Span 4) */}
-        <div className="col-span-12 lg:col-span-4 flex flex-col gap-6">
-          <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
-            <h4 className="font-sans text-sm font-black uppercase tracking-wider text-slate-800 mb-5 flex items-center gap-2">
-              <MousePointerClick className="w-4 h-4 text-indigo-600" />
-              <span>Quick Actions</span>
-            </h4>
-            <div className="flex flex-col gap-2.5">
-              {[
-                { name: 'Upload CV', icon: FileUp, path: '/upload' },
-                { name: 'Employee Repository', icon: Database, path: '/repository' },
-                { name: 'Generate Customer CV', icon: Sparkles, path: '/generate' },
-                { name: 'Manage Templates', icon: Grid, path: '/templates' },
-              ].map((action, i) => {
-                const ActionIcon = action.icon;
-                return (
-                  <button
-                    key={i}
-                    onClick={() => router.push(action.path)}
-                    className="w-full flex items-center justify-between p-4 rounded-xl bg-slate-50 hover:bg-indigo-50 border border-slate-100 hover:border-indigo-100 transition-all duration-300 group text-left cursor-pointer"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-white flex items-center justify-center shadow-sm text-slate-600 group-hover:text-indigo-600 group-hover:scale-105 transition-all border border-slate-200/50">
-                        <ActionIcon className="w-4.5 h-4.5" />
-                      </div>
-                      <span className="text-xs font-bold text-slate-700 group-hover:text-indigo-950 font-sans tracking-wide">
-                        {action.name}
-                      </span>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-slate-400 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* Right Bento: Recent Activity (Span 8) */}
-        <div className="col-span-12 lg:col-span-8">
+        {/* Recent Activity (Full width) */}
+        <div className="col-span-12">
           <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm h-full flex flex-col">
             <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
               <h4 className="font-sans text-sm font-black uppercase tracking-wider text-slate-800 flex items-center gap-2">
                 <History className="w-4 h-4 text-indigo-600" />
                 <span>Recent System Activity</span>
               </h4>
-              <button
-                onClick={() => router.push('/repository')}
-                className="text-xs font-black text-indigo-600 hover:text-indigo-800 hover:underline transition-colors"
-              >
-                View Repository
-              </button>
             </div>
 
             <div className="space-y-4 flex-1">

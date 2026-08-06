@@ -12,13 +12,13 @@ import {
   FolderOpen,
   CloudUpload,
   BrainCircuit,
-  FileSpreadsheet,
   Settings,
   Sparkles,
   Users,
   User,
   ClipboardCheck,
-  LogOut
+  LogOut,
+  UserCircle
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -52,7 +52,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ user }) => {
               { name: 'Customize CVs', path: '/generate', icon: BrainCircuit },
             ]
           : []),
-        ...(isReviewerOrAbove(user.role) ? [{ name: 'CV Templates', path: '/templates', icon: FileSpreadsheet }] : []),
         ...(isReviewerOrAbove(user.role) ? [{ name: 'Pending Approvals', path: '/review', icon: ClipboardCheck }] : []),
       ];
 
@@ -131,11 +130,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ user }) => {
       {/* User Footer Profile */}
       <div className="flex items-center gap-3 mt-4 pt-4 border-t border-slate-800/80">
         <div className="relative">
-          <img
-            src={user.avatarUrl}
-            alt={user.fullName}
-            className="w-10 h-10 rounded-full border border-slate-700 object-cover"
-          />
+          {user.avatarUrl && !user.avatarUrl.includes('unsplash.com') ? (
+            <img
+              src={user.avatarUrl}
+              alt={user.fullName}
+              className="w-10 h-10 rounded-full border border-slate-700 object-cover"
+            />
+          ) : (
+            <div className="w-10 h-10 rounded-full border border-slate-700 bg-slate-800 flex items-center justify-center">
+              <UserCircle className="w-6 h-6 text-slate-400" />
+            </div>
+          )}
           <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 rounded-full border border-slate-950"></span>
         </div>
         <div className="truncate flex-1">

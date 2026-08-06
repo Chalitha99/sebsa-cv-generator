@@ -10,10 +10,9 @@ import type { Employee } from '@/types/domain';
 import type { TailoredCv } from './types';
 import {
   customizeCvAction,
-  listTemplatesAction,
   saveGeneratedCvAction,
 } from './actions';
-import { exportToPdf, exportTemplatedDocx } from '@/lib/cvExport';
+import { exportToPdf } from '@/lib/cvExport';
 import {
   BrainCircuit,
   Sparkles,
@@ -25,15 +24,8 @@ import {
   Loader2,
   AlertCircle,
   CheckCircle2,
+  UserCircle,
 } from 'lucide-react';
-
-interface Template {
-  id: string;
-  name: string;
-  description: string;
-  storagePath: string;
-  createdAt: string;
-}
 
 interface GenerateClientProps {
   employees: Employee[];
@@ -63,19 +55,10 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1);
 
   // ── Step 1 form state ───────────────────────────────────────────────────────
-  const [customerName, setCustomerName] = useState('Acme Corp — Lead Architect Initiative');
+  const [customerName, setCustomerName] = useState('');
   const [selectedCandidateId, setSelectedCandidateId] = useState('');
-  const [requiredSkills, setRequiredSkills] = useState(
-    'Kubernetes, Go, AWS Cloud Services, Terraform Architecture'
-  );
-  const [preferredExp, setPreferredExp] = useState(
-    'At least 6 years orchestrating large-scale financial microservices and leading infrastructure transformations.'
-  );
-
-  // ── Template state ──────────────────────────────────────────────────────────
-  const [templates, setTemplates] = useState<Template[]>([]);
-  const [selectedTemplateId, setSelectedTemplateId] = useState('');
-  const [templatesLoading, setTemplatesLoading] = useState(true);
+  const [requiredSkills, setRequiredSkills] = useState('');
+  const [preferredExp, setPreferredExp] = useState('');
 
   // ── Generation state ────────────────────────────────────────────────────────
   const [customizingLoading, setCustomizingLoading] = useState(false);
@@ -93,28 +76,6 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
     () => employees.find((emp) => emp.id === selectedCandidateId) || employees[0],
     [employees, selectedCandidateId]
   );
-
-  const selectedTemplate = useMemo(
-    () => templates.find((t) => t.id === selectedTemplateId) || null,
-    [templates, selectedTemplateId]
-  );
-
-  // ── Load templates on mount ─────────────────────────────────────────────────
-  useEffect(() => {
-    const fetchTemplates = async () => {
-      try {
-        setTemplatesLoading(true);
-        const list = await listTemplatesAction();
-        setTemplates(list);
-        if (list.length > 0) setSelectedTemplateId(list[0].id);
-      } catch (err) {
-        console.error('Failed to load templates:', err);
-      } finally {
-        setTemplatesLoading(false);
-      }
-    };
-    fetchTemplates();
-  }, []);
 
   // ── Pre-select employee from query param ────────────────────────────────────
   useEffect(() => {
@@ -138,10 +99,6 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
    */
   const handleCustomize = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedTemplateId) {
-      alert('Please upload and select a DOCX template first.');
-      return;
-    }
 
     setCustomizingLoading(true);
     setCustomizingError(null);
@@ -180,10 +137,10 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
    * Returns true on success, false on failure.
    */
   const handleSave = async (): Promise<boolean> => {
-    if (!tailoredCv || !selectedEmployee || !selectedTemplateId) return false;
+    if (!tailoredCv || !selectedEmployee) return false;
     setSaving(true);
     try {
-      await saveGeneratedCvAction(selectedEmployee.rowId, selectedTemplateId, tailoredCv);
+      await saveGeneratedCvAction(selectedEmployee.rowId, tailoredCv);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 4000);
       return true;
@@ -196,24 +153,21 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
   };
 
   /**
-   * Auto-saves the CV (if not yet saved), then navigates to Step 3 preview.
+   * Always saves the CV then navigates to Step 3 preview.
+   * (The "Apply to Template" button is the single action — it saves + previews.)
    */
   const handleGoToPreview = async () => {
     if (!tailoredCv) return;
-    if (!saveSuccess) {
-      const ok = await handleSave();
-      if (!ok) return;
-    }
+    const ok = await handleSave();
+    if (!ok) return;
     setWizardStep(3);
   };
 
   const handleDownloadDocx = async () => {
-    if (!tailoredCv || !selectedTemplateId) return;
+    if (!tailoredCv) return;
     try {
-      await exportTemplatedDocx(
-        selectedTemplateId,
-        tailoredCv,
-        selectedEmployee?.avatar,
+      await exportToPdf(
+        'cv-preview-root',
         `${(tailoredCv.name ?? 'CV').replace(/\s+/g, '_')}_Tailored_CV`
       );
     } catch (err) {
@@ -236,9 +190,9 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
   };
 
   const handleSyncToCrm = async () => {
-    if (!tailoredCv || !selectedTemplateId) return;
+    if (!tailoredCv) return;
     try {
-      await saveGeneratedCvAction(selectedEmployee.rowId, selectedTemplateId, tailoredCv);
+      await saveGeneratedCvAction(selectedEmployee.rowId, tailoredCv);
       alert('Successfully synchronized tailored CV to CRM database.');
     } catch (err: any) {
       alert(`Could not sync to CRM: ${err.message}`);
@@ -354,11 +308,17 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
 
                 {selectedEmployee && (
                   <div className="flex items-center gap-2.5 mt-2">
-                    <img
-                      src={selectedEmployee.avatar}
-                      alt={selectedEmployee.name}
-                      className="w-8 h-8 rounded-full object-cover border border-slate-200 shadow-sm"
-                    />
+                    {selectedEmployee.avatar && !selectedEmployee.avatar.includes('unsplash.com') ? (
+                      <img
+                        src={selectedEmployee.avatar}
+                        alt={selectedEmployee.name}
+                        className="w-8 h-8 rounded-full object-cover border border-slate-200 shadow-sm"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 shadow-sm flex items-center justify-center shrink-0">
+                        <UserCircle className="w-5 h-5 text-slate-400" />
+                      </div>
+                    )}
                     <span className="text-[11px] text-slate-500 font-semibold">
                       {selectedEmployee.department} · {selectedEmployee.role}
                     </span>
@@ -366,35 +326,6 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                 )}
               </div>
 
-              {/* Select DOCX Template */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">
-                  Select CV Template (DOCX)
-                </label>
-                {templatesLoading ? (
-                  <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-xl text-slate-400 text-xs font-semibold">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Loading active templates...</span>
-                  </div>
-                ) : templates.length === 0 ? (
-                  <div className="p-3.5 bg-rose-50 border border-rose-100 rounded-xl text-rose-700 text-xs font-bold flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span>No DOCX templates found. Upload one in CV Templates page first.</span>
-                  </div>
-                ) : (
-                  <select
-                    value={selectedTemplateId}
-                    onChange={(e) => setSelectedTemplateId(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200/80 rounded-xl px-4 py-3 text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-500/10 focus:border-slate-400 transition-all text-slate-700"
-                  >
-                    {templates.map((tpl) => (
-                      <option key={tpl.id} value={tpl.id}>
-                        {tpl.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </div>
 
               {/* Mandatory Skills */}
               <div className="space-y-1.5">
@@ -428,8 +359,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
               {/* Submit */}
               <button
                 type="submit"
-                disabled={templates.length === 0}
-                className="mt-4 py-4 bg-gradient-to-r from-sky-600 to-indigo-700 hover:from-sky-500 hover:to-indigo-600 disabled:from-slate-400 disabled:to-slate-400 disabled:cursor-not-allowed text-white rounded-xl font-sans text-sm font-black shadow-lg shadow-sky-600/10 active:scale-[0.98] transition-transform flex items-center justify-center gap-2.5 cursor-pointer"
+                className="mt-4 py-4 bg-gradient-to-r from-sky-600 to-indigo-700 hover:from-sky-500 hover:to-indigo-600 text-white rounded-xl font-sans text-sm font-black shadow-lg shadow-sky-600/10 active:scale-[0.98] transition-transform flex items-center justify-center gap-2.5 cursor-pointer"
               >
                 <BrainCircuit className="w-5 h-5" />
                 <span>Customize CV</span>
@@ -459,11 +389,17 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                 {/* Employee */}
                 {selectedEmployee && (
                   <div className="flex items-center gap-3">
-                    <img
-                      src={selectedEmployee.avatar}
-                      alt={selectedEmployee.name}
-                      className="w-11 h-11 rounded-full object-cover border-2 border-indigo-100 shadow-sm shrink-0"
-                    />
+                    {selectedEmployee.avatar && !selectedEmployee.avatar.includes('unsplash.com') ? (
+                      <img
+                        src={selectedEmployee.avatar}
+                        alt={selectedEmployee.name}
+                        className="w-11 h-11 rounded-full object-cover border-2 border-indigo-100 shadow-sm shrink-0"
+                      />
+                    ) : (
+                      <div className="w-11 h-11 rounded-full bg-slate-100 border-2 border-indigo-100 shadow-sm flex items-center justify-center shrink-0">
+                        <UserCircle className="w-7 h-7 text-slate-400" />
+                      </div>
+                    )}
                     <div className="min-w-0">
                       <p className="text-xs font-black text-slate-800 truncate">
                         {selectedEmployee.name}
@@ -484,16 +420,6 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                       {customerName}
                     </p>
                   </div>
-                  {selectedTemplate && (
-                    <div>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                        Template
-                      </p>
-                      <p className="text-xs font-semibold text-slate-700 mt-0.5">
-                        {selectedTemplate.name}
-                      </p>
-                    </div>
-                  )}
                 </div>
               </div>
 
@@ -504,29 +430,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                     Actions
                   </h4>
 
-                  {/* Save Customized CV */}
-                  <button
-                    type="button"
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-xl text-xs font-black uppercase tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm"
-                  >
-                    {saving ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        <span>Saving...</span>
-                      </>
-                    ) : saveSuccess ? (
-                      <>
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Saved!</span>
-                      </>
-                    ) : (
-                      <span>Save Customized CV</span>
-                    )}
-                  </button>
-
-                  {/* Apply to Template & Preview */}
+                  {/* Apply to Template & Preview — also auto-saves */}
                   <button
                     type="button"
                     onClick={handleGoToPreview}
@@ -538,6 +442,11 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
                         <span>Saving...</span>
                       </>
+                    ) : saveSuccess ? (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Saved! Applying...</span>
+                      </>
                     ) : (
                       <>
                         <span>Apply to Template</span>
@@ -547,7 +456,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                   </button>
 
                   <p className="text-[10px] text-slate-400 text-center leading-relaxed">
-                    "Apply to Template" auto-saves then generates the DOCX preview.
+                    Saves your customized CV and generates the template preview.
                   </p>
                 </div>
               )}
@@ -668,15 +577,6 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
               >
                 <Download className="w-4 h-4 text-rose-500" />
                 <span>Export PDF</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleDownloadDocx}
-                className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-50 transition-colors cursor-pointer active:scale-95 shadow-sm"
-              >
-                <Download className="w-4 h-4 text-blue-500" />
-                <span>Export DOCX</span>
               </button>
 
               <button

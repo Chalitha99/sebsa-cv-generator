@@ -5,7 +5,6 @@ import { User, Building2 } from 'lucide-react';
 import type { CvExperienceEntry, CvAcademicEntry, CvProjectEntry, CvCertificationEntry } from '@/lib/cvTypes';
 import {
   SectionCard,
-  SkillsSection,
   ExperienceSection,
   ProjectsSection,
   EducationSection,
@@ -108,13 +107,6 @@ export default function ProfileFieldsEditor({ value, onChange, departments, name
         </div>
       </SectionCard>
 
-      <SkillsSection
-        label="Core Skills"
-        skills={value.skills}
-        expanded={expanded.skills}
-        onToggle={() => toggle('skills')}
-        onChange={(skills) => patch({ skills })}
-      />
 
       <ExperienceSection
         experience={value.experience}
@@ -135,6 +127,7 @@ export default function ProfileFieldsEditor({ value, onChange, departments, name
         expanded={expanded.education}
         onToggle={() => toggle('education')}
         onChange={(academic) => patch({ academic })}
+        readOnly={false}
       />
 
       <CertificationsSection

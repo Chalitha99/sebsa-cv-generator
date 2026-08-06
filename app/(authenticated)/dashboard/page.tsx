@@ -15,7 +15,11 @@ export default async function DashboardPage() {
   if (user.role === 'cv_reviewer') redirect('/repository');
 
   const supabase = await createClient();
-  const employees = await listEmployees(supabase);
+  const [employees, countResult] = await Promise.all([
+    listEmployees(supabase),
+    supabase.from('generated_cvs').select('*', { count: 'exact', head: true }),
+  ]);
+  const generatedCvCount = countResult.count ?? 0;
 
-  return <DashboardClient employees={employees} />;
+  return <DashboardClient employees={employees} generatedCvCount={generatedCvCount} />;
 }
