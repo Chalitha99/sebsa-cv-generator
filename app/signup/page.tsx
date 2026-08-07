@@ -8,6 +8,11 @@ import { PageWrapper } from '../components/PageWrapper';
 import { createClient } from '@/lib/supabase/client';
 import { Mail, Eye, EyeOff, UserPlus, CheckCircle2 } from 'lucide-react';
 
+// Until Microsoft SSO is wired in (docs/04-rbac-security.md §8), self-signup is restricted to
+// real SEBSA work emails in firstname.lastname@sebsaworld.com form — keeps the employee directory
+// consistent and prevents junk/duplicate accounts.
+const SEBSA_WORK_EMAIL = /^[a-z]+\.[a-z]+@sebsaworld\.com$/i;
+
 export default function SignupPage() {
   const router = useRouter();
   const [fullName, setFullName] = useState('');
@@ -23,6 +28,10 @@ export default function SignupPage() {
     e.preventDefault();
     setError(null);
 
+    if (!SEBSA_WORK_EMAIL.test(email.trim())) {
+      setError('Please use your SEBSA work email, in firstname.lastname@sebsaworld.com format.');
+      return;
+    }
     if (password !== confirmPassword) {
       setError('Passwords do not match.');
       return;
@@ -119,7 +128,7 @@ export default function SignupPage() {
               <input
                 type="email"
                 required
-                placeholder="Work Email Address"
+                placeholder="firstname.lastname@sebsaworld.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full h-14 px-4 border border-slate-200 hover:border-slate-300 rounded-xl bg-slate-50/50 text-slate-800 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-500/10 focus:border-slate-500 transition-all font-sans"

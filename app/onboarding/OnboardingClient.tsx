@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { PageWrapper } from '../components/PageWrapper';
+import { createClient } from '@/lib/supabase/client';
 import { extractText } from '@/lib/parsing/extractClientText';
 import type { CvProfile } from '@/lib/cvTypes';
 import ProfileFieldsEditor, { emptyProfileFieldsValue, type ProfileFieldsValue } from '../components/ProfileFieldsEditor';
@@ -35,9 +37,34 @@ interface OnboardingClientProps {
 }
 
 export default function OnboardingClient({ userEmail, departments, claimableProfile, pendingClaim }: OnboardingClientProps) {
+  const router = useRouter();
   const [mode, setMode] = useState<Mode>(pendingClaim ? 'pending-claim' : claimableProfile ? 'claim' : 'choose');
   const [isClaiming, setIsClaiming] = useState(false);
   const [claimError, setClaimError] = useState<string | null>(null);
+
+  // There's nowhere else in the app an Employee without a profile can land — every other page
+  // either requires one or redirects back here — so "not now" means signing out. Logging back in
+  // later re-enters this same flow at whatever state was already in progress (server-derived on
+  // every load), so nothing is lost.
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const handleSkipForNow = async () => {
+    setIsSigningOut(true);
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push('/login');
+    router.refresh();
+  };
+
+  const SkipForNowLink = (
+    <button
+      type="button"
+      onClick={handleSkipForNow}
+      disabled={isSigningOut}
+      className="text-[11px] font-bold text-slate-400 hover:text-slate-600 underline underline-offset-2 disabled:opacity-40 transition-colors"
+    >
+      {isSigningOut ? 'Signing out...' : "Not now — I'll finish this later"}
+    </button>
+  );
 
   const handleClaim = async () => {
     if (!claimableProfile) return;
@@ -238,6 +265,7 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
             </p>
             {code && <p className="text-[10px] font-mono text-slate-400 mt-3">{code}</p>}
           </div>
+          <div className="text-center mt-5">{SkipForNowLink}</div>
         </div>
       </PageWrapper>
     );
@@ -293,6 +321,7 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
               </button>
             </div>
           </div>
+          <div className="text-center mt-5">{SkipForNowLink}</div>
         </div>
       </PageWrapper>
     );
@@ -339,6 +368,7 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
               </p>
             </button>
           </div>
+          <div className="text-center mt-8">{SkipForNowLink}</div>
         </div>
       </PageWrapper>
     );

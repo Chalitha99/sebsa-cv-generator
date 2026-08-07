@@ -51,6 +51,11 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
   const tailoredCv = useMemo(() => buildTailoredCvFromEmployee(employee), [employee]);
   const exportFilename = `${employee.name.replace(/\s+/g, '_')}_CV`;
 
+  // A self-service signup (or an Admin-provisioned account, §14) links `user_id` immediately —
+  // separate from whether the profile itself has cleared review yet. Show "Pending Approval"
+  // while status is still 'draft' rather than a misleading "Active".
+  const isPendingApproval = employee.status === 'draft';
+
   const handleDownloadPdf = async () => {
     setDownloadingPdf(true);
     try {
@@ -117,15 +122,22 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
 
   return (
     <PageWrapper className="p-8">
-      {/* Breadcrumb / Back button */}
+      {/* Breadcrumb / Back button — Employees only ever see their own profile here (repository is
+          Admin/Reviewer-only, docs/04-rbac-security.md §2), so "Back to Repository" would just
+          bounce them right back to this same page. Only show it to viewers who can actually go
+          somewhere else. */}
       <div className="flex items-center justify-between mb-6">
-        <button
-          onClick={handleBack}
-          className="flex items-center gap-2 text-xs font-black text-slate-500 hover:text-slate-900 uppercase tracking-wider group cursor-pointer"
-        >
-          <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
-          <span>Back to Repository</span>
-        </button>
+        {viewerRole !== 'employee' ? (
+          <button
+            onClick={handleBack}
+            className="flex items-center gap-2 text-xs font-black text-slate-500 hover:text-slate-900 uppercase tracking-wider group cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
+            <span>Back to Repository</span>
+          </button>
+        ) : (
+          <span />
+        )}
 
         {viewerRole === 'employee' && employee.status === 'published' && !employee.hasPendingChange && (
           <button
@@ -143,8 +155,8 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
         <div className="mb-6 flex items-center gap-2.5 px-4 py-3 bg-amber-50 border border-amber-200/60 rounded-xl text-amber-700">
           <Clock className="w-4 h-4 shrink-0" />
           <p className="text-xs font-semibold">
-            This profile is pending review by a Super Admin or CV Reviewer — it won't appear in the
-            general repository until approved.
+            This profile is pending review by Admins — it won't appear in the general repository
+            until approved.
           </p>
         </div>
       )}
@@ -202,12 +214,16 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
               {/* Verify Match button CTA */}
               <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
                 <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded flex items-center gap-1.5 ${
-                  employee.isAccountLinked
+                  isPendingApproval
+                    ? 'bg-amber-50 border border-amber-200/50 text-amber-700'
+                    : employee.isAccountLinked
                     ? 'bg-emerald-50 border border-emerald-200/50 text-emerald-700'
                     : 'bg-slate-50 border border-slate-200/50 text-slate-400'
                 }`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${employee.isAccountLinked ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-                  Account {employee.isAccountLinked ? 'Active' : 'Inactive'}
+                  <span className={`w-1.5 h-1.5 rounded-full ${
+                    isPendingApproval ? 'bg-amber-500' : employee.isAccountLinked ? 'bg-emerald-500' : 'bg-slate-400'
+                  }`} />
+                  {isPendingApproval ? 'Pending Approval' : `Account ${employee.isAccountLinked ? 'Active' : 'Inactive'}`}
                 </span>
                 {canGenerateCv && (
                   <button
@@ -412,12 +428,13 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
                   <Eye className="w-3 h-3" /> View Full Preview
                 </span>
               </div>
-              {/* Scaled-down live CV template preview */}
+              {/* Scaled-down live CV template preview — decorative only, given its own id so it
+                  can't collide with the real 'cv-preview-root' export target below. */}
               <div
                 className="pointer-events-none absolute top-0 left-0 origin-top-left"
                 style={{ transform: 'scale(0.28)', width: '357%', transformOrigin: 'top left' }}
               >
-                <CvPreviewTemplate cv={tailoredCv} />
+                <CvPreviewTemplate cv={tailoredCv} id="cv-preview-thumb" />
               </div>
             </button>
 
@@ -468,11 +485,22 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
               </div>
             </div>
             <div className="p-6 overflow-y-auto bg-slate-100 flex-1 flex justify-center">
-              <CvPreviewTemplate cv={tailoredCv} />
+              {/* Visible copy only — also its own id, kept out of the export capture path since
+                  a scrollable/fixed-position ancestor can distort what html2canvas captures. */}
+              <CvPreviewTemplate cv={tailoredCv} id="cv-preview-modal" />
             </div>
           </div>
         </div>
       )}
+
+      {/* Dedicated, always-mounted export target for handleDownloadPdf — kept off-screen but in
+          normal document flow (no scale transform, no scrollable/fixed/blurred ancestor), so
+          html2canvas captures a clean, correctly-laid-out copy regardless of whether the preview
+          modal is open. Fixes PDF export previously screenshotting the scaled-down sidebar
+          thumbnail instead (docs/04-rbac-security.md §15). */}
+      <div style={{ position: 'fixed', top: 0, left: '-10000px', zIndex: -1 }} aria-hidden="true">
+        <CvPreviewTemplate cv={tailoredCv} />
+      </div>
     </PageWrapper>
   );
 }
