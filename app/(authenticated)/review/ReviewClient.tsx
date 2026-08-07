@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useState, useTransition } from 'react';
+import React, { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageWrapper } from '../../components/PageWrapper';
+import CvPreviewTemplate from '../generate/CvPreviewTemplate';
+import { buildTailoredCvFromInput } from '@/lib/templates/buildTailoredCvFromEmployee';
 import {
   approveNewProfileAction,
   rejectNewProfileAction,
@@ -12,7 +14,7 @@ import {
   rejectChangeAction,
   type PendingItem,
 } from './actions';
-import { ClipboardCheck, UserPlus, LinkIcon, PenLine, Check, X, Loader2 } from 'lucide-react';
+import { ClipboardCheck, UserPlus, LinkIcon, PenLine, Check, X, Loader2, Eye } from 'lucide-react';
 
 interface ReviewClientProps {
   initialItems: PendingItem[];
@@ -30,8 +32,26 @@ export default function ReviewClient({ initialItems }: ReviewClientProps) {
   const [processingKey, setProcessingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  // Only 'change' items preview here (there's no live page to view a not-yet-approved
+  // new_profile/claim against something else — that data itself is what's being previewed).
+  const [previewItem, setPreviewItem] = useState<PendingItem | null>(null);
 
   const keyFor = (item: PendingItem) => `${item.type}:${item.profileId}`;
+
+  const handleView = (item: PendingItem) => {
+    if (item.type === 'change') {
+      setPreviewItem(item);
+    } else {
+      // New profiles and claims target an existing/already-published profile row — reviewers can
+      // see any profile regardless of status (profiles_select RLS), so just view it in place.
+      router.push(`/repository/${item.employeeCode}`);
+    }
+  };
+
+  const previewCv = useMemo(
+    () => (previewItem?.proposedChange ? buildTailoredCvFromInput(previewItem.proposedChange) : null),
+    [previewItem]
+  );
 
   const handleAction = (item: PendingItem, action: 'approve' | 'reject') => {
     const key = keyFor(item);
@@ -104,9 +124,6 @@ export default function ReviewClient({ initialItems }: ReviewClientProps) {
                         {meta.label}
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      {item.email} · <span className="font-mono">{item.employeeCode}</span>
-                    </p>
                     {item.type === 'change' && item.proposedChange && (
                       <>
                         <p className="text-[11px] text-slate-500 mt-1.5">
@@ -125,6 +142,13 @@ export default function ReviewClient({ initialItems }: ReviewClientProps) {
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => handleView(item)}
+                    title="View in template format"
+                    className="flex items-center gap-1.5 p-2 border border-slate-200 text-slate-500 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 rounded-xl transition-all"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                  </button>
                   <button
                     onClick={() => handleAction(item, 'reject')}
                     disabled={busy}
@@ -145,6 +169,33 @@ export default function ReviewClient({ initialItems }: ReviewClientProps) {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Proposed-change preview modal — renders the pending edit in the real CV template so a
+          reviewer can see exactly what publishing it would look like before approving. */}
+      {previewItem && previewCv && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-6">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-200">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
+              <div>
+                <h4 className="text-sm font-black text-slate-800">Proposed Change — {previewItem.name}</h4>
+                <p className="text-[11px] text-slate-450 font-medium mt-0.5">
+                  Rendered from the proposed edit, not the currently-live profile.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewItem(null)}
+                className="p-1.5 hover:bg-slate-200/65 rounded-lg text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto bg-slate-100 flex-1 flex justify-center">
+              <CvPreviewTemplate cv={previewCv} id="cv-preview-review" />
+            </div>
+          </div>
         </div>
       )}
     </PageWrapper>

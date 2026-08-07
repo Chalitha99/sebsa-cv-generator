@@ -7,9 +7,11 @@
  *
  * Visual design mirrors the SEBSA reference template: portrait photo beside a stacked
  * logo/name/title header, a purple divider bar, and gradient "notch corner" section labels
- * (Objective + Academic + Skills + Certifications on the left; Experience + Special Projects
- * on the right). Field names are exactly TailoredCv's (app/(authenticated)/generate/types.ts) —
- * no renaming — since CvSectionEditor.tsx edits that same shape directly.
+ * (Objective + Academic + Skills on the left; Experience + Special Projects on the right).
+ * Certifications are deliberately folded into the Academic block (a sub-label under the same
+ * header) rather than given their own top-level section — product direction, demo-readiness pass.
+ * Field names are exactly TailoredCv's (app/(authenticated)/generate/types.ts) — no renaming —
+ * since CvSectionEditor.tsx edits that same shape directly.
  */
 export const cvTemplateSource = `
 <div style="font-family: 'Segoe UI', Arial, sans-serif; color: #262626; line-height: 1.55; max-width: 800px; margin: 0 auto; padding: 32px; background-color: #ffffff;">
@@ -56,6 +58,16 @@ export const cvTemplateSource = `
             <p style="font-size: 11.5px; color: #7F7F7F; margin: 2px 0 0 0;">{{institution}} ({{period}})</p>
           </div>
           {{/each}}
+
+          {{#if certifications}}
+          <p style="font-size: 10.5px; font-weight: 700; color: #4E1C90; text-transform: uppercase; letter-spacing: 0.5px; margin: 14px 0 8px 0;">Certifications</p>
+          {{#each certifications}}
+          <div style="margin-bottom: 10px;">
+            <p style="font-size: 12px; font-weight: 700; color: #262626; margin: 0;">{{name}}</p>
+            <p style="font-size: 11px; color: #7F7F7F; margin: 2px 0 0 0;">{{issuer}}{{#if year}} — {{year}}{{/if}}</p>
+          </div>
+          {{/each}}
+          {{/if}}
         </div>
         {{/if}}
 
@@ -67,18 +79,6 @@ export const cvTemplateSource = `
               <span style="display: inline-block; background-color: #F3EEFC; color: #4E1C90; padding: 3px 9px; margin: 0 4px 4px 0; border-radius: 4px; font-weight: 600;">{{this}}</span>
             {{/each}}
           </div>
-        </div>
-        {{/if}}
-
-        {{#if certifications}}
-        <div style="margin-bottom: 22px;">
-          <div style="display: block; width: 100%; box-sizing: border-box; background: linear-gradient(to right, #7650E1, #4E1C90); color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; padding: 6px 16px; border-radius: 10px 0 10px 0; margin-bottom: 10px;">Certifications</div>
-          {{#each certifications}}
-          <div style="margin-bottom: 10px;">
-            <p style="font-size: 12px; font-weight: 700; color: #262626; margin: 0;">{{name}}</p>
-            <p style="font-size: 11px; color: #7F7F7F; margin: 2px 0 0 0;">{{issuer}}{{#if year}} — {{year}}{{/if}}</p>
-          </div>
-          {{/each}}
         </div>
         {{/if}}
       </td>

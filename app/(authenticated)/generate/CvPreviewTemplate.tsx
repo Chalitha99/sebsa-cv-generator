@@ -8,9 +8,17 @@ import type { TailoredCv } from './types';
 interface CvPreviewTemplateProps {
   cv: TailoredCv;
   onChange?: (updated: TailoredCv) => void;
+  /**
+   * Defaults to 'cv-preview-root' — the id `lib/cvExport.ts`'s `exportToPdf` screenshots. Pass a
+   * different id for any additional mounted copy (e.g. a decorative thumbnail) so it doesn't
+   * collide — duplicate DOM ids mean `getElementById` silently grabs whichever renders first,
+   * which previously caused PDF export to capture a scaled-down thumbnail instead of the real
+   * preview (docs/04-rbac-security.md §15).
+   */
+  id?: string;
 }
 
-export default function CvPreviewTemplate({ cv, onChange }: CvPreviewTemplateProps) {
+export default function CvPreviewTemplate({ cv, onChange, id = 'cv-preview-root' }: CvPreviewTemplateProps) {
   // Compile the Handlebars template with the current CV data
   const compiledHtml = useMemo(() => {
     try {
@@ -24,7 +32,7 @@ export default function CvPreviewTemplate({ cv, onChange }: CvPreviewTemplatePro
 
   return (
     <div
-      id="cv-preview-root"
+      id={id}
       // Deliberately inline styles only, no Tailwind/utility classes — this node (and everything
       // Handlebars renders inside it) is screenshotted by html2canvas for PDF export, and
       // Tailwind v4's default palette is oklch(), which html2canvas 1.x cannot parse (it throws
