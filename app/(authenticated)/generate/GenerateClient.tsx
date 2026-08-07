@@ -73,7 +73,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
 
   // ── Derived ─────────────────────────────────────────────────────────────────
   const selectedEmployee = useMemo(
-    () => employees.find((emp) => emp.id === selectedCandidateId) || employees[0],
+    () => employees.find((emp) => emp.rowId === selectedCandidateId) || employees[0],
     [employees, selectedCandidateId]
   );
 
@@ -84,10 +84,10 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
       (emp) => emp.name.toLowerCase() === preselectedName?.toLowerCase()
     );
     if (match) {
-      setSelectedCandidateId(match.id);
+      setSelectedCandidateId(match.rowId);
     } else {
       const alex = employees.find((emp) => emp.name.includes('Alexander'));
-      setSelectedCandidateId(alex ? alex.id : employees[0].id);
+      setSelectedCandidateId(alex ? alex.rowId : employees[0].rowId);
     }
   }, [employees, preselectedName]);
 
@@ -300,7 +300,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                   className="w-full bg-slate-50 border border-slate-200/80 rounded-xl px-4 py-3 text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-500/10 focus:border-slate-400 transition-all text-slate-700"
                 >
                   {employees.map((emp) => (
-                    <option key={emp.id} value={emp.id}>
+                    <option key={emp.rowId} value={emp.rowId}>
                       {emp.name} ({emp.role})
                     </option>
                   ))}

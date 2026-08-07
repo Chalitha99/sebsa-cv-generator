@@ -78,12 +78,12 @@ export async function createEmployeeAction(input: CreateEmployeeInput): Promise<
   // second profile for someone who's already in the repository (bulk-added or self-service).
   const { data: existing } = await adminClient
     .from('profiles')
-    .select('employee_code')
+    .select('id')
     .eq('email', input.email)
     .maybeSingle();
   if (existing) {
     throw new Error(
-      `A profile already exists for ${input.email} (${existing.employee_code}). Use "Update Profile" instead of creating a new one.`
+      `A profile already exists for ${input.email}. Use "Update Profile" instead of creating a new one.`
     );
   }
 

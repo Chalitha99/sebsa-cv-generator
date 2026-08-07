@@ -12,7 +12,7 @@ import type { CvExperienceEntry, CvAcademicEntry, CvProjectEntry, CvCertificatio
  */
 
 const LIST_SELECT = `
-  id, employee_code, full_name, email, role_title, specialty, location, years_experience,
+  id, full_name, email, role_title, specialty, location, years_experience,
   avatar_url, updated_at, user_id,
   departments ( name )
 `;
@@ -36,23 +36,16 @@ export async function listEmployeeRows(supabase: SupabaseClient) {
   return data ?? [];
 }
 
-export async function getEmployeeRowByCode(supabase: SupabaseClient, employeeCode: string) {
+export async function getEmployeeRowById(supabase: SupabaseClient, profileId: string) {
   const { data, error } = await supabase
     .from('profiles')
     .select(DETAIL_SELECT)
-    .eq('employee_code', employeeCode)
+    .eq('id', profileId)
     .maybeSingle();
 
   if (error) throw error;
   return data;
 }
-
-function generateEmployeeCode(): string {
-  const suffix = Math.floor(10000 + Math.random() * 90000);
-  return `EMP-${suffix}`;
-}
-
-const UNIQUE_VIOLATION = '23505';
 
 /**
  * Attempts to parse a period string like "Jan 2020 – Present" or "2018 – 2021" into
@@ -103,44 +96,29 @@ export async function createEmployeeRow(
     ? JSON.stringify(input.cvAcademic)
     : null;
 
-  let profileId: string | null = null;
-  let lastError: { code?: string; message: string } | null = null;
+  const { data, error } = await supabase
+    .from('profiles')
+    .insert({
+      full_name: input.name,
+      email: input.email,
+      role_title: input.currentPosition ?? input.role,
+      department_id: dept?.id ?? null,
+      // Self-service submissions start as 'draft' (not searchable/usable) until an Admin
+      // reviews them — see docs/04-rbac-security.md §0. Admin/Reviewer-created profiles keep
+      // today's behavior of going straight to 'published', whether or not an account was
+      // linked (linkedUserId, §14) — the Admin's own action doesn't need self-approval.
+      status: input.selfServiceUserId ? 'draft' : 'published',
+      user_id: input.selfServiceUserId ?? input.linkedUserId ?? null,
+      education: educationJson,
+      avatar_url: input.avatarUrl ?? null,
+      created_by: createdBy,
+      updated_by: createdBy,
+    })
+    .select('id')
+    .single();
 
-  for (let attempt = 0; attempt < 5 && !profileId; attempt++) {
-    const { data, error } = await supabase
-      .from('profiles')
-      .insert({
-        employee_code: generateEmployeeCode(),
-        full_name: input.name,
-        email: input.email,
-        role_title: input.currentPosition ?? input.role,
-        department_id: dept?.id ?? null,
-        // Self-service submissions start as 'draft' (not searchable/usable) until an Admin
-        // reviews them — see docs/04-rbac-security.md §0. Admin/Reviewer-created profiles keep
-        // today's behavior of going straight to 'published', whether or not an account was
-        // linked (linkedUserId, §14) — the Admin's own action doesn't need self-approval.
-        status: input.selfServiceUserId ? 'draft' : 'published',
-        user_id: input.selfServiceUserId ?? input.linkedUserId ?? null,
-        education: educationJson,
-        avatar_url: input.avatarUrl ?? null,
-        created_by: createdBy,
-        updated_by: createdBy,
-      })
-      .select('id')
-      .single();
-
-    if (!error) {
-      profileId = data.id as string;
-      break;
-    }
-
-    lastError = error;
-    if (error.code !== UNIQUE_VIOLATION) throw error;
-  }
-
-  if (!profileId) {
-    throw new Error(lastError?.message ?? 'Failed to generate a unique employee code.');
-  }
+  if (error) throw error;
+  const profileId = data.id as string;
 
   // ── Insert structured experience entries ──────────────────────────────────
   if (input.cvExperience && input.cvExperience.length > 0) {

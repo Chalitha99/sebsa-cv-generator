@@ -10,7 +10,6 @@ export type PendingItemType = 'new_profile' | 'claim' | 'change';
 
 export interface PendingItem {
   profileId: string;
-  employeeCode: string;
   name: string;
   email: string;
   type: PendingItemType;
@@ -45,7 +44,7 @@ export async function listPendingItemsAction(): Promise<PendingItem[]> {
   const { data, error } = await adminClient
     .from('profiles')
     .select(
-      'id, employee_code, full_name, email, status, pending_claim_user_id, pending_change, pending_change_submitted_at, created_at'
+      'id, full_name, email, status, pending_claim_user_id, pending_change, pending_change_submitted_at, created_at'
     )
     .or('status.eq.draft,pending_claim_user_id.not.is.null,pending_change.not.is.null');
 
@@ -57,7 +56,6 @@ export async function listPendingItemsAction(): Promise<PendingItem[]> {
     if (row.status === 'draft') {
       items.push({
         profileId: row.id,
-        employeeCode: row.employee_code,
         name: row.full_name,
         email: row.email,
         type: 'new_profile',
@@ -67,7 +65,6 @@ export async function listPendingItemsAction(): Promise<PendingItem[]> {
     if (row.pending_claim_user_id) {
       items.push({
         profileId: row.id,
-        employeeCode: row.employee_code,
         name: row.full_name,
         email: row.email,
         type: 'claim',
@@ -77,7 +74,6 @@ export async function listPendingItemsAction(): Promise<PendingItem[]> {
     if (row.pending_change) {
       items.push({
         profileId: row.id,
-        employeeCode: row.employee_code,
         name: row.full_name,
         email: row.email,
         type: 'change',

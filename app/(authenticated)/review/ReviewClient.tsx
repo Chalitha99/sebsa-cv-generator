@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useMemo, useState, useTransition } from 'react';
+import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageWrapper } from '../../components/PageWrapper';
 import CvPreviewTemplate from '../generate/CvPreviewTemplate';
-import { buildTailoredCvFromInput } from '@/lib/templates/buildTailoredCvFromEmployee';
+import { buildTailoredCvFromEmployee, buildTailoredCvFromInput } from '@/lib/templates/buildTailoredCvFromEmployee';
+import { getEmployeeDetailsAction } from '../update-profile/actions';
+import type { TailoredCv } from '../generate/types';
 import {
   approveNewProfileAction,
   rejectNewProfileAction,
@@ -32,26 +34,50 @@ export default function ReviewClient({ initialItems }: ReviewClientProps) {
   const [processingKey, setProcessingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  // Only 'change' items preview here (there's no live page to view a not-yet-approved
-  // new_profile/claim against something else — that data itself is what's being previewed).
+  // 'new_profile' and 'change' both preview in the real CV template here — a claim has no new CV
+  // content of its own (it's just linking an account to an already-viewable published profile),
+  // so that one still navigates to the profile page instead.
   const [previewItem, setPreviewItem] = useState<PendingItem | null>(null);
+  const [previewCv, setPreviewCv] = useState<TailoredCv | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   const keyFor = (item: PendingItem) => `${item.type}:${item.profileId}`;
 
-  const handleView = (item: PendingItem) => {
-    if (item.type === 'change') {
-      setPreviewItem(item);
-    } else {
-      // New profiles and claims target an existing/already-published profile row — reviewers can
-      // see any profile regardless of status (profiles_select RLS), so just view it in place.
-      router.push(`/repository/${item.employeeCode}`);
+  const handleView = async (item: PendingItem) => {
+    if (item.type === 'claim') {
+      router.push(`/repository/${item.profileId}`);
+      return;
+    }
+
+    setPreviewItem(item);
+    setPreviewCv(null);
+    setPreviewError(null);
+    setPreviewLoading(true);
+
+    try {
+      if (item.type === 'change' && item.proposedChange) {
+        // The proposal only carries a new avatarUrl if the employee actually replaced their
+        // photo (see ProfileChangeSubmission's doc comment) — fetch the current profile so the
+        // preview falls back to their existing photo instead of showing no image at all.
+        const current = await getEmployeeDetailsAction(item.profileId);
+        setPreviewCv(buildTailoredCvFromInput(item.proposedChange, current?.avatar));
+      } else {
+        // new_profile — nothing proposed yet to diff against, just render the submitted profile.
+        const employee = await getEmployeeDetailsAction(item.profileId);
+        if (employee) {
+          setPreviewCv(buildTailoredCvFromEmployee(employee));
+        } else {
+          setPreviewError('Could not load this profile.');
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load profile for preview:', err);
+      setPreviewError(err instanceof Error ? err.message : 'Could not load this profile.');
+    } finally {
+      setPreviewLoading(false);
     }
   };
-
-  const previewCv = useMemo(
-    () => (previewItem?.proposedChange ? buildTailoredCvFromInput(previewItem.proposedChange) : null),
-    [previewItem]
-  );
 
   const handleAction = (item: PendingItem, action: 'approve' | 'reject') => {
     const key = keyFor(item);
@@ -172,16 +198,20 @@ export default function ReviewClient({ initialItems }: ReviewClientProps) {
         </div>
       )}
 
-      {/* Proposed-change preview modal — renders the pending edit in the real CV template so a
-          reviewer can see exactly what publishing it would look like before approving. */}
-      {previewItem && previewCv && (
+      {/* Pending-item preview modal — renders a new profile or a proposed edit in the real CV
+          template so a reviewer can see exactly what approving it would publish. */}
+      {previewItem && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-6">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-200">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
               <div>
-                <h4 className="text-sm font-black text-slate-800">Proposed Change — {previewItem.name}</h4>
+                <h4 className="text-sm font-black text-slate-800">
+                  {previewItem.type === 'change' ? 'Proposed Change' : 'New Profile'} — {previewItem.name}
+                </h4>
                 <p className="text-[11px] text-slate-450 font-medium mt-0.5">
-                  Rendered from the proposed edit, not the currently-live profile.
+                  {previewItem.type === 'change'
+                    ? 'Rendered from the proposed edit, not the currently-live profile.'
+                    : 'Rendered from the submitted profile, pending your approval.'}
                 </p>
               </div>
               <button
@@ -192,8 +222,19 @@ export default function ReviewClient({ initialItems }: ReviewClientProps) {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="p-6 overflow-y-auto bg-slate-100 flex-1 flex justify-center">
-              <CvPreviewTemplate cv={previewCv} id="cv-preview-review" />
+            <div className="p-6 overflow-y-auto bg-slate-100 flex-1 flex justify-center items-start">
+              {previewLoading && (
+                <div className="flex flex-col items-center justify-center py-20 gap-3">
+                  <Loader2 className="w-7 h-7 animate-spin text-indigo-600" />
+                  <p className="text-xs font-semibold text-slate-400">Loading preview...</p>
+                </div>
+              )}
+              {previewError && !previewLoading && (
+                <p className="text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200/60 rounded-lg px-3 py-2 my-8">
+                  {previewError}
+                </p>
+              )}
+              {previewCv && !previewLoading && <CvPreviewTemplate cv={previewCv} id="cv-preview-review" />}
             </div>
           </div>
         </div>

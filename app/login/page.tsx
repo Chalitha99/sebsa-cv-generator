@@ -71,7 +71,7 @@ export default function LoginPage() {
             src="/images/seb-logo-1.png"
             alt="AI CV Generator"
             width={180}
-            height={180}            
+            height={180}
           />
         </div>
           <h1 className="text-3xl font-black tracking-tight mb-4 text-slate-100 font-sans leading-tight">

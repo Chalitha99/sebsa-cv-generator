@@ -33,7 +33,7 @@ interface OnboardingClientProps {
   userEmail: string;
   departments: { id: string; name: string }[];
   claimableProfile: ClaimableProfile | null;
-  pendingClaim: { employeeCode: string } | null;
+  pendingClaim: boolean;
 }
 
 export default function OnboardingClient({ userEmail, departments, claimableProfile, pendingClaim }: OnboardingClientProps) {
@@ -248,7 +248,6 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
 
   // ── Pending claim (already requested) ──────────────────────────────────────
   if (mode === 'pending-claim') {
-    const code = claimableProfile?.employeeCode ?? pendingClaim?.employeeCode;
     return (
       <PageWrapper className="min-h-screen w-full flex items-center justify-center bg-[#fbf9fb] p-8">
         <div className="w-full max-w-md">
@@ -263,7 +262,6 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
               We've asked a Super Admin or CV Reviewer to confirm this profile is yours. You'll
               get access as soon as it's approved.
             </p>
-            {code && <p className="text-[10px] font-mono text-slate-400 mt-3">{code}</p>}
           </div>
           <div className="text-center mt-5">{SkipForNowLink}</div>
         </div>
@@ -291,7 +289,6 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
               <p className="text-sm font-black text-slate-800">{claimableProfile.name}</p>
               <p className="text-xs text-slate-500">{claimableProfile.role || 'Role not specified'}</p>
               <p className="text-xs text-slate-500">{claimableProfile.department}</p>
-              <p className="text-[10px] font-mono text-slate-400 mt-2">{claimableProfile.employeeCode}</p>
             </div>
 
             {claimError && (

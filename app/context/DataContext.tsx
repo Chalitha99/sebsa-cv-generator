@@ -19,12 +19,6 @@ export interface CompanySettings {
   activeTemplate: string;
 }
 
-export interface NotificationSettings {
-  emailDigests: boolean;
-  newGenerationAlert: boolean;
-  systemUpdates: boolean;
-}
-
 export interface Activity {
   id: string;
   type: string;
@@ -55,10 +49,8 @@ export interface NewEmployeePayload {
 
 interface DataContextType {
   companySettings: CompanySettings;
-  notificationSettings: NotificationSettings;
   activities: Activity[];
   updateCompanySettings: (settings: Partial<CompanySettings>) => void;
-  updateNotificationSettings: (settings: Partial<NotificationSettings>) => void;
   addActivity: (activity: Omit<Activity, 'id' | 'time'>) => void;
   /**
    * Persists a new employee to Supabase via the upload/actions.ts server action.
@@ -75,12 +67,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     industry: 'Technology & HR',
     colors: ['#003d9b', '#486176'],
     activeTemplate: 'Executive Modern',
-  });
-
-  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>({
-    emailDigests: true,
-    newGenerationAlert: false,
-    systemUpdates: true,
   });
 
   const [activities, setActivities] = useState<Activity[]>([
@@ -128,10 +114,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateCompanySettings = (settings: Partial<CompanySettings>) => {
     setCompanySettings((prev) => ({ ...prev, ...settings }));
-  };
-
-  const updateNotificationSettings = (settings: Partial<NotificationSettings>) => {
-    setNotificationSettings((prev) => ({ ...prev, ...settings }));
   };
 
   const addActivity = (act: Omit<Activity, 'id' | 'time'>) => {
@@ -190,10 +172,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <DataContext.Provider
       value={{
         companySettings,
-        notificationSettings,
         activities,
         updateCompanySettings,
-        updateNotificationSettings,
         addActivity,
         addEmployee,
       }}

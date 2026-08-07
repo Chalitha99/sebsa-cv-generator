@@ -23,8 +23,6 @@ import {
   Save,
   Plus,
   Minus,
-  ChevronDown,
-  ChevronUp,
   AlertCircle,
   GraduationCap,
   Briefcase,
@@ -117,7 +115,7 @@ interface UpdateProfileClientProps {
   departments: { id: string; name: string }[];
   /** Pre-selects an employee when arriving from their profile page's edit-pencil icon, instead
    *  of requiring the Admin to re-pick them from the dropdown below. */
-  initialCode?: string;
+  initialId?: string;
 }
 
 type CvUploadStatus = 'idle' | 'extracting' | 'analyzing' | 'done' | 'error';
@@ -125,12 +123,12 @@ type CvUploadStatus = 'idle' | 'extracting' | 'analyzing' | 'done' | 'error';
 export default function UpdateProfileClient({
   initialEmployees,
   departments,
-  initialCode,
+  initialId,
 }: UpdateProfileClientProps) {
   const router = useRouter();
 
   // Selected employee selection
-  const [selectedCode, setSelectedCode] = useState<string>(initialCode ?? '');
+  const [selectedId, setSelectedId] = useState<string>(initialId ?? '');
   const [loadingProfile, setLoadingProfile] = useState<boolean>(false);
   const [activeProfile, setActiveProfile] = useState<Employee | null>(null);
 
@@ -170,37 +168,47 @@ export default function UpdateProfileClient({
   // Save states
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [jsonPreviewOpen, setJsonPreviewOpen] = useState(false);
+
+  // Snapshot of {profile, email, department} as-loaded, so the Save button can stay disabled
+  // until the Admin actually changes something rather than being enabled by default.
+  const [initialSnapshot, setInitialSnapshot] = useState<string>('');
+  const isDirty =
+    profileImageFile !== null || JSON.stringify({ profile, email, department }) !== initialSnapshot;
 
   // Load selected employee details
   useEffect(() => {
-    if (!selectedCode) {
+    if (!selectedId) {
       setActiveProfile(null);
       setProfile(emptyCvProfile());
       setEmail('');
       setProfileImagePreview(null);
       setProfileImageFile(null);
+      setInitialSnapshot('');
       return;
     }
 
     const loadDetails = async () => {
       try {
         setLoadingProfile(true);
-        const detailedEmp = await getEmployeeDetailsAction(selectedCode);
+        const detailedEmp = await getEmployeeDetailsAction(selectedId);
         if (detailedEmp) {
           setActiveProfile(detailedEmp);
-          setProfile({
+          const loadedProfile: CvProfile = {
             name: detailedEmp.name,
             currentPosition: detailedEmp.role,
             experience: detailedEmp.cvExperience || [],
             academic: detailedEmp.cvAcademic || [],
             specialProjects: detailedEmp.specialProjects || [],
             certifications: detailedEmp.cvCertifications || [],
-          });
+          };
+          setProfile(loadedProfile);
           setEmail(detailedEmp.email);
           setDepartment(detailedEmp.department);
           setProfileImagePreview(detailedEmp.avatar);
           setProfileImageFile(null); // Keep null to flag no changes yet
+          setInitialSnapshot(
+            JSON.stringify({ profile: loadedProfile, email: detailedEmp.email, department: detailedEmp.department })
+          );
         }
       } catch (err) {
         console.error('Failed to load profile details:', err);
@@ -210,7 +218,7 @@ export default function UpdateProfileClient({
     };
 
     loadDetails();
-  }, [selectedCode]);
+  }, [selectedId]);
 
   // ─── CV File upload processing ──────────────────────────────────────────────
 
@@ -406,7 +414,7 @@ export default function UpdateProfileClient({
   };
 
   const handleBackToList = () => {
-    setSelectedCode('');
+    setSelectedId('');
     setSaveError(null);
   };
 
@@ -418,14 +426,14 @@ export default function UpdateProfileClient({
           Update Profile
         </h2>
         <p className="text-sm font-medium text-slate-500 mt-2">
-          {selectedCode
+          {selectedId
             ? 'Update their information, replace their profile photo, or import a new CV.'
             : 'Search for an employee to update their information, replace their profile photo, or import a new CV.'}
         </p>
       </div>
 
       {/* Employee picker — search + list, replaces the selected employee's edit form below once clicked */}
-      {!selectedCode && (
+      {!selectedId && (
         <>
           <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm mb-4 relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-8 top-1/2 -translate-y-1/2" />
@@ -443,9 +451,9 @@ export default function UpdateProfileClient({
               <div className="divide-y divide-slate-100">
                 {filteredEmployees.map((emp) => (
                   <button
-                    key={emp.employeeCode}
+                    key={emp.rowId}
                     type="button"
-                    onClick={() => setSelectedCode(emp.employeeCode)}
+                    onClick={() => setSelectedId(emp.rowId)}
                     className="w-full flex items-center gap-4 p-4 hover:bg-slate-50 transition-colors text-left cursor-pointer"
                   >
                     {emp.avatar && !emp.avatar.includes('unsplash.com') ? (
@@ -516,7 +524,8 @@ export default function UpdateProfileClient({
               <button
                 type="submit"
                 form="update-profile-form"
-                disabled={isSaving}
+                disabled={isSaving || !isDirty}
+                title={!isDirty && !isSaving ? 'No changes to save yet' : undefined}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white font-sans text-xs font-black uppercase tracking-wider px-5 py-2.5 rounded-xl shadow-md shadow-indigo-600/10 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
               >
                 {isSaving ? (
@@ -660,30 +669,6 @@ export default function UpdateProfileClient({
                     {cvStatus === 'error' && (cvErrorMsg || 'Parsing failed.')}
                   </span>
                 </div>
-              )}
-            </div>
-
-            {/* JSON preview */}
-            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setJsonPreviewOpen((o) => !o)}
-                className="w-full flex items-center justify-between px-5 py-4 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
-              >
-                <span className="flex items-center gap-2">
-                  <Layers className="w-4 h-4" />
-                  Profile Preview (JSON)
-                </span>
-                {jsonPreviewOpen ? (
-                  <ChevronUp className="w-4 h-4" />
-                ) : (
-                  <ChevronDown className="w-4 h-4" />
-                )}
-              </button>
-              {jsonPreviewOpen && (
-                <pre className="bg-slate-950 text-emerald-400 text-[10px] font-mono leading-relaxed px-5 py-4 overflow-auto max-h-[300px] whitespace-pre-wrap break-words">
-                  {JSON.stringify(profile, null, 2)}
-                </pre>
               )}
             </div>
           </div>

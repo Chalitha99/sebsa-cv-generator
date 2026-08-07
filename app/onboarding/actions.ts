@@ -22,7 +22,6 @@ export interface OnboardingSubmission {
 
 export interface ClaimableProfile {
   id: string;
-  employeeCode: string;
   name: string;
   role: string;
   department: string;
@@ -41,7 +40,7 @@ export async function findClaimableProfileAction(): Promise<ClaimableProfile | n
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, employee_code, full_name, role_title, departments ( name )')
+    .select('id, full_name, role_title, departments ( name )')
     .is('user_id', null)
     .eq('email', user.email)
     .maybeSingle();
@@ -51,7 +50,6 @@ export async function findClaimableProfileAction(): Promise<ClaimableProfile | n
 
   return {
     id: data.id as string,
-    employeeCode: data.employee_code as string,
     name: data.full_name as string,
     role: (data.role_title as string | null) ?? '',
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -90,20 +88,20 @@ export async function claimProfileAction(profileId: string): Promise<void> {
  * /onboarding can show a "waiting for approval" screen instead of re-showing the claim card or
  * looping them back into the create-from-scratch flow.
  */
-export async function findPendingClaimAction(): Promise<{ employeeCode: string } | null> {
+export async function findPendingClaimAction(): Promise<boolean> {
   const user = await getCurrentUser();
   if (!user) throw new Error('Not authenticated.');
-  if (user.role !== 'employee' || user.hasLinkedProfile) return null;
+  if (user.role !== 'employee' || user.hasLinkedProfile) return false;
 
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('profiles')
-    .select('employee_code')
+    .select('id')
     .eq('pending_claim_user_id', user.id)
     .maybeSingle();
 
   if (error) throw error;
-  return data ? { employeeCode: data.employee_code as string } : null;
+  return data != null;
 }
 
 /**
@@ -150,9 +148,9 @@ export async function createOwnProfileAction(input: OnboardingSubmission): Promi
   // regardless of status.
   const { data: ownProfile } = await supabase
     .from('profiles')
-    .select('employee_code')
+    .select('id')
     .eq('user_id', user.id)
     .single();
 
-  redirect(`/repository/${ownProfile.employee_code}`);
+  redirect(`/repository/${ownProfile.id}`);
 }

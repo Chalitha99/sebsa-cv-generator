@@ -41,7 +41,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ user }) => {
   // templates, and review pending approvals, but can't edit others' profiles or generate CVs;
   // Admin/Super Admin keep the full set.
   const navItems = user.role === 'employee'
-    ? [{ name: 'My Profile', path: `/repository/${user.employeeCode}`, icon: User }]
+    ? [{ name: 'My Profile', path: `/repository/${user.profileId}`, icon: User }]
     : [
         ...(isAdminOrAbove(user.role) ? [{ name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard }] : []),
         { name: 'Employee Profiles', path: '/repository', icon: FolderOpen },

@@ -155,7 +155,7 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
 
         {canEditAnyProfile && (
           <button
-            onClick={() => router.push(`/update-profile?code=${encodeURIComponent(employee.employeeCode)}`)}
+            onClick={() => router.push(`/update-profile?id=${encodeURIComponent(employee.rowId)}`)}
             title="Update this profile"
             className="p-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm active:scale-95 transition-all cursor-pointer"
           >
@@ -206,9 +206,6 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
                   <h3 className="text-2xl font-black text-slate-900 tracking-tight font-sans">
                     {employee.name}
                   </h3>
-                  <span className="text-[10px] font-mono font-bold text-indigo-600 bg-indigo-50 border border-indigo-100/50 px-2.5 py-0.5 rounded-full">
-                    {employee.id}
-                  </span>
                 </div>
                 <p className="text-sm font-bold text-slate-700 mt-1">
                   {employee.role}{' '}
@@ -245,7 +242,7 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
                     className="bg-indigo-600 hover:bg-indigo-700 text-white font-sans text-xs font-black uppercase tracking-wider px-5 py-2.5 rounded-full shadow-md shadow-indigo-600/10 active:scale-95 transition-transform flex items-center gap-2"
                   >
                     <Sparkles className="w-3.5 h-3.5 text-sky-300" />
-                    <span>Verify Talent Match</span>
+                    <span>Customize this CV</span>
                   </button>
                 )}
               </div>

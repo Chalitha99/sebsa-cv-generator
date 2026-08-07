@@ -36,7 +36,7 @@ export async function proposeProfileChangeAction(change: ProfileChangeSubmission
   const user = await getCurrentUser();
   if (!user) throw new Error('Not authenticated.');
   if (user.role !== 'employee') throw new Error('Only Employee accounts propose changes this way.');
-  if (!user.hasLinkedProfile || !user.employeeCode) throw new Error('You do not have a profile yet.');
+  if (!user.hasLinkedProfile || !user.profileId) throw new Error('You do not have a profile yet.');
 
   const supabase = await createClient();
 
@@ -72,6 +72,6 @@ export async function proposeProfileChangeAction(change: ProfileChangeSubmission
 
   if (error) throw error;
 
-  revalidatePath(`/repository/${user.employeeCode}`);
+  revalidatePath(`/repository/${user.profileId}`);
   revalidatePath('/my-profile');
 }
