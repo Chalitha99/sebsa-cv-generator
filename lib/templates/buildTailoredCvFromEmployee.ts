@@ -61,8 +61,16 @@ export function buildTailoredCvFromEmployee(employee: Employee): TailoredCv {
  * reviewer can preview it in the real CV template before approving, at /review
  * (docs/04-rbac-security.md §12) — same rendering path as buildTailoredCvFromEmployee above, just
  * fed from the proposed input instead of the live profile row.
+ *
+ * `fallbackAvatarUrl` should be the profile's CURRENT (already-live) photo — `input.avatarUrl` is
+ * only ever set when the employee actually uploaded a replacement photo as part of this proposal
+ * (ProfileChangeSubmission's doc comment: "Omit to leave the current photo unchanged"), so most
+ * proposals have no avatarUrl of their own and would otherwise preview with no photo at all.
  */
-export function buildTailoredCvFromInput(input: CreateEmployeeInput, avatarUrl?: string | null): TailoredCv {
+export function buildTailoredCvFromInput(
+  input: CreateEmployeeInput,
+  fallbackAvatarUrl?: string | null
+): TailoredCv {
   return {
     name: input.name,
     currentPosition: input.currentPosition || input.role,
@@ -73,6 +81,6 @@ export function buildTailoredCvFromInput(input: CreateEmployeeInput, avatarUrl?:
     academic: input.cvAcademic ?? [],
     specialProjects: input.specialProjects ?? [],
     certifications: input.cvCertifications ?? [],
-    avatar: avatarUrl ?? input.avatarUrl ?? null,
+    avatar: input.avatarUrl ?? fallbackAvatarUrl ?? null,
   };
 }
