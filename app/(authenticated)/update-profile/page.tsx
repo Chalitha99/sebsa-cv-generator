@@ -5,7 +5,11 @@ import { getDepartmentsAction } from '../upload/actions';
 import { getCurrentUser, isAdminOrAbove } from '@/lib/auth';
 import UpdateProfileClient from './UpdateProfileClient';
 
-export default async function UpdateProfilePage() {
+export default async function UpdateProfilePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ code?: string }>;
+}) {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
 
@@ -17,6 +21,9 @@ export default async function UpdateProfilePage() {
   const supabase = await createClient();
   const employees = await listEmployees(supabase);
   const departments = await getDepartmentsAction();
+  const { code } = await searchParams;
 
-  return <UpdateProfileClient initialEmployees={employees} departments={departments} />;
+  // Arriving from the pencil icon on an employee's own profile page (EmployeeProfileClient.tsx)
+  // pre-selects them instead of making the Admin re-pick from the dropdown.
+  return <UpdateProfileClient initialEmployees={employees} departments={departments} initialCode={code} />;
 }

@@ -1,4 +1,4 @@
-import type { Employee } from '@/types/domain';
+import type { Employee, CreateEmployeeInput } from '@/types/domain';
 import type { TailoredCv } from '@/app/(authenticated)/generate/types';
 
 /**
@@ -52,5 +52,27 @@ export function buildTailoredCvFromEmployee(employee: Employee): TailoredCv {
     specialProjects,
     certifications,
     avatar: employee.avatar,
+  };
+}
+
+/**
+ * Converts a proposed-but-not-yet-approved edit (`profiles.pending_change`, a full
+ * `CreateEmployeeInput` — see app/(authenticated)/my-profile/actions.ts) into `TailoredCv` so a
+ * reviewer can preview it in the real CV template before approving, at /review
+ * (docs/04-rbac-security.md §12) — same rendering path as buildTailoredCvFromEmployee above, just
+ * fed from the proposed input instead of the live profile row.
+ */
+export function buildTailoredCvFromInput(input: CreateEmployeeInput, avatarUrl?: string | null): TailoredCv {
+  return {
+    name: input.name,
+    currentPosition: input.currentPosition || input.role,
+    summary: '',
+    customerName: '',
+    skillsAligned: input.skills,
+    experience: input.cvExperience ?? [],
+    academic: input.cvAcademic ?? [],
+    specialProjects: input.specialProjects ?? [],
+    certifications: input.cvCertifications ?? [],
+    avatar: avatarUrl ?? input.avatarUrl ?? null,
   };
 }

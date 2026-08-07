@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageWrapper } from '../../components/PageWrapper';
 import { uploadProfilePictureAction } from '../upload/actions';
@@ -32,6 +32,10 @@ import {
   Layers,
   ImageIcon,
   UserCircle2,
+  Search,
+  ArrowLeft,
+  ChevronRight,
+  UserCircle,
 } from 'lucide-react';
 
 // ─── Sub-components (consistent with upload/page.tsx) ───────────────────────────
@@ -111,6 +115,9 @@ async function extractText(file: File): Promise<string> {
 interface UpdateProfileClientProps {
   initialEmployees: Employee[];
   departments: { id: string; name: string }[];
+  /** Pre-selects an employee when arriving from their profile page's edit-pencil icon, instead
+   *  of requiring the Admin to re-pick them from the dropdown below. */
+  initialCode?: string;
 }
 
 type CvUploadStatus = 'idle' | 'extracting' | 'analyzing' | 'done' | 'error';
@@ -118,13 +125,28 @@ type CvUploadStatus = 'idle' | 'extracting' | 'analyzing' | 'done' | 'error';
 export default function UpdateProfileClient({
   initialEmployees,
   departments,
+  initialCode,
 }: UpdateProfileClientProps) {
   const router = useRouter();
 
   // Selected employee selection
-  const [selectedCode, setSelectedCode] = useState<string>('');
+  const [selectedCode, setSelectedCode] = useState<string>(initialCode ?? '');
   const [loadingProfile, setLoadingProfile] = useState<boolean>(false);
   const [activeProfile, setActiveProfile] = useState<Employee | null>(null);
+
+  // Search filter for the employee picker list (shown before an employee is selected)
+  const [searchTerm, setSearchTerm] = useState('');
+  const filteredEmployees = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return initialEmployees;
+    return initialEmployees.filter(
+      (emp) =>
+        emp.name.toLowerCase().includes(term) ||
+        emp.email.toLowerCase().includes(term) ||
+        emp.role.toLowerCase().includes(term) ||
+        emp.department.toLowerCase().includes(term)
+    );
+  }, [initialEmployees, searchTerm]);
 
   // Form editable states
   const [profile, setProfile] = useState<CvProfile>(emptyCvProfile());
@@ -383,6 +405,11 @@ export default function UpdateProfileClient({
     }
   };
 
+  const handleBackToList = () => {
+    setSelectedCode('');
+    setSaveError(null);
+  };
+
   return (
     <PageWrapper className="p-8">
       {/* Page Header */}
@@ -391,26 +418,70 @@ export default function UpdateProfileClient({
           Update Profile
         </h2>
         <p className="text-sm font-medium text-slate-500 mt-2">
-          Select an employee profile to update their information, replace profile photo, or import a new CV.
+          {selectedCode
+            ? 'Update their information, replace their profile photo, or import a new CV.'
+            : 'Search for an employee to update their information, replace their profile photo, or import a new CV.'}
         </p>
       </div>
 
-      {/* Select Employee Selector */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm mb-8 max-w-xl">
-        <FieldLabel>Select Employee Profile</FieldLabel>
-        <select
-          value={selectedCode}
-          onChange={(e) => setSelectedCode(e.target.value)}
-          className="w-full bg-slate-50 border border-slate-200/80 rounded-xl px-4 py-3.5 text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all text-slate-700"
-        >
-          <option value="">Choose an employee to update...</option>
-          {initialEmployees.map((emp) => (
-            <option key={emp.employeeCode} value={emp.employeeCode}>
-              {emp.name} ({emp.role}) - {emp.employeeCode}
-            </option>
-          ))}
-        </select>
-      </div>
+      {/* Employee picker — search + list, replaces the selected employee's edit form below once clicked */}
+      {!selectedCode && (
+        <>
+          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm mb-4 relative">
+            <Search className="w-4 h-4 text-slate-400 absolute left-8 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search by name, email, role, or department..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200/80 rounded-xl py-3 pl-10 pr-4 text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all text-slate-700 placeholder:text-slate-400"
+            />
+          </div>
+
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden mb-8">
+            {filteredEmployees.length > 0 ? (
+              <div className="divide-y divide-slate-100">
+                {filteredEmployees.map((emp) => (
+                  <button
+                    key={emp.employeeCode}
+                    type="button"
+                    onClick={() => setSelectedCode(emp.employeeCode)}
+                    className="w-full flex items-center gap-4 p-4 hover:bg-slate-50 transition-colors text-left cursor-pointer"
+                  >
+                    {emp.avatar && !emp.avatar.includes('unsplash.com') ? (
+                      <img
+                        src={emp.avatar}
+                        alt={emp.name}
+                        className="w-11 h-11 rounded-full border border-slate-200 object-cover shrink-0"
+                      />
+                    ) : (
+                      <div className="w-11 h-11 rounded-full border border-slate-200 bg-slate-100 flex items-center justify-center shrink-0">
+                        <UserCircle className="w-6 h-6 text-slate-400" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-black text-slate-800 truncate">{emp.name}</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5 truncate">
+                        {emp.role} · {emp.email}
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border bg-slate-50 border-slate-200 text-slate-500 shrink-0 hidden sm:inline-block">
+                      {emp.department}
+                    </span>
+                    <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="py-12 text-center">
+                <p className="text-sm font-medium text-slate-400">
+                  No employee profiles match your search.
+                </p>
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       {loadingProfile && (
         <div className="flex justify-center py-16">
@@ -419,7 +490,51 @@ export default function UpdateProfileClient({
       )}
 
       {!loadingProfile && activeProfile && (
-        <div className="grid grid-cols-12 gap-8">
+        <>
+          {/* Sticky action bar — Save Changes lives here instead of only at the bottom of a long
+              form, plus a way back to the search list without losing your place. */}
+          <div className="sticky top-16 z-20 -mx-8 px-8 py-3.5 mb-6 bg-white/95 backdrop-blur border-b border-slate-200/80 shadow-sm flex items-center justify-between gap-4">
+            <button
+              type="button"
+              onClick={handleBackToList}
+              className="flex items-center gap-1.5 text-xs font-black text-slate-500 hover:text-slate-900 uppercase tracking-wider transition-colors cursor-pointer shrink-0"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back to List</span>
+            </button>
+
+            <div className="flex-1 min-w-0 text-center hidden sm:block">
+              <p className="text-xs font-black text-slate-800 truncate">Editing {activeProfile.name}</p>
+            </div>
+
+            <div className="flex items-center gap-3 shrink-0">
+              {saveError && (
+                <p className="text-[11px] font-semibold text-rose-600 max-w-[240px] truncate" title={saveError}>
+                  {saveError}
+                </p>
+              )}
+              <button
+                type="submit"
+                form="update-profile-form"
+                disabled={isSaving}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-sans text-xs font-black uppercase tracking-wider px-5 py-2.5 rounded-xl shadow-md shadow-indigo-600/10 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    <span>Save Changes</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-12 gap-8">
           {/* Left Column - Image Upload & CV Upload */}
           <div className="col-span-12 lg:col-span-5 flex flex-col gap-6">
             {/* Photo upload */}
@@ -576,6 +691,7 @@ export default function UpdateProfileClient({
           {/* Right Column - Form */}
           <div className="col-span-12 lg:col-span-7">
             <form
+              id="update-profile-form"
               onSubmit={handleSubmit}
               className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col gap-8"
             >
@@ -905,37 +1021,10 @@ export default function UpdateProfileClient({
                 </div>
               </div>
 
-              {/* Actions */}
-              <div className="pt-4 border-t border-slate-100">
-                {saveError && (
-                  <div className="mb-4 flex items-center gap-2 text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200/60 rounded-lg px-3 py-2">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    {saveError}
-                  </div>
-                )}
-                <div className="flex items-center justify-end">
-                  <button
-                    type="submit"
-                    disabled={isSaving}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-sans text-xs font-black uppercase tracking-wider px-6 py-3.5 rounded-xl shadow-md shadow-indigo-600/10 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-                  >
-                    {isSaving ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Saving...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Save className="w-4 h-4" />
-                        <span>Save Changes</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
             </form>
           </div>
-        </div>
+          </div>
+        </>
       )}
     </PageWrapper>
   );

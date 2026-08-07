@@ -36,6 +36,10 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'experience' | 'projects'>('experience');
   const canGenerateCv = isAdminOrAbove(viewerRole);
+  // Admin/Super Admin can edit anyone's profile (docs/04-rbac-security.md §2) — surfaced here as
+  // a pencil icon instead of a standalone "Update Profile" sidebar page/menu item, so editing
+  // starts from the profile you're already looking at rather than a separate employee picker.
+  const canEditAnyProfile = isAdminOrAbove(viewerRole);
 
   const handleBack = () => {
     router.push('/repository');
@@ -146,6 +150,16 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
           >
             <PenLine className="w-3.5 h-3.5" />
             <span>Edit Profile</span>
+          </button>
+        )}
+
+        {canEditAnyProfile && (
+          <button
+            onClick={() => router.push(`/update-profile?code=${encodeURIComponent(employee.employeeCode)}`)}
+            title="Update this profile"
+            className="p-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm active:scale-95 transition-all cursor-pointer"
+          >
+            <PenLine className="w-4 h-4" />
           </button>
         )}
       </div>
