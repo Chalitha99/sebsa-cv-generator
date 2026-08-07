@@ -79,10 +79,8 @@ export default function RepositoryClient({ employees, viewerRole, departments }:
     router.push('/upload');
   };
 
-  const handleViewProfile = (id: string) => {
-    // Strip hashtag for dynamic route matching if needed, or handle matching directly
-    const cleanId = id.replace('#', '');
-    router.push(`/repository/${cleanId}`);
+  const handleViewProfile = (rowId: string) => {
+    router.push(`/repository/${rowId}`);
   };
 
   // Resolve avatar image
@@ -165,9 +163,9 @@ export default function RepositoryClient({ employees, viewerRole, departments }:
               {filteredEmployees.length > 0 ? (
                 filteredEmployees.map((emp) => (
                   <tr
-                    key={emp.id}
+                    key={emp.rowId}
                     className="hover:bg-slate-50/50 transition-colors group cursor-pointer"
-                    onClick={() => handleViewProfile(emp.id)}
+                    onClick={() => handleViewProfile(emp.rowId)}
                   >
                     {/* User profile with headshot */}
                     <td className="py-4 px-6">
@@ -235,7 +233,7 @@ export default function RepositoryClient({ employees, viewerRole, departments }:
                     <td className="py-4 px-6 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
-                          onClick={() => handleViewProfile(emp.id)}
+                          onClick={() => handleViewProfile(emp.rowId)}
                           className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
                           title="View Profile"
                         >

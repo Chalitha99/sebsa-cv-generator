@@ -84,7 +84,7 @@ export default function MyProfileClient({ employee, departments }: MyProfileClie
     return (
       <PageWrapper className="p-8">
         <button
-          onClick={() => router.push(`/repository/${employee.employeeCode}`)}
+          onClick={() => router.push(`/repository/${employee.rowId}`)}
           className="flex items-center gap-2 text-xs font-black text-slate-500 hover:text-slate-900 uppercase tracking-wider mb-6"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -109,7 +109,7 @@ export default function MyProfileClient({ employee, departments }: MyProfileClie
   return (
     <PageWrapper className="p-8">
       <button
-        onClick={() => router.push(`/repository/${employee.employeeCode}`)}
+        onClick={() => router.push(`/repository/${employee.rowId}`)}
         className="flex items-center gap-2 text-xs font-black text-slate-500 hover:text-slate-900 uppercase tracking-wider mb-6"
       >
         <ArrowLeft className="w-4 h-4" />

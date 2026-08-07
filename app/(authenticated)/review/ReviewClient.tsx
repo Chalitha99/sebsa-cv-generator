@@ -46,7 +46,7 @@ export default function ReviewClient({ initialItems }: ReviewClientProps) {
 
   const handleView = async (item: PendingItem) => {
     if (item.type === 'claim') {
-      router.push(`/repository/${item.employeeCode}`);
+      router.push(`/repository/${item.profileId}`);
       return;
     }
 
@@ -60,11 +60,11 @@ export default function ReviewClient({ initialItems }: ReviewClientProps) {
         // The proposal only carries a new avatarUrl if the employee actually replaced their
         // photo (see ProfileChangeSubmission's doc comment) — fetch the current profile so the
         // preview falls back to their existing photo instead of showing no image at all.
-        const current = await getEmployeeDetailsAction(item.employeeCode);
+        const current = await getEmployeeDetailsAction(item.profileId);
         setPreviewCv(buildTailoredCvFromInput(item.proposedChange, current?.avatar));
       } else {
         // new_profile — nothing proposed yet to diff against, just render the submitted profile.
-        const employee = await getEmployeeDetailsAction(item.employeeCode);
+        const employee = await getEmployeeDetailsAction(item.profileId);
         if (employee) {
           setPreviewCv(buildTailoredCvFromEmployee(employee));
         } else {

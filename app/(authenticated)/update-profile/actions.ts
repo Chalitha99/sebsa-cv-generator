@@ -3,23 +3,21 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { getEmployeeByCode, updateEmployee } from '@/services/employee-service';
+import { getEmployeeById, updateEmployee } from '@/services/employee-service';
 import { getCurrentUser, isAdminOrAbove } from '@/lib/auth';
 import type { CreateEmployeeInput, Employee } from '@/types/domain';
 
 /**
- * Loads the complete detailed profile of a selected employee by their code.
+ * Loads the complete detailed profile of a selected employee by their profile id.
  */
-export async function getEmployeeDetailsAction(employeeCode: string): Promise<Employee | null> {
+export async function getEmployeeDetailsAction(profileId: string): Promise<Employee | null> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated.');
 
-  // Clean employee code
-  const cleanCode = employeeCode.replace('#', '').toUpperCase();
-  return getEmployeeByCode(supabase, cleanCode);
+  return getEmployeeById(supabase, profileId);
 }
 
 /**

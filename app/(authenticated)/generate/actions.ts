@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getCurrentUser, isReviewerOrAbove } from '@/lib/auth';
 import { getSavedGeneratedCv, saveGeneratedCv } from '@/services/generated-cv-service';
-import { getEmployeeByCode } from '@/services/employee-service';
+import { getEmployeeById } from '@/services/employee-service';
 import type { Employee } from '@/types/domain';
 import type { TailoredCv } from './types';
 
@@ -102,9 +102,9 @@ export async function customizeCvAction(
   const ai = new GoogleGenAI({ apiKey });
 
   const supabase = await createClient();
-  const fullEmployee = await getEmployeeByCode(supabase, employee.employeeCode);
+  const fullEmployee = await getEmployeeById(supabase, employee.rowId);
   if (!fullEmployee) {
-    throw new Error(`Employee profile for code ${employee.employeeCode} not found.`);
+    throw new Error(`Employee profile ${employee.rowId} not found.`);
   }
 
   // Capture the original (locked) academic and position data BEFORE the AI call.

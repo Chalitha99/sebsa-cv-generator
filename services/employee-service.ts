@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   createEmployeeRow,
   deleteEmployeeRow,
-  getEmployeeRowByCode,
+  getEmployeeRowById,
   listEmployeeRows,
   updateEmployeeRow,
 } from '@/repositories/employee-repository';
@@ -24,8 +24,6 @@ function formatDate(value: string | null | undefined): string {
 function mapListRow(row: any): Employee {
   return {
     rowId: row.id,
-    id: `#${row.employee_code}`,
-    employeeCode: row.employee_code,
     name: row.full_name,
     email: row.email,
     role: row.role_title ?? '',
@@ -66,11 +64,11 @@ export async function listEmployees(supabase: SupabaseClient): Promise<Employee[
   return mapped;
 }
 
-export async function getEmployeeByCode(
+export async function getEmployeeById(
   supabase: SupabaseClient,
-  employeeCode: string
+  profileId: string
 ): Promise<Employee | null> {
-  const row = await getEmployeeRowByCode(supabase, employeeCode);
+  const row = await getEmployeeRowById(supabase, profileId);
   if (!row) return null;
 
   // ── Legacy experience mapping (with JSON tasks fallback) ──────────────────

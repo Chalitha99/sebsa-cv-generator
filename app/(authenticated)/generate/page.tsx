@@ -10,7 +10,7 @@ export default async function GeneratePage() {
 
   // Generating/customizing CVs is Admin/Super Admin only — CV Reviewer can only View generated
   // CVs (no create), Employee has no access at all (docs/04-rbac-security.md §2).
-  if (user.role === 'employee') redirect(`/repository/${user.employeeCode}`);
+  if (user.role === 'employee') redirect(`/repository/${user.profileId}`);
   if (user.role === 'cv_reviewer') redirect('/repository');
 
   const supabase = await createClient();

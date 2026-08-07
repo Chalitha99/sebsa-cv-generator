@@ -11,7 +11,7 @@ export default async function RepositoryPage() {
 
   // Employees only ever see their own profile — not the general repository (matrix: "View own"
   // only, docs/04-rbac-security.md §2). CV Reviewer/Admin/Super Admin all have "View all".
-  if (user.role === 'employee') redirect(`/repository/${user.employeeCode}`);
+  if (user.role === 'employee') redirect(`/repository/${user.profileId}`);
 
   const supabase = await createClient();
   const [employees, departments] = await Promise.all([

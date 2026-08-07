@@ -155,7 +155,7 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
 
         {canEditAnyProfile && (
           <button
-            onClick={() => router.push(`/update-profile?code=${encodeURIComponent(employee.employeeCode)}`)}
+            onClick={() => router.push(`/update-profile?id=${encodeURIComponent(employee.rowId)}`)}
             title="Update this profile"
             className="p-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm active:scale-95 transition-all cursor-pointer"
           >

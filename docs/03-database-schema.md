@@ -64,7 +64,6 @@ Index: `user_id` (unique, already covers lookups).
 | ------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------- |
 | id                  | uuid pk default gen_random_uuid()                                                    |                                                               |
 | user_id             | uuid unique references auth.users(id) on delete set null                             | nullable — set only for self-service employees               |
-| employee_code       | text not null unique                                                                 | human-readable, e.g.`EMP-00124`                             |
 | full_name           | text not null                                                                        |                                                               |
 | email               | text not null                                                                        |                                                               |
 | phone               | text                                                                                 |                                                               |
@@ -84,7 +83,7 @@ Index: `user_id` (unique, already covers lookups).
 | created_at          | timestamptz not null default now()                                                   |                                                               |
 | updated_at          | timestamptz not null default now()                                                   |                                                               |
 
-Indexes: `department_id`, `status`, `employee_code` (unique already), full-text search index:
+Indexes: `department_id`, `status`, full-text search index:
 `create index profiles_search_idx on profiles using gin (to_tsvector('english', full_name || ' ' || coalesce(role_title,'') || ' ' || coalesce(summary,'')))`.
 
 ### `experiences`

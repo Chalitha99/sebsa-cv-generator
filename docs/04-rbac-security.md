@@ -332,7 +332,7 @@ Previously the only way to get a real, template-formatted export was the Admin/S
 "Customize CVs" wizard (`/generate`) — the "Structured CV Preview" card on `/repository/[id]`
 (`EmployeeProfileClient.tsx`) was pure decoration: a static mockup with `Download PDF`/`Print CV`
 buttons that just showed an `alert()`. Since an Employee visiting `/generate` is redirected
-straight to their own `/repository/[employeeCode]` page (`app/(authenticated)/generate/page.tsx`),
+straight to their own `/repository/[id]` page (`app/(authenticated)/generate/page.tsx`),
 there was no path at all for an Employee to get an actual document out of the system.
 
 Fix: `EmployeeProfileClient.tsx` now builds a real `TailoredCv` directly from the profile already
@@ -360,3 +360,31 @@ file and, optionally, an avatar image URL are the only things it fetches). Restr
 Admin/Super Admin was blocking this feature for no real security benefit, so the check was
 relaxed to "any authenticated user" — the actual data boundary is still enforced upstream, at
 whichever RLS-scoped query produced the `Employee`/`TailoredCv` in the first place.
+
+## 16. `employee_code` removed — `profiles.id` is now the sole identifier
+
+`profiles.employee_code` (a generated `EMP-00124` string, unique, retried on collision at insert
+time — `generateEmployeeCode()` in `repositories/employee-repository.ts`) was a second identifier
+alongside the real primary key `id`, used purely for routing/lookups (`/repository/EMP-00124`,
+`getEmployeeByCode`) and a cosmetic `#EMP-00124` display badge. It added a collision-retry insert
+loop and a second "which id do I use here" decision at every call site, for no benefit `id` (a
+uuid, already guaranteed unique by the database) didn't already provide.
+
+Removed via `supabase/migrations/0022_remove_employee_code.sql`. Every touchpoint now routes by
+`profiles.id` directly:
+
+- `Employee.rowId` (`types/domain.ts`) is the sole identifier on the UI-facing shape — the old
+  `id` ("#EMP-00124" display string) and `employeeCode` fields are gone.
+- `CurrentUser.employeeCode` (`lib/auth.ts`) → `CurrentUser.profileId` (the uuid).
+- `services/employee-service.ts`'s `getEmployeeByCode` → `getEmployeeById`;
+  `repositories/employee-repository.ts`'s `getEmployeeRowByCode` → `getEmployeeRowById`, and
+  `createEmployeeRow`'s 5-attempt collision-retry loop is gone (a single insert now, since `id`
+  can't collide).
+- Routes: `/repository/[id]` already took a path segment named `id` — it now actually receives
+  `profiles.id` instead of a code. `/update-profile`'s `?code=` query param is now `?id=`.
+- `PendingItem` (`app/(authenticated)/review/actions.ts`) already carried `profileId` — its
+  redundant `employeeCode` field was simply dropped.
+- Two small onboarding-flow types (`ClaimableProfile`, `findPendingClaimAction`'s return value)
+  only ever used `employeeCode` for a cosmetic mono-text code shown to the employee — removed
+  rather than replaced with a uuid, since a raw uuid isn't a meaningful thing to show a human;
+  `findPendingClaimAction` now just returns `boolean` (does a pending claim exist).
