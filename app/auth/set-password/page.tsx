@@ -4,7 +4,9 @@ import React, { useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { PageWrapper } from '@/app/components/PageWrapper';
+import PasswordRequirementsList from '@/app/components/PasswordRequirementsList';
 import { createClient } from '@/lib/supabase/client';
+import { isPasswordValid } from '@/lib/passwordValidation';
 import { Eye, EyeOff, KeyRound } from 'lucide-react';
 
 /**
@@ -25,12 +27,12 @@ export default function SetPasswordPage() {
     e.preventDefault();
     setError(null);
 
-    if (password !== confirmPassword) {
-      setError('Passwords do not match.');
+    if (!isPasswordValid(password)) {
+      setError('Password does not meet all requirements — check the checklist below.');
       return;
     }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters.');
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.');
       return;
     }
 
@@ -77,7 +79,7 @@ export default function SetPasswordPage() {
               <input
                 type={showPassword ? 'text' : 'password'}
                 required
-                placeholder="New Password (min. 6 characters)"
+                placeholder="New Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full h-14 px-4 border border-slate-200 hover:border-slate-300 rounded-xl bg-slate-50/50 text-slate-800 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-500/10 focus:border-slate-500 transition-all font-sans"
@@ -90,6 +92,8 @@ export default function SetPasswordPage() {
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
             </div>
+
+            {password.length > 0 && <PasswordRequirementsList password={password} />}
 
             <div className="relative group">
               <input
