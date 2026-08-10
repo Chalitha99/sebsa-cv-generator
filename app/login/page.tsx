@@ -1,22 +1,44 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import Image from "next/image";
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { PageWrapper } from '../components/PageWrapper';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import LightRays from '../components/LightRays';
-import { Mail, Eye, EyeOff, LogIn, CheckCircle, ShieldCheck, TrendingUp, Sparkles, BrainCircuit } from 'lucide-react';
+import { Mail, Eye, EyeOff, LogIn, CheckCircle, ShieldCheck, TrendingUp, Sparkles, BrainCircuit, Loader2 } from 'lucide-react';
 
 export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen w-full flex items-center justify-center bg-white">
+          <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+        </div>
+      }
+    >
+      <LoginPageContent />
+    </Suspense>
+  );
+}
+
+function LoginPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Surfaces failures from /auth/callback (e.g. an expired or already-used invite link) instead
+  // of silently dropping the person on a blank login form with no explanation.
+  useEffect(() => {
+    const callbackError = searchParams?.get('error');
+    if (callbackError) setError(callbackError);
+  }, [searchParams]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

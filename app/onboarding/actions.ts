@@ -3,8 +3,10 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { createEmployee } from '@/services/employee-service';
 import { getCurrentUser } from '@/lib/auth';
+import { notifyReviewers } from '@/lib/notifications';
 import type { CreateEmployeeInput } from '@/types/domain';
 
 export interface OnboardingSubmission {
@@ -13,6 +15,7 @@ export interface OnboardingSubmission {
   department: string;
   skills: string[];
   currentPosition?: string;
+  summary?: string;
   cvExperience?: CreateEmployeeInput['cvExperience'];
   cvAcademic?: CreateEmployeeInput['cvAcademic'];
   specialProjects?: CreateEmployeeInput['specialProjects'];
@@ -72,6 +75,15 @@ export async function claimProfileAction(profileId: string): Promise<void> {
   if (user.hasLinkedProfile) throw new Error('You already have a profile on file.');
 
   const supabase = await createClient();
+
+  // Fetched before the update purely for a readable notification message below — not part of the
+  // enforcement (profiles_self_claim_request RLS already covers that).
+  const { data: targetProfile } = await supabase
+    .from('profiles')
+    .select('full_name')
+    .eq('id', profileId)
+    .maybeSingle();
+
   const { error } = await supabase
     .from('profiles')
     .update({ pending_claim_user_id: user.id, updated_at: new Date().toISOString() })
@@ -79,6 +91,13 @@ export async function claimProfileAction(profileId: string): Promise<void> {
     .is('user_id', null);
 
   if (error) throw error;
+
+  await notifyReviewers(createAdminClient(), {
+    type: 'claim_requested',
+    title: 'Account claim requested',
+    message: `${user.email} requested to link their account to ${targetProfile?.full_name ?? 'an existing profile'}.`,
+    link: '/review',
+  });
 
   revalidatePath('/onboarding');
 }
@@ -130,6 +149,7 @@ export async function createOwnProfileAction(input: OnboardingSubmission): Promi
       department: input.department,
       skills: input.skills,
       currentPosition: input.currentPosition,
+      summary: input.summary,
       cvExperience: input.cvExperience,
       cvAcademic: input.cvAcademic,
       specialProjects: input.specialProjects,
@@ -139,6 +159,13 @@ export async function createOwnProfileAction(input: OnboardingSubmission): Promi
     },
     user.id
   );
+
+  await notifyReviewers(createAdminClient(), {
+    type: 'new_profile_submitted',
+    title: 'New profile submitted',
+    message: `${input.name} submitted a new profile for review.`,
+    link: '/review',
+  });
 
   revalidatePath('/dashboard');
 

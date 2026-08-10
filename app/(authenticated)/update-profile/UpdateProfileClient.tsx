@@ -197,6 +197,7 @@ export default function UpdateProfileClient({
           const loadedProfile: CvProfile = {
             name: detailedEmp.name,
             currentPosition: detailedEmp.role,
+            summary: detailedEmp.summary ?? '',
             experience: detailedEmp.cvExperience || [],
             academic: detailedEmp.cvAcademic || [],
             specialProjects: detailedEmp.specialProjects || [],
@@ -397,6 +398,7 @@ export default function UpdateProfileClient({
         email,
         role: profile.currentPosition,
         department,
+        summary: profile.summary,
         skills: [],
         cvExperience: profile.experience,
         cvAcademic: profile.academic,
@@ -764,6 +766,18 @@ export default function UpdateProfileClient({
                     ))}
                   </select>
                 </div>
+              </div>
+
+              {/* Objective */}
+              <div>
+                <FieldLabel>Objective / Professional Summary</FieldLabel>
+                <textarea
+                  rows={3}
+                  placeholder="A brief statement of career goals and what they bring to the role..."
+                  value={profile.summary}
+                  onChange={(e) => updateField('summary', e.target.value)}
+                  className={TEXTAREA_CLS}
+                />
               </div>
 
               {/* Experience */}

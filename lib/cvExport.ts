@@ -45,13 +45,22 @@ export async function exportToPdf(elementId: string, filename: string): Promise<
   let yOffset = 0;
   let remaining = imgH;
 
-  // Multi-page support: slice the canvas image across A4 pages
+  // Multi-page support: slice the canvas image across A4 pages. Skip adding a trailing page for
+  // a small leftover sliver — the template always has generous bottom padding/margin (32px outer
+  // padding + 22px section spacing), so a small remainder past a full page is virtually always
+  // blank whitespace, not real content. Without this threshold, content whose height landed just
+  // over a page boundary produced a near-empty final page with just a thin strip bleeding onto
+  // it ("a line at the end").
+  const MIN_TRAILING_CONTENT_MM = 15;
+
   while (remaining > 0) {
     pdf.addImage(imgData, 'JPEG', 0, yOffset > 0 ? -yOffset : 0, pdfW, imgH);
     remaining -= pdfH;
-    if (remaining > 0) {
+    if (remaining > MIN_TRAILING_CONTENT_MM) {
       pdf.addPage();
       yOffset += pdfH;
+    } else {
+      break;
     }
   }
 

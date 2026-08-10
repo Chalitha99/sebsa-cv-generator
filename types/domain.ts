@@ -66,6 +66,8 @@ export interface Employee {
   specialProjects?: CvProjectEntry[];
   cvCertifications?: CvCertificationEntry[];
   currentPosition?: string;
+  /** Objective / professional summary — profiles.summary column. */
+  summary?: string;
 }
 
 export interface CreateEmployeeInput {
@@ -77,6 +79,8 @@ export interface CreateEmployeeInput {
 
   // Optional structured CV fields — populated from Gemini parsing pipeline
   currentPosition?: string;
+  /** Objective / professional summary — profiles.summary column. */
+  summary?: string;
   cvExperience?: CvExperienceEntry[];
   cvAcademic?: CvAcademicEntry[];
   specialProjects?: CvProjectEntry[];

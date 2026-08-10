@@ -1,9 +1,15 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useData } from '../context/DataContext';
+import React, { useEffect, useState } from 'react';
 import type { CurrentUser } from '@/lib/auth';
-import { Search, Bell, ChevronDown, UserCircle } from 'lucide-react';
+import { NotificationList } from './NotificationList';
+import {
+  listNotificationsAction,
+  markNotificationReadAction,
+  markAllNotificationsReadAction,
+} from '@/app/(authenticated)/notifications/actions';
+import type { AppNotification } from '@/services/notification-service';
+import { Search, Bell, UserCircle, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 interface HeaderProps {
@@ -19,9 +25,51 @@ export const Header: React.FC<HeaderProps> = ({
   onSearchChange,
   searchValue = '',
 }) => {
-  const { activities } = useData();
   const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
+
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
+
+  const loadNotifications = async () => {
+    try {
+      const list = await listNotificationsAction();
+      setNotifications(list);
+    } catch (err) {
+      console.error('Failed to load notifications:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadNotifications();
+  }, []);
+
+  const handleToggleDropdown = () => {
+    const opening = !showNotificationDropdown;
+    setShowNotificationDropdown(opening);
+    if (opening) loadNotifications(); // refresh on open, not just once on page load
+  };
+
+  const handleItemClick = async (n: AppNotification) => {
+    setShowNotificationDropdown(false);
+    if (!n.isRead) {
+      setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, isRead: true } : x)));
+      markNotificationReadAction(n.id).catch((err) => console.error('Failed to mark notification read:', err));
+    }
+    if (n.link) router.push(n.link);
+  };
+
+  const handleMarkAllRead = async () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    try {
+      await markAllNotificationsReadAction();
+    } catch (err) {
+      console.error('Failed to mark all notifications read:', err);
+    }
+  };
 
   return (
     <header className="fixed top-0 right-0 w-[calc(100%-260px)] h-16 bg-white/80 backdrop-blur-md border-b border-slate-200/80 flex items-center justify-between px-8 z-40">
@@ -44,33 +92,48 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Notifications Icon */}
         <div className="relative">
           <button
-            onClick={() => setShowNotificationDropdown(!showNotificationDropdown)}
+            onClick={handleToggleDropdown}
             className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-full transition-all duration-300 relative"
           >
             <Bell className="w-5 h-5" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full border-2 border-white"></span>
+            {unreadCount > 0 && (
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full border-2 border-white"></span>
+            )}
           </button>
 
           {/* Quick Notifications Dropdown */}
           {showNotificationDropdown && (
-            <div className="absolute right-0 mt-2.5 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl shadow-slate-200/50 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="absolute right-0 mt-2.5 w-96 bg-white border border-slate-200 rounded-2xl shadow-xl shadow-slate-200/50 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
               <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                <span className="text-xs font-black text-slate-800 uppercase tracking-wider">Recent System Alerts</span>
-                <button
-                  onClick={() => router.push('/dashboard')}
-                  className="text-[11px] font-bold text-sky-600 hover:underline"
-                >
-                  View Dashboard
-                </button>
+                <span className="text-xs font-black text-slate-800 uppercase tracking-wider">Notifications</span>
+                <div className="flex items-center gap-3">
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={handleMarkAllRead}
+                      className="text-[11px] font-bold text-slate-500 hover:text-slate-800"
+                    >
+                      Mark all read
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      setShowNotificationDropdown(false);
+                      router.push('/activity');
+                    }}
+                    className="text-[11px] font-bold text-sky-600 hover:underline"
+                  >
+                    View All
+                  </button>
+                </div>
               </div>
-              <div className="max-h-64 overflow-y-auto divide-y divide-slate-100">
-                {activities.slice(0, 4).map((act) => (
-                  <div key={act.id} className="p-3.5 hover:bg-slate-50 transition-colors">
-                    <p className="text-xs font-black text-slate-800 leading-snug">{act.title}</p>
-                    <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-2 leading-relaxed">{act.desc}</p>
-                    <p className="text-[10px] text-slate-400 mt-1 font-semibold">{act.time}</p>
+              <div className="max-h-96 overflow-y-auto p-2">
+                {loading ? (
+                  <div className="flex items-center justify-center py-10">
+                    <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
                   </div>
-                ))}
+                ) : (
+                  <NotificationList notifications={notifications.slice(0, 8)} onItemClick={handleItemClick} />
+                )}
               </div>
             </div>
           )}

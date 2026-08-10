@@ -1,14 +1,21 @@
 import { redirect } from 'next/navigation';
+import { createClient } from '@/lib/supabase/server';
+import { listNotifications } from '@/services/notification-service';
 import { getCurrentUser } from '@/lib/auth';
 import ActivityLogClient from './ActivityLogClient';
 
+/**
+ * Unlike the old Dashboard-only "system activity" panel, this is every user's OWN notification
+ * history (RLS-scoped, notifications_select_own) — an Employee gets approval/rejection
+ * notifications just as much as a reviewer gets "new submission" ones, so this is open to any
+ * authenticated, onboarded user, not just Admin/Super Admin.
+ */
 export default async function ActivityLogPage() {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
 
-  // Same audience as the Dashboard it's linked from (docs/04-rbac-security.md §2).
-  if (user.role === 'employee') redirect(`/repository/${user.profileId}`);
-  if (user.role === 'cv_reviewer') redirect('/repository');
+  const supabase = await createClient();
+  const notifications = await listNotifications(supabase, 100);
 
-  return <ActivityLogClient />;
+  return <ActivityLogClient initialNotifications={notifications} />;
 }

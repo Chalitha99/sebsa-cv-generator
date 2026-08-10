@@ -159,6 +159,7 @@ export async function getEmployeeById(
     cvCertifications: cvCertifications.length > 0 ? cvCertifications : undefined,
     cvAcademic: cvAcademic.length > 0 ? cvAcademic : undefined,
     currentPosition: (row as any).role_title ?? undefined,
+    summary: (row as any).summary ?? undefined,
     status: (row as any).status ?? undefined,
     hasPendingChange: (row as any).pending_change != null,
   };

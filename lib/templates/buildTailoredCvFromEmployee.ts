@@ -6,8 +6,9 @@ import type { TailoredCv } from '@/app/(authenticated)/generate/types';
  * `CvPreviewTemplate`/`lib/cvExport.ts` render and export, with no AI tailoring step — used for
  * the "preview & download my own CV" feature (repository/[id]) rather than the Admin/Super Admin
  * "Customize CVs" wizard (app/(authenticated)/generate/), which produces a `TailoredCv` via
- * Gemini instead. `summary` and `customerName` are left blank on purpose — the Handlebars
- * template (`lib/templates/cvTemplate.ts`) simply omits those sections/lines when empty.
+ * Gemini instead. `customerName` is left blank on purpose — the Handlebars template
+ * (`lib/templates/cvTemplate.ts`) simply omits that line when empty. `summary` now comes from the
+ * employee's own Objective field (profiles.summary) rather than always being blank.
  *
  * Prefers the structured Gemini-parsed fields (cvExperience/cvAcademic/specialProjects/
  * cvCertifications); falls back to the legacy demo-data shapes for the handful of
@@ -44,7 +45,7 @@ export function buildTailoredCvFromEmployee(employee: Employee): TailoredCv {
   return {
     name: employee.name,
     currentPosition: employee.currentPosition || employee.role,
-    summary: '',
+    summary: employee.summary ?? '',
     customerName: '',
     skillsAligned: employee.skills,
     experience,
@@ -74,7 +75,7 @@ export function buildTailoredCvFromInput(
   return {
     name: input.name,
     currentPosition: input.currentPosition || input.role,
-    summary: '',
+    summary: input.summary ?? '',
     customerName: '',
     skillsAligned: input.skills,
     experience: input.cvExperience ?? [],

@@ -1,11 +1,12 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useData } from '../../context/DataContext';
 import { PageWrapper } from '../../components/PageWrapper';
-import { ActivityList } from '../../components/ActivityList';
+import { NotificationList } from '../../components/NotificationList';
+import { markNotificationReadAction } from '../notifications/actions';
 import type { Employee } from '@/types/domain';
+import type { AppNotification } from '@/services/notification-service';
 import {
   Users,
   Sparkles,
@@ -13,16 +14,23 @@ import {
   ArrowRight,
 } from 'lucide-react';
 
-const RECENT_ACTIVITY_LIMIT = 5;
-
 interface DashboardClientProps {
   employees: Employee[];
   generatedCvCount: number;
+  initialNotifications: AppNotification[];
 }
 
-export default function DashboardClient({ employees, generatedCvCount }: DashboardClientProps) {
+export default function DashboardClient({ employees, generatedCvCount, initialNotifications }: DashboardClientProps) {
   const router = useRouter();
-  const { activities } = useData();
+  const [notifications, setNotifications] = useState(initialNotifications);
+
+  const handleItemClick = async (n: AppNotification) => {
+    if (!n.isRead) {
+      setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, isRead: true } : x)));
+      markNotificationReadAction(n.id).catch((err) => console.error('Failed to mark notification read:', err));
+    }
+    if (n.link) router.push(n.link);
+  };
 
   // Dynamic statistics calculations
   const totalEmployeesCount = employees.length;
@@ -95,7 +103,7 @@ export default function DashboardClient({ employees, generatedCvCount }: Dashboa
             <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
               <h4 className="font-sans text-sm font-black uppercase tracking-wider text-slate-800 flex items-center gap-2">
                 <History className="w-4 h-4 text-indigo-600" />
-                <span>Recent System Activity</span>
+                <span>Recent Notifications</span>
               </h4>
               <button
                 type="button"
@@ -108,7 +116,7 @@ export default function DashboardClient({ employees, generatedCvCount }: Dashboa
             </div>
 
             <div className="flex-1">
-              <ActivityList activities={activities.slice(0, RECENT_ACTIVITY_LIMIT)} />
+              <NotificationList notifications={notifications} onItemClick={handleItemClick} />
             </div>
           </div>
         </div>

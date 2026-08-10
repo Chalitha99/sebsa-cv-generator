@@ -18,6 +18,7 @@ STRICT RULES — you MUST follow these without exception:
 1. DO NOT change, paraphrase, rename, or modify the candidate's academic qualifications in any way. Return academic data exactly as provided in the input profile.
 2. DO NOT change, paraphrase, or modify any experience "position" (job title). Only rewrite the tasks/responsibilities listed under each position to align with customer requirements.
 3. DO NOT fabricate details not present or reasonably inferred from the candidate's original history, but frame their achievements using key terminology from the requirements.
+4. If the candidate's original profile already has an Objective/Summary, treat it as the base text: refine and re-emphasize it for this opportunity, keeping their core points and voice — do not discard it and write an unrelated one from scratch. Only compose a new summary from nothing if the original profile has none.
 
 Return ONLY structured JSON matching the provided schema.`;
 
@@ -26,7 +27,7 @@ const TAILORED_CV_SCHEMA = {
   properties: {
     name: { type: Type.STRING },
     currentPosition: { type: Type.STRING },
-    summary: { type: Type.STRING, description: "A tailored executive summary matching the opportunity and instructions." },
+    summary: { type: Type.STRING, description: "The candidate's Objective/Summary, adapted for this opportunity. If they already have one, refine that text rather than inventing a new one; only write from scratch if they have none." },
     experience: {
       type: Type.ARRAY,
       items: {
@@ -118,6 +119,7 @@ export async function customizeCvAction(
   const originalProfile = {
     name: fullEmployee.name,
     currentPosition: fullEmployee.currentPosition || fullEmployee.role,
+    summary: fullEmployee.summary || '',
     experience: fullEmployee.cvExperience || fullEmployee.experience || [],
     academic: originalAcademic,
     specialProjects: fullEmployee.specialProjects || [],
@@ -135,7 +137,7 @@ Preferred Requirements / Job Specs: ${preferredExp}
 Chat Customization History:
 ${chatHistory.map((h) => `${h.role === 'user' ? 'User Instruction' : 'AI Response Summary'}: ${h.content}`).join('\n')}
 
-${newInstruction ? `Latest User Refinement Request: "${newInstruction}"` : 'Initial Customization: Tailor the CV summary and experience task descriptions to highlight the mandatory and preferred skills above. DO NOT change academic qualifications or experience position titles.'}
+${newInstruction ? `Latest User Refinement Request: "${newInstruction}"` : `Initial Customization: Tailor the experience task descriptions to highlight the mandatory and preferred skills above. ${originalProfile.summary ? 'Refine the candidate\'s existing Objective/Summary above for this opportunity — adapt it, do not replace it with an unrelated one.' : 'The candidate has no existing Objective/Summary — write a concise one from their experience.'} DO NOT change academic qualifications or experience position titles.`}
 `;
 
   try {
