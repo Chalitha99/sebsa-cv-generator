@@ -34,6 +34,7 @@ import {
   ArrowLeft,
   ChevronRight,
   UserCircle,
+  X,
 } from 'lucide-react';
 
 // ─── Sub-components (consistent with upload/page.tsx) ───────────────────────────
@@ -414,8 +415,28 @@ export default function UpdateProfileClient({
   };
 
   const handleBackToList = () => {
+    if (isDirty) {
+      if (!confirm('You have unsaved changes. Are you sure you want to discard them?')) {
+        return;
+      }
+    }
     setSelectedId('');
     setSaveError(null);
+  };
+
+  const handleCancel = () => {
+    if (isDirty) {
+      if (!confirm('You have unsaved changes. Are you sure you want to discard them?')) {
+        return;
+      }
+    }
+    if (initialId) {
+      router.push(`/repository/${initialId}`);
+    } else {
+      setSelectedId('');
+      setSearchTerm('');
+      setSaveError(null);
+    }
   };
 
   return (
@@ -521,6 +542,14 @@ export default function UpdateProfileClient({
                   {saveError}
                 </p>
               )}
+              <button
+                type="button"
+                onClick={handleCancel}
+                className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-sans text-xs font-black uppercase tracking-wider px-5 py-2.5 rounded-xl border border-slate-200/80 active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+                <span>Cancel</span>
+              </button>
               <button
                 type="submit"
                 form="update-profile-form"
