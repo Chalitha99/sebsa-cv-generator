@@ -621,6 +621,19 @@ export default function UploadPage() {
               </div>
             </div>
 
+            {/* ── Objective ── */}
+            <div>
+              <FieldLabel>Objective / Professional Summary</FieldLabel>
+              <textarea
+                rows={3}
+                placeholder="A brief statement of career goals and what they bring to the role..."
+                value={profile.summary}
+                onChange={(e) => updateField('summary', e.target.value)}
+                disabled={status !== 'done'}
+                className={TEXTAREA_CLS}
+              />
+            </div>
+
             {/* ── Experience ── */}
             <div>
               <SectionTitle icon={Briefcase}>Work Experience</SectionTitle>

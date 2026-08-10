@@ -77,6 +77,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       department: payload.department,
       skills: payload.skills.length > 0 ? payload.skills : skillsFromExperience,
       currentPosition: payload.cvProfile.currentPosition,
+      summary: payload.cvProfile.summary,
       cvExperience: payload.cvProfile.experience,
       cvAcademic: payload.cvProfile.academic,
       specialProjects: payload.cvProfile.specialProjects,

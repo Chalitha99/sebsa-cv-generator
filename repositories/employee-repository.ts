@@ -19,7 +19,7 @@ const LIST_SELECT = `
 
 const DETAIL_SELECT = `
   ${LIST_SELECT},
-  education, status, pending_change, pending_change_submitted_at,
+  education, summary, status, pending_change, pending_change_submitted_at,
   experiences ( company, role_title, employment_type, start_date, end_date, is_current, description, display_order ),
   projects ( name, description, tags, display_order ),
   certifications ( name, issuer, issued_date )
@@ -110,6 +110,7 @@ export async function createEmployeeRow(
       status: input.selfServiceUserId ? 'draft' : 'published',
       user_id: input.selfServiceUserId ?? input.linkedUserId ?? null,
       education: educationJson,
+      summary: input.summary ?? null,
       avatar_url: input.avatarUrl ?? null,
       created_by: createdBy,
       updated_by: createdBy,
@@ -228,6 +229,7 @@ export async function updateEmployeeRow(
     role_title: input.currentPosition ?? input.role,
     department_id: dept?.id ?? null,
     education: educationJson,
+    summary: input.summary ?? null,
     updated_by: updatedBy,
     updated_at: new Date().toISOString(),
   };

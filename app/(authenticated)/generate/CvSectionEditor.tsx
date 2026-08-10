@@ -12,8 +12,9 @@ import {
   textareaCls,
 } from '@/app/components/CvEntrySections';
 
-// ── Summary (Generate-flow specific — TailoredCv.summary has no equivalent in the base
-//    CvProfile shape other flows edit, so this one section stays local rather than shared) ────
+// ── Summary (kept local rather than moved into the shared CvEntrySections — this is the
+//    AI-tailored version of the same profiles.summary/Objective field the other profile-editing
+//    forms write directly via ProfileFieldsEditor/upload/update-profile) ──────────────────────
 
 function SummarySection({
   summary,

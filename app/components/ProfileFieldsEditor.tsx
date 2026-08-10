@@ -10,12 +10,15 @@ import {
   EducationSection,
   CertificationsSection,
   inputCls,
+  textareaCls,
 } from '@/app/components/CvEntrySections';
 
 export interface ProfileFieldsValue {
   name: string;
   role: string;
   department: string;
+  /** Objective / professional summary — profiles.summary column. */
+  summary: string;
   skills: string[];
   experience: CvExperienceEntry[];
   academic: CvAcademicEntry[];
@@ -28,6 +31,7 @@ export function emptyProfileFieldsValue(defaults?: Partial<ProfileFieldsValue>):
     name: '',
     role: '',
     department: '',
+    summary: '',
     skills: [],
     experience: [],
     academic: [],
@@ -104,6 +108,16 @@ export default function ProfileFieldsEditor({ value, onChange, departments, name
               ))}
             </select>
           </div>
+        </div>
+        <div className="space-y-1">
+          <label className="text-[10px] font-bold text-slate-500 uppercase block">Objective / Professional Summary</label>
+          <textarea
+            rows={3}
+            value={value.summary}
+            onChange={(e) => patch({ summary: e.target.value })}
+            placeholder="A brief statement of your career goals and what you bring to the role..."
+            className={textareaCls}
+          />
         </div>
       </SectionCard>
 

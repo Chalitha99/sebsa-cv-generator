@@ -13,6 +13,7 @@ import type { CvExperienceEntry, CvAcademicEntry, CvProjectEntry, CvCertificatio
 export interface ProfileChangeSubmission {
   role: string;
   department: string;
+  summary: string;
   skills: string[];
   cvExperience: CvExperienceEntry[];
   cvAcademic: CvAcademicEntry[];
@@ -54,6 +55,7 @@ export async function proposeProfileChangeAction(change: ProfileChangeSubmission
     email: current.email as string,
     role: change.role,
     department: change.department,
+    summary: change.summary,
     skills: change.skills,
     currentPosition: change.role,
     cvExperience: change.cvExperience,

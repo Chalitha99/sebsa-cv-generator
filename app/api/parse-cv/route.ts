@@ -37,6 +37,10 @@ const CV_RESPONSE_SCHEMA = {
       type: Type.STRING,
       description: "Current or most recent job title",
     },
+    summary: {
+      type: Type.STRING,
+      description: "The candidate's own Objective/Summary/Profile statement, verbatim or lightly cleaned up, ONLY if the CV explicitly has one. Return an empty string if no such section exists — do not compose one.",
+    },
     experience: {
       type: Type.ARRAY,
       description: "Work experience entries",
@@ -94,7 +98,7 @@ const CV_RESPONSE_SCHEMA = {
       },
     },
   },
-  required: ['name', 'currentPosition', 'experience', 'academic', 'specialProjects', 'certifications'],
+  required: ['name', 'currentPosition', 'summary', 'experience', 'academic', 'specialProjects', 'certifications'],
 };
 
 export async function POST(req: NextRequest): Promise<NextResponse> {

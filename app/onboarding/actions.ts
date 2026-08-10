@@ -15,6 +15,7 @@ export interface OnboardingSubmission {
   department: string;
   skills: string[];
   currentPosition?: string;
+  summary?: string;
   cvExperience?: CreateEmployeeInput['cvExperience'];
   cvAcademic?: CreateEmployeeInput['cvAcademic'];
   specialProjects?: CreateEmployeeInput['specialProjects'];
@@ -148,6 +149,7 @@ export async function createOwnProfileAction(input: OnboardingSubmission): Promi
       department: input.department,
       skills: input.skills,
       currentPosition: input.currentPosition,
+      summary: input.summary,
       cvExperience: input.cvExperience,
       cvAcademic: input.cvAcademic,
       specialProjects: input.specialProjects,

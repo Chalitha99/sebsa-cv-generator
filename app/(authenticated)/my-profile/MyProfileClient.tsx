@@ -21,6 +21,7 @@ export default function MyProfileClient({ employee, departments }: MyProfileClie
     name: employee.name,
     role: employee.role,
     department: departments.some((d) => d.name === employee.department) ? employee.department : departments[0]?.name ?? '',
+    summary: employee.summary ?? '',
     skills: employee.skills,
     experience: employee.cvExperience ?? [],
     academic: employee.cvAcademic ?? [],
@@ -64,6 +65,7 @@ export default function MyProfileClient({ employee, departments }: MyProfileClie
       await proposeProfileChangeAction({
         role: value.role,
         department: value.department,
+        summary: value.summary,
         skills: value.skills,
         cvExperience: value.experience,
         cvAcademic: value.academic,
