@@ -388,3 +388,60 @@ Removed via `supabase/migrations/0022_remove_employee_code.sql`. Every touchpoin
   only ever used `employeeCode` for a cosmetic mono-text code shown to the employee — removed
   rather than replaced with a uuid, since a raw uuid isn't a meaningful thing to show a human;
   `findPendingClaimAction` now just returns `boolean` (does a pending claim exist).
+
+## 17. Real, persistent, role-specific notifications
+
+Replaces the entirely fake system that used to live in `app/context/DataContext.tsx`: four
+hardcoded placeholder entries (fictional names, never-real events), client-only `useState` that
+reset on every page refresh, and not shared across users — so a Reviewer in one browser tab had no
+way to know a CV Reviewer in another tab had just approved something. Only two places ever even
+called `addActivity` (the upload flow and the AI customize flow), and both were logging the
+*actor's own* action back to themselves, which isn't what a notification is for.
+
+**Schema** (`supabase/migrations/0024_notifications.sql`): a `notifications` table —
+`user_id, type, title, message, link, is_read, created_at`. Recipient-centric (who should *see*
+this), unlike the existing `audit_logs` table (actor-centric, "who *did* this" — itself still
+unused by any app code, left alone). RLS only grants `select`/`update` of a user's own rows; there
+is deliberately no insert policy for regular users — every insert happens server-side through the
+service-role admin client via `lib/notifications.ts`'s two helpers:
+
+- `notifyUser(adminClient, userId, payload)` — one specific recipient.
+- `notifyReviewers(adminClient, payload)` — every Super Admin and CV Reviewer, looked up from
+  `user_roles`.
+
+Both swallow and log their own failures rather than throwing — the same principle as
+`provisionEmployeeAccount`'s error handling (§14): a broken notification insert must never block
+or roll back the real action it's attached to.
+
+**Wired into every maker-checker event** (§10/§12) as both directions of each gate:
+
+| Event | Trigger | Notifies |
+|---|---|---|
+| New profile submitted | `createOwnProfileAction` (onboarding) | Reviewers |
+| Claim requested | `claimProfileAction` (onboarding) | Reviewers |
+| Change requested | `proposeProfileChangeAction` (my-profile) | Reviewers |
+| Profile approved / rejected | `approveNewProfileAction` / `rejectNewProfileAction` (review) | The employee |
+| Claim approved / rejected | `approveClaimAction` / `rejectClaimAction` (review) | The employee |
+| Change approved / rejected | `approveChangeAction` / `rejectChangeAction` (review) | The employee |
+| Account provisioned | `createEmployeeAction` (upload, §14) | The newly linked employee |
+
+For `rejectNewProfileAction`, the profile row is deleted — `user_id` is read *before* the delete,
+since there's nothing left to read from afterwards.
+
+**Read side** — `services/notification-service.ts` (`listNotifications`/`markNotificationRead`/
+`markAllNotificationsRead`) wrapped in `app/(authenticated)/notifications/actions.ts` (a
+`'use server'` actions-only folder, no `page.tsx` — same pattern as `update-profile/actions.ts`'s
+`getEmployeeDetailsAction`, not a route). Consumed in three places, all sharing one
+`app/components/NotificationList.tsx` row renderer:
+
+- **Header bell** (`app/components/Header.tsx`) — fetches on mount and again each time the
+  dropdown opens, shows an unread-count dot, "Mark all read", and a "View All" link to `/activity`.
+- **Dashboard** "Recent Notifications" panel — server-fetched (5 most recent) in
+  `dashboard/page.tsx`, passed down as a prop rather than an extra client round-trip.
+- **`/activity`** (the full log) — server-fetched (100 most recent). Unlike the old
+  Dashboard-only "system activity" panel, this is every user's *own* notification history, so it's
+  open to any authenticated user, not just Admin/Super Admin — an Employee receives
+  approval/rejection notifications just as much as a Reviewer receives "new submission" ones.
+
+Clicking a notification marks it read (optimistic local update, fire-and-forget server call) and
+navigates to its `link` if it has one.

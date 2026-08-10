@@ -2,7 +2,9 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { getCurrentUser } from '@/lib/auth';
+import { notifyReviewers } from '@/lib/notifications';
 import type { CreateEmployeeInput } from '@/types/domain';
 import type { CvExperienceEntry, CvAcademicEntry, CvProjectEntry, CvCertificationEntry } from '@/lib/cvTypes';
 
@@ -71,6 +73,13 @@ export async function proposeProfileChangeAction(change: ProfileChangeSubmission
     .eq('status', 'published');
 
   if (error) throw error;
+
+  await notifyReviewers(createAdminClient(), {
+    type: 'change_requested',
+    title: 'Profile update requested',
+    message: `${current.full_name} proposed changes to their profile.`,
+    link: '/review',
+  });
 
   revalidatePath(`/repository/${user.profileId}`);
   revalidatePath('/my-profile');

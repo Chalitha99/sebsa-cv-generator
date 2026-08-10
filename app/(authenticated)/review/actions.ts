@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getCurrentUser, isReviewerOrAbove, type CurrentUser } from '@/lib/auth';
 import { updateEmployee } from '@/services/employee-service';
+import { notifyUser } from '@/lib/notifications';
 import type { CreateEmployeeInput } from '@/types/domain';
 
 export type PendingItemType = 'new_profile' | 'claim' | 'change';
@@ -90,12 +91,29 @@ export async function listPendingItemsAction(): Promise<PendingItem[]> {
 export async function approveNewProfileAction(profileId: string): Promise<void> {
   await requireReviewer();
   const adminClient = createAdminClient();
+
+  const { data: row, error: fetchError } = await adminClient
+    .from('profiles')
+    .select('user_id')
+    .eq('id', profileId)
+    .single();
+  if (fetchError) throw fetchError;
+
   const { error } = await adminClient
     .from('profiles')
     .update({ status: 'published', updated_at: new Date().toISOString() })
     .eq('id', profileId)
     .eq('status', 'draft');
   if (error) throw error;
+
+  if (row.user_id) {
+    await notifyUser(adminClient, row.user_id, {
+      type: 'profile_approved',
+      title: 'Profile approved',
+      message: 'Your profile is now live in the company repository.',
+      link: `/repository/${profileId}`,
+    });
+  }
   revalidateAll();
 }
 
@@ -103,8 +121,26 @@ export async function approveNewProfileAction(profileId: string): Promise<void> 
 export async function rejectNewProfileAction(profileId: string): Promise<void> {
   await requireReviewer();
   const adminClient = createAdminClient();
+
+  // Fetched before the delete — there's no row left to read from afterwards.
+  const { data: row, error: fetchError } = await adminClient
+    .from('profiles')
+    .select('user_id')
+    .eq('id', profileId)
+    .single();
+  if (fetchError) throw fetchError;
+
   const { error } = await adminClient.from('profiles').delete().eq('id', profileId).eq('status', 'draft');
   if (error) throw error;
+
+  if (row.user_id) {
+    await notifyUser(adminClient, row.user_id, {
+      type: 'profile_rejected',
+      title: 'Profile rejected',
+      message: 'Your submitted profile was rejected. You can create a new one whenever you’re ready.',
+      link: '/onboarding',
+    });
+  }
   revalidateAll();
 }
 
@@ -131,17 +167,41 @@ export async function approveClaimAction(profileId: string): Promise<void> {
     .eq('id', profileId)
     .is('user_id', null);
   if (error) throw error;
+
+  await notifyUser(adminClient, row.pending_claim_user_id, {
+    type: 'claim_approved',
+    title: 'Account linked',
+    message: 'Your account is now linked to your profile.',
+    link: `/repository/${profileId}`,
+  });
   revalidateAll();
 }
 
 export async function rejectClaimAction(profileId: string): Promise<void> {
   await requireReviewer();
   const adminClient = createAdminClient();
+
+  const { data: row, error: fetchError } = await adminClient
+    .from('profiles')
+    .select('pending_claim_user_id')
+    .eq('id', profileId)
+    .single();
+  if (fetchError) throw fetchError;
+
   const { error } = await adminClient
     .from('profiles')
     .update({ pending_claim_user_id: null })
     .eq('id', profileId);
   if (error) throw error;
+
+  if (row.pending_claim_user_id) {
+    await notifyUser(adminClient, row.pending_claim_user_id, {
+      type: 'claim_rejected',
+      title: 'Account claim rejected',
+      message: 'Your request to link your account to that profile was rejected.',
+      link: '/onboarding',
+    });
+  }
   revalidateAll();
 }
 
@@ -158,7 +218,7 @@ export async function approveChangeAction(profileId: string): Promise<void> {
 
   const { data: row, error: fetchError } = await adminClient
     .from('profiles')
-    .select('pending_change')
+    .select('pending_change, user_id')
     .eq('id', profileId)
     .single();
   if (fetchError) throw fetchError;
@@ -172,16 +232,42 @@ export async function approveChangeAction(profileId: string): Promise<void> {
     .update({ pending_change: null, pending_change_submitted_at: null })
     .eq('id', profileId);
   if (error) throw error;
+
+  if (row.user_id) {
+    await notifyUser(adminClient, row.user_id, {
+      type: 'change_approved',
+      title: 'Profile changes approved',
+      message: 'Your proposed changes are now live on your profile.',
+      link: `/repository/${profileId}`,
+    });
+  }
   revalidateAll();
 }
 
 export async function rejectChangeAction(profileId: string): Promise<void> {
   await requireReviewer();
   const adminClient = createAdminClient();
+
+  const { data: row, error: fetchError } = await adminClient
+    .from('profiles')
+    .select('user_id')
+    .eq('id', profileId)
+    .single();
+  if (fetchError) throw fetchError;
+
   const { error } = await adminClient
     .from('profiles')
     .update({ pending_change: null, pending_change_submitted_at: null })
     .eq('id', profileId);
   if (error) throw error;
+
+  if (row.user_id) {
+    await notifyUser(adminClient, row.user_id, {
+      type: 'change_rejected',
+      title: 'Profile changes rejected',
+      message: 'Your proposed profile changes were rejected. Your live profile is unchanged.',
+      link: `/repository/${profileId}`,
+    });
+  }
   revalidateAll();
 }

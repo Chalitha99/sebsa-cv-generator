@@ -4,7 +4,6 @@ import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import CvPreviewTemplate from './CvPreviewTemplate';
 import CvSectionEditor from './CvSectionEditor';
 import { useSearchParams } from 'next/navigation';
-import { useData } from '../../context/DataContext';
 import { PageWrapper } from '../../components/PageWrapper';
 import type { Employee } from '@/types/domain';
 import type { TailoredCv } from './types';
@@ -46,7 +45,6 @@ export default function GenerateClient({ employees }: GenerateClientProps) {
 }
 
 function GeneratePageContent({ employees }: GenerateClientProps) {
-  const { addActivity } = useData();
   const searchParams = useSearchParams();
   const preselectedName = searchParams ? searchParams.get('name') : '';
 
@@ -115,14 +113,6 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
         [] // Always empty — fresh generation every time
       );
       setTailoredCv(tailored);
-
-      addActivity({
-        type: 'success',
-        title: 'Customized CV Generated',
-        desc: `AI tailored CV for ${selectedEmployee.name} aligned with ${customerName}.`,
-        status: '96% FIT',
-        user: { name: selectedEmployee.name, avatar: selectedEmployee.avatar },
-      });
     } catch (err) {
       setCustomizingError(
         err instanceof Error ? err.message : 'AI customization failed. Please check setup.'

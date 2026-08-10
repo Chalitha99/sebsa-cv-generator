@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { listEmployees } from '@/services/employee-service';
+import { listNotifications } from '@/services/notification-service';
 import { getCurrentUser } from '@/lib/auth';
 import DashboardClient from './DashboardClient';
 
@@ -15,11 +16,18 @@ export default async function DashboardPage() {
   if (user.role === 'cv_reviewer') redirect('/repository');
 
   const supabase = await createClient();
-  const [employees, countResult] = await Promise.all([
+  const [employees, countResult, notifications] = await Promise.all([
     listEmployees(supabase),
     supabase.from('generated_cvs').select('*', { count: 'exact', head: true }),
+    listNotifications(supabase, 5),
   ]);
   const generatedCvCount = countResult.count ?? 0;
 
-  return <DashboardClient employees={employees} generatedCvCount={generatedCvCount} />;
+  return (
+    <DashboardClient
+      employees={employees}
+      generatedCvCount={generatedCvCount}
+      initialNotifications={notifications}
+    />
+  );
 }

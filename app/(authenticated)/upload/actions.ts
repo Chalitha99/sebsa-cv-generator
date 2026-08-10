@@ -6,6 +6,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { createEmployee } from '@/services/employee-service';
 import { getCurrentUser, isReviewerOrAbove } from '@/lib/auth';
 import { provisionEmployeeAccount } from '@/lib/auth/provisionAccount';
+import { notifyUser } from '@/lib/notifications';
 import type { CreateEmployeeInput } from '@/types/domain';
 
 export interface CreateEmployeeResult {
@@ -102,6 +103,17 @@ export async function createEmployeeAction(input: CreateEmployeeInput): Promise<
   }
 
   const rowId = await createEmployee(adminClient, { ...input, linkedUserId }, user.id);
+
+  if (linkedUserId) {
+    await notifyUser(adminClient, linkedUserId, {
+      type: 'account_provisioned',
+      title: accountInvited ? 'Welcome to SEBSA-CV' : 'Profile linked to your account',
+      message: accountInvited
+        ? 'Your profile has been created — check your email to set up your account.'
+        : 'Your existing account has been linked to a new profile created by an Admin.',
+      link: `/repository/${rowId}`,
+    });
+  }
 
   revalidatePath('/repository');
   revalidatePath('/dashboard');
