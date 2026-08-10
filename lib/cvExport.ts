@@ -25,12 +25,32 @@ export async function exportToPdf(elementId: string, filename: string): Promise<
     import('jspdf'),
   ]);
 
-  const canvas = await html2canvas(element, {
-    scale: 2, // 2x for sharper output
-    useCORS: true,
-    logging: false,
-    backgroundColor: '#ffffff',
-  });
+  // The root element carries a decorative border/rounded-corner/box-shadow for the on-screen
+  // preview card (CvPreviewTemplate.tsx) — html2canvas screenshots it verbatim, so that border's
+  // bottom edge (plus the shadow underneath it) got baked into the exported image and showed up
+  // as a stray horizontal line wherever the content happened to end, including alone on an
+  // otherwise-blank trailing page. None of that chrome belongs in the exported document, so it's
+  // stripped from the live element for the duration of the capture and restored immediately after.
+  const previousBorder = element.style.border;
+  const previousBoxShadow = element.style.boxShadow;
+  const previousBorderRadius = element.style.borderRadius;
+  element.style.border = 'none';
+  element.style.boxShadow = 'none';
+  element.style.borderRadius = '0';
+
+  let canvas: HTMLCanvasElement;
+  try {
+    canvas = await html2canvas(element, {
+      scale: 2, // 2x for sharper output
+      useCORS: true,
+      logging: false,
+      backgroundColor: '#ffffff',
+    });
+  } finally {
+    element.style.border = previousBorder;
+    element.style.boxShadow = previousBoxShadow;
+    element.style.borderRadius = previousBorderRadius;
+  }
 
   const imgData = canvas.toDataURL('image/jpeg', 0.95);
 
@@ -45,16 +65,15 @@ export async function exportToPdf(elementId: string, filename: string): Promise<
   let yOffset = 0;
   let remaining = imgH;
 
-  // Multi-page support: slice the canvas image across A4 pages. Skip adding a trailing page for
-  // a small leftover sliver — the template always has generous bottom padding/margin (32px outer
-  // padding + 22px section spacing), so a small remainder past a full page is virtually always
-  // blank whitespace, not real content. Without this threshold, content whose height landed just
-  // over a page boundary produced a near-empty final page with just a thin strip bleeding onto
-  // it ("a line at the end").
-  const MIN_TRAILING_CONTENT_MM = 15;
+  // Multi-page support: slice the canvas image across A4 pages. A small leftover sliver past a
+  // full page (the template's own bottom padding/margins rounding up just past 297mm) doesn't get
+  // its own near-blank trailing page — the template always has enough bottom whitespace (32px
+  // outer padding + 22px section spacing) that anything this small is never real content.
+  const MIN_TRAILING_CONTENT_MM = 40;
 
   while (remaining > 0) {
     pdf.addImage(imgData, 'JPEG', 0, yOffset > 0 ? -yOffset : 0, pdfW, imgH);
+
     remaining -= pdfH;
     if (remaining > MIN_TRAILING_CONTENT_MM) {
       pdf.addPage();

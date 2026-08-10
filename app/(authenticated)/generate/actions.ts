@@ -199,7 +199,7 @@ export async function getSavedGeneratedCvAction(
   profileId: string
 ): Promise<Record<string, any> | null> {
   const supabase = await createClient();
-  return getSavedGeneratedCv(supabase, profileId, null);
+  return getSavedGeneratedCv(supabase, profileId);
 }
 
 export async function saveGeneratedCvAction(
@@ -212,7 +212,6 @@ export async function saveGeneratedCvAction(
   const adminClient = createAdminClient();
   await saveGeneratedCv(adminClient, {
     profileId,
-    templateId: null,
     content,
     userId: user.id,
   });

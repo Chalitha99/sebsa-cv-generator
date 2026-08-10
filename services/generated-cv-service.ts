@@ -7,10 +7,9 @@ import {
 
 export async function getSavedGeneratedCv(
   supabase: SupabaseClient,
-  profileId: string,
-  templateId: string | null
+  profileId: string
 ): Promise<Record<string, any> | null> {
-  const row = await getLatestGeneratedCvRow(supabase, profileId, templateId);
+  const row = await getLatestGeneratedCvRow(supabase, profileId);
   return row ? row.content : null;
 }
 
@@ -18,12 +17,11 @@ export async function saveGeneratedCv(
   supabase: SupabaseClient,
   params: {
     profileId: string;
-    templateId: string | null;
     content: Record<string, any>;
     userId: string;
   }
 ): Promise<void> {
-  const existing = await getLatestGeneratedCvRow(supabase, params.profileId, params.templateId);
+  const existing = await getLatestGeneratedCvRow(supabase, params.profileId);
 
   if (existing) {
     await updateGeneratedCvRow(
@@ -35,14 +33,10 @@ export async function saveGeneratedCv(
   } else {
     await insertGeneratedCvRow(supabase, {
       profile_id: params.profileId,
-      template_id: params.templateId,
-      opportunity_id: null,
       status: 'draft',
       content: params.content,
-      ai_highlights: {},
       ai_provider: 'gemini',
       ai_model: 'gemini-3-flash-preview',
-      parent_generated_cv_id: null,
       created_by: params.userId,
       updated_by: params.userId,
     });
