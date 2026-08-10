@@ -12,7 +12,7 @@ import type { CvExperienceEntry, CvAcademicEntry, CvProjectEntry, CvCertificatio
  */
 
 const LIST_SELECT = `
-  id, full_name, email, role_title, specialty, location, years_experience,
+  id, full_name, email, role_title, years_experience,
   avatar_url, updated_at, user_id,
   departments ( name )
 `;
@@ -21,7 +21,7 @@ const DETAIL_SELECT = `
   ${LIST_SELECT},
   education, summary, status, pending_change, pending_change_submitted_at,
   experiences ( company, role_title, employment_type, start_date, end_date, is_current, description, display_order ),
-  projects ( name, description, tags, display_order ),
+  projects ( name, description, display_order ),
   certifications ( name, issuer, issued_date )
 `;
 
@@ -175,7 +175,6 @@ async function insertProjects(
     profile_id: profileId,
     name: p.title,
     description: p.brief,
-    tags: [],
     display_order: i,
   }));
 

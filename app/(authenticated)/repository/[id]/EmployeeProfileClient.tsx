@@ -103,12 +103,10 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
     {
       name: 'Project Delta-Prime',
       desc: 'Re-engineering product structure with serverless technologies.',
-      tags: [],
     },
     {
       name: 'Hyperion core analytics',
       desc: 'AI-driven data query model built on Python databases.',
-      tags: ['AI/ML', 'PYTHON'],
     },
   ];
 
@@ -207,12 +205,7 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
                     {employee.name}
                   </h3>
                 </div>
-                <p className="text-sm font-bold text-slate-700 mt-1">
-                  {employee.role}{' '}
-                  {employee.specialty && (
-                    <span className="text-slate-400 font-medium">| {employee.specialty}</span>
-                  )}
-                </p>
+                <p className="text-sm font-bold text-slate-700 mt-1">{employee.role}</p>
 
                 <div className="flex flex-wrap gap-y-2 gap-x-4 mt-3 text-slate-500 font-sans text-xs">
                   <div className="flex items-center gap-1.5">

@@ -3,11 +3,19 @@
 import { revalidatePath } from 'next/cache';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getCurrentUser, isReviewerOrAbove, type CurrentUser } from '@/lib/auth';
-import { updateEmployee } from '@/services/employee-service';
+import { updateEmployee, getEmployeeById } from '@/services/employee-service';
 import { notifyUser } from '@/lib/notifications';
-import type { CreateEmployeeInput } from '@/types/domain';
+import type { CreateEmployeeInput, Employee } from '@/types/domain';
 
 export type PendingItemType = 'new_profile' | 'claim' | 'change';
+
+export interface ProfileFieldDiff {
+  field: string;
+  /** Only set for simple scalar fields (Role, Department, Objective) — list-shaped fields
+   *  (Experience, Education, etc.) just say whether they changed, not a full entry-by-entry diff. */
+  before?: string;
+  after?: string;
+}
 
 export interface PendingItem {
   profileId: string;
@@ -16,6 +24,58 @@ export interface PendingItem {
   type: PendingItemType;
   submittedAt: string;
   proposedChange?: CreateEmployeeInput;
+  /** Only populated for type 'change' — which fields actually differ from the live profile. */
+  changedFields?: ProfileFieldDiff[];
+}
+
+/** Compares the live profile against a proposed change and returns only the fields that
+ *  actually differ — list-shaped fields (experience/academic/etc.) are compared as whole
+ *  arrays (deep equality) since a full per-entry diff isn't worth the complexity here. */
+function computeChangedFields(current: Employee, proposed: CreateEmployeeInput): ProfileFieldDiff[] {
+  const diffs: ProfileFieldDiff[] = [];
+
+  const currentRole = current.currentPosition || current.role || '';
+  const proposedRole = proposed.currentPosition || proposed.role || '';
+  if (currentRole !== proposedRole) {
+    diffs.push({ field: 'Role', before: currentRole || '—', after: proposedRole || '—' });
+  }
+
+  if ((current.department || '') !== (proposed.department || '')) {
+    diffs.push({ field: 'Department', before: current.department || '—', after: proposed.department || '—' });
+  }
+
+  if ((current.summary ?? '') !== (proposed.summary ?? '')) {
+    diffs.push({
+      field: 'Objective',
+      before: current.summary || '(none)',
+      after: proposed.summary || '(none)',
+    });
+  }
+
+  const listField = (
+    label: string,
+    currentList: unknown[] | undefined,
+    proposedList: unknown[] | undefined
+  ) => {
+    const before = currentList ?? [];
+    const after = proposedList ?? [];
+    if (JSON.stringify(before) !== JSON.stringify(after)) {
+      diffs.push({ field: label, before: `${before.length} entries`, after: `${after.length} entries` });
+    }
+  };
+
+  listField('Work Experience', current.cvExperience, proposed.cvExperience);
+  listField('Education', current.cvAcademic, proposed.cvAcademic);
+  listField('Special Projects', current.specialProjects, proposed.specialProjects);
+  listField('Certifications', current.cvCertifications, proposed.cvCertifications);
+
+  // Proposed only ever carries a new avatarUrl when the employee actually replaced their photo
+  // (ProfileChangeSubmission's doc comment) — no need to compare signed URLs, presence is enough.
+  if (proposed.avatarUrl) {
+    diffs.push({ field: 'Photo' });
+  }
+
+  return diffs;
 }
 
 async function requireReviewer(): Promise<CurrentUser> {
@@ -73,13 +133,25 @@ export async function listPendingItemsAction(): Promise<PendingItem[]> {
       });
     }
     if (row.pending_change) {
+      const proposedChange = row.pending_change as CreateEmployeeInput;
+      // Fetch the live profile to diff against — one extra query per pending change, which is
+      // fine at review-queue scale (a handful of items at a time, not a paginated list).
+      let changedFields: ProfileFieldDiff[] | undefined;
+      try {
+        const current = await getEmployeeById(adminClient, row.id);
+        if (current) changedFields = computeChangedFields(current, proposedChange);
+      } catch (err) {
+        console.error(`Failed to diff pending change for profile ${row.id}:`, err);
+      }
+
       items.push({
         profileId: row.id,
         name: row.full_name,
         email: row.email,
         type: 'change',
         submittedAt: row.pending_change_submitted_at ?? row.created_at,
-        proposedChange: row.pending_change as CreateEmployeeInput,
+        proposedChange,
+        changedFields,
       });
     }
   }
@@ -218,7 +290,7 @@ export async function approveChangeAction(profileId: string): Promise<void> {
 
   const { data: row, error: fetchError } = await adminClient
     .from('profiles')
-    .select('pending_change, user_id')
+    .select('pending_change, user_id, full_name')
     .eq('id', profileId)
     .single();
   if (fetchError) throw fetchError;
@@ -241,16 +313,24 @@ export async function approveChangeAction(profileId: string): Promise<void> {
       link: `/repository/${profileId}`,
     });
   }
+  // Log the action back to the reviewer's own feed too — previously only the submitting employee
+  // got a resulting notification, so the admin who approved it had no record it had gone through.
+  await notifyUser(adminClient, user.id, {
+    type: 'change_approved',
+    title: 'Profile changes approved',
+    message: `You approved ${row.full_name}'s proposed profile changes.`,
+    link: `/repository/${profileId}`,
+  });
   revalidateAll();
 }
 
 export async function rejectChangeAction(profileId: string): Promise<void> {
-  await requireReviewer();
+  const user = await requireReviewer();
   const adminClient = createAdminClient();
 
   const { data: row, error: fetchError } = await adminClient
     .from('profiles')
-    .select('user_id')
+    .select('user_id, full_name')
     .eq('id', profileId)
     .single();
   if (fetchError) throw fetchError;
@@ -269,5 +349,11 @@ export async function rejectChangeAction(profileId: string): Promise<void> {
       link: `/repository/${profileId}`,
     });
   }
+  await notifyUser(adminClient, user.id, {
+    type: 'change_rejected',
+    title: 'Profile changes rejected',
+    message: `You rejected ${row.full_name}'s proposed profile changes.`,
+    link: `/repository/${profileId}`,
+  });
   revalidateAll();
 }

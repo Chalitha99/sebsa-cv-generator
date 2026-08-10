@@ -150,19 +150,27 @@ export default function ReviewClient({ initialItems }: ReviewClientProps) {
                         {meta.label}
                       </span>
                     </div>
-                    {item.type === 'change' && item.proposedChange && (
-                      <>
-                        <p className="text-[11px] text-slate-500 mt-1.5">
-                          Proposed: <span className="font-semibold text-slate-700">{item.proposedChange.role}</span> ·{' '}
-                          {item.proposedChange.department}
-                        </p>
-                        <p className="text-[10px] text-slate-400 mt-1">
-                          {item.proposedChange.cvExperience?.length ?? 0} experience ·{' '}
-                          {item.proposedChange.cvAcademic?.length ?? 0} education ·{' '}
-                          {item.proposedChange.specialProjects?.length ?? 0} projects ·{' '}
-                          {item.proposedChange.cvCertifications?.length ?? 0} certifications
-                        </p>
-                      </>
+                    {item.type === 'change' && (
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {item.changedFields === undefined ? (
+                          <span className="text-[11px] text-slate-400">Could not load what changed.</span>
+                        ) : item.changedFields.length === 0 ? (
+                          <span className="text-[11px] text-slate-400">No detectable field changes.</span>
+                        ) : (
+                          item.changedFields.map((diff) => (
+                            <span
+                              key={diff.field}
+                              title={diff.before && diff.after ? `${diff.before} → ${diff.after}` : undefined}
+                              className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full"
+                            >
+                              {diff.field}
+                              {diff.before && diff.after && (
+                                <span className="font-medium text-amber-600"> · {diff.before} → {diff.after}</span>
+                              )}
+                            </span>
+                          ))
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>

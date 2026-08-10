@@ -27,8 +27,6 @@ function mapListRow(row: any): Employee {
     name: row.full_name,
     email: row.email,
     role: row.role_title ?? '',
-    specialty: row.specialty ?? undefined,
-    location: row.location ?? undefined,
     experienceYears:
       row.years_experience != null ? `${row.years_experience}+ Years Experience` : undefined,
     department: row.departments?.name ?? 'Unassigned',
@@ -115,7 +113,7 @@ export async function getEmployeeById(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .sort((a: any, b: any) => a.display_order - b.display_order)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .map((p: any) => ({ name: p.name, desc: p.description ?? '', tags: p.tags ?? [] }));
+    .map((p: any) => ({ name: p.name, desc: p.description ?? '' }));
 
   // ── Structured special projects mapping ───────────────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

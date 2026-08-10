@@ -30,7 +30,6 @@ export interface EmployeeExperience {
 export interface EmployeeProject {
   name: string;
   desc: string;
-  tags: string[];
 }
 
 // Re-export CV types for convenience in service / repository layers
@@ -41,8 +40,6 @@ export interface Employee {
   name: string;
   email: string;
   role: string;
-  specialty?: string;
-  location?: string;
   experienceYears?: string;
   department: string;
   skills: string[];

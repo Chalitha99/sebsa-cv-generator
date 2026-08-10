@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { CurrentUser } from '@/lib/auth';
 import { NotificationList } from './NotificationList';
 import {
@@ -29,6 +29,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const notificationRef = useRef<HTMLDivElement>(null);
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
 
@@ -46,6 +47,20 @@ export const Header: React.FC<HeaderProps> = ({
   useEffect(() => {
     loadNotifications();
   }, []);
+
+  // Close the dropdown on any click outside it, not just on a second bell click.
+  useEffect(() => {
+    if (!showNotificationDropdown) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (notificationRef.current && !notificationRef.current.contains(e.target as Node)) {
+        setShowNotificationDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showNotificationDropdown]);
 
   const handleToggleDropdown = () => {
     const opening = !showNotificationDropdown;
@@ -90,7 +105,7 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Action Utilities */}
       <div className="flex items-center gap-5">
         {/* Notifications Icon */}
-        <div className="relative">
+        <div className="relative" ref={notificationRef}>
           <button
             onClick={handleToggleDropdown}
             className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-full transition-all duration-300 relative"
