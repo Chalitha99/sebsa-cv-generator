@@ -20,7 +20,7 @@ export const cvTemplateSource = `
     <tr>
       <td style="width: 100px; vertical-align: top;">
         {{#if avatar}}
-        <img src="{{avatar}}" alt="{{name}}" style="width: 85px; height: 105px; border-radius: 6px; border: 2px solid #8FD3E8; object-fit: cover; display: block;" />
+        <div style="width: 85px; height: 105px; border-radius: 6px; background-image: url('{{avatar}}'); background-size: cover; background-position: center; background-repeat: no-repeat; display: block;"></div>
         {{else}}
         <div style="width: 85px; height: 105px; border-radius: 6px; border: 2px solid #E2E8F0; background-color: #F7FAFC;"></div>
         {{/if}}
@@ -35,7 +35,6 @@ export const cvTemplateSource = `
       </td>
     </tr>
   </table>
-  <div style="height: 3px; background-color: #481484; margin-bottom: 20px; border-radius: 2px;"></div>
 
   <!-- Two-column body -->
   <table style="width: 100%; border-collapse: collapse;">
@@ -44,14 +43,14 @@ export const cvTemplateSource = `
       <td style="width: 34%; vertical-align: top; padding-right: 18px;">
         {{#if summary}}
         <div style="margin-bottom: 22px;">
-          <div style="display: block; width: 100%; box-sizing: border-box; background: linear-gradient(to right, #7650E1, #4E1C90); color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; padding: 6px 16px; border-radius: 10px 0 10px 0; margin-bottom: 10px;">Objective</div>
+          <div style="display: flex; align-items: center; width: 100%; box-sizing: border-box; background: linear-gradient(to right, #7650E1, #4E1C90); color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; padding: 0px 0px 12px 16px; line-height: 1; height: 30px; border-radius: 10px 0 10px 0; margin-bottom: 10px;">Objective</div>
           <p style="font-size: 12px; margin: 0; color: #404040; text-align: justify;">{{summary}}</p>
         </div>
         {{/if}}
 
         {{#if academic}}
         <div style="margin-bottom: 22px;">
-          <div style="display: block; width: 100%; box-sizing: border-box; background: linear-gradient(to right, #7650E1, #4E1C90); color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; padding: 6px 16px; border-radius: 10px 0 10px 0; margin-bottom: 10px;">Academic</div>
+          <div style="display: flex; align-items: center; width: 100%; box-sizing: border-box; background: linear-gradient(to right, #7650E1, #4E1C90); color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; padding: 0px 0px 12px 16px; line-height: 1; height: 30px; border-radius: 10px 0 10px 0; margin-bottom: 10px;">Academic</div>
           {{#each academic}}
           <div style="margin-bottom: 12px;">
             <p style="font-size: 12.5px; font-weight: 700; color: #262626; margin: 0;">{{qualification}}</p>
@@ -59,21 +58,30 @@ export const cvTemplateSource = `
           </div>
           {{/each}}
 
-          {{#if certifications}}
-          <p style="font-size: 10.5px; font-weight: 700; color: #4E1C90; text-transform: uppercase; letter-spacing: 0.5px; margin: 14px 0 8px 0;">Certifications</p>
           {{#each certifications}}
-          <div style="margin-bottom: 10px;">
-            <p style="font-size: 12px; font-weight: 700; color: #262626; margin: 0;">{{name}}</p>
-            <p style="font-size: 11px; color: #7F7F7F; margin: 2px 0 0 0;">{{issuer}}{{#if year}} — {{year}}{{/if}}</p>
+          <div style="margin-bottom: 12px;">
+            <p style="font-size: 12.5px; font-weight: 700; color: #262626; margin: 0;">{{name}}</p>
+            <p style="font-size: 11.5px; color: #7F7F7F; margin: 2px 0 0 0;">{{issuer}}{{#if year}} ({{year}}){{/if}}</p>
           </div>
           {{/each}}
-          {{/if}}
         </div>
+        {{else}}
+          {{#if certifications}}
+          <div style="margin-bottom: 22px;">
+            <div style="display: flex; align-items: center; width: 100%; box-sizing: border-box; background: linear-gradient(to right, #7650E1, #4E1C90); color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; padding: 0px 0px 12px 16px; line-height: 1; height: 30px; border-radius: 10px 0 10px 0; margin-bottom: 10px;">Academic</div>
+            {{#each certifications}}
+            <div style="margin-bottom: 12px;">
+              <p style="font-size: 12.5px; font-weight: 700; color: #262626; margin: 0;">{{name}}</p>
+              <p style="font-size: 11.5px; color: #7F7F7F; margin: 2px 0 0 0;">{{issuer}}{{#if year}} ({{year}}){{/if}}</p>
+            </div>
+            {{/each}}
+          </div>
+          {{/if}}
         {{/if}}
 
         {{#if skillsAligned}}
         <div style="margin-bottom: 22px;">
-          <div style="display: block; width: 100%; box-sizing: border-box; background: linear-gradient(to right, #7650E1, #4E1C90); color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; padding: 6px 16px; border-radius: 10px 0 10px 0; margin-bottom: 10px;">Skills</div>
+          <div style="display: flex; align-items: center; width: 100%; box-sizing: border-box; background: linear-gradient(to right, #7650E1, #4E1C90); color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; padding: 0px 0px 12px 16px; line-height: 1; height: 30px; border-radius: 10px 0 10px 0; margin-bottom: 10px;">Skills</div>
           <div style="font-size: 11.5px; color: #404040; line-height: 2;">
             {{#each skillsAligned}}
               <span style="display: inline-block; background-color: #F3EEFC; color: #4E1C90; padding: 3px 9px; margin: 0 4px 4px 0; border-radius: 4px; font-weight: 600;">{{this}}</span>
@@ -87,7 +95,7 @@ export const cvTemplateSource = `
       <td style="width: 66%; vertical-align: top; padding-left: 18px;">
         {{#if experience}}
         <div style="margin-bottom: 22px;">
-          <div style="display: block; width: 100%; box-sizing: border-box; background: linear-gradient(to right, #7650E1, #4E1C90); color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; padding: 6px 16px; border-radius: 10px 0 10px 0; margin-bottom: 12px;">Experience</div>
+          <div style="display: flex; align-items: center; width: 100%; box-sizing: border-box; background: linear-gradient(to right, #7650E1, #4E1C90); color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; padding: 0px 0px 12px 16px; line-height: 1; height: 30px; border-radius: 10px 0 10px 0; margin-bottom: 12px;">Experience</div>
           {{#each experience}}
           <div style="margin-bottom: 14px;">
             <p style="font-size: 13px; margin: 0 0 4px 0;">
@@ -95,11 +103,14 @@ export const cvTemplateSource = `
               <span style="font-weight: 600; color: #7F7F7F; font-style: italic;"> ({{period}})</span>
             </p>
             {{#if tasks}}
-            <ul style="margin: 0; padding-left: 18px; font-size: 12px; color: #404040; list-style: disc; list-style-position: outside;">
+            <table style="width: 100%; border-collapse: collapse; margin-top: 4px;">
               {{#each tasks}}
-              <li style="margin-bottom: 3px; text-align: justify;">{{this}}</li>
+              <tr>
+                <td style="width: 12px; vertical-align: top; font-size: 12px; color: #404040; line-height: 1.55; padding: 0;">•</td>
+                <td style="vertical-align: top; font-size: 12px; color: #404040; line-height: 1.55; padding: 0 0 3px 0; text-align: justify;">{{this}}</td>
+              </tr>
               {{/each}}
-            </ul>
+            </table>
             {{/if}}
           </div>
           {{/each}}
@@ -108,14 +119,17 @@ export const cvTemplateSource = `
 
         {{#if specialProjects}}
         <div style="margin-bottom: 22px;">
-          <div style="display: block; width: 100%; box-sizing: border-box; background: linear-gradient(to right, #7650E1, #4E1C90); color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; padding: 6px 16px; border-radius: 10px 0 10px 0; margin-bottom: 12px;">Special Projects</div>
-          <ul style="margin: 0; padding-left: 18px; font-size: 12px; color: #404040; list-style: disc; list-style-position: outside;">
+          <div style="display: flex; align-items: center; width: 100%; box-sizing: border-box; background: linear-gradient(to right, #7650E1, #4E1C90); color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; padding: 0px 0px 12px 16px; line-height: 1; height: 30px; border-radius: 10px 0 10px 0; margin-bottom: 12px;">Special Projects</div>
+          <table style="width: 100%; border-collapse: collapse; margin-top: 4px;">
             {{#each specialProjects}}
-            <li style="margin-bottom: 10px; text-align: justify;">
-              <span style="font-weight: 700; color: #262626;">{{title}}</span> - {{brief}}
-            </li>
+            <tr>
+              <td style="width: 12px; vertical-align: top; font-size: 12px; color: #404040; line-height: 1.55; padding: 0;">•</td>
+              <td style="vertical-align: top; font-size: 12px; color: #404040; line-height: 1.55; padding: 0 0 10px 0; text-align: justify;">
+                <span style="font-weight: 700; color: #262626;">{{title}}</span> - {{brief}}
+              </td>
+            </tr>
             {{/each}}
-          </ul>
+          </table>
         </div>
         {{/if}}
       </td>
