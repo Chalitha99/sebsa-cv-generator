@@ -68,6 +68,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
   // ── Save state ──────────────────────────────────────────────────────────────
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isHumanVerified, setIsHumanVerified] = useState(false);
 
   // ── Derived ─────────────────────────────────────────────────────────────────
   const selectedEmployee = useMemo(
@@ -102,6 +103,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
     setCustomizingError(null);
     setSaveSuccess(false);
     setTailoredCv(null);
+    setIsHumanVerified(false);
     setWizardStep(2);
 
     try {
@@ -420,11 +422,28 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                     Actions
                   </h4>
 
-                  {/* Apply to Template & Preview — also auto-saves */}
+                  {/* Human Verified checkbox */}
+                  <div className="flex items-center gap-2 py-1">
+                    <input
+                      id="generate-human-verified-checkbox"
+                      type="checkbox"
+                      checked={isHumanVerified}
+                      onChange={(e) => setIsHumanVerified(e.target.checked)}
+                      className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20 cursor-pointer"
+                    />
+                    <label
+                      htmlFor="generate-human-verified-checkbox"
+                      className="text-xs font-bold text-slate-600 select-none cursor-pointer"
+                    >
+                      Human Verified
+                    </label>
+                  </div>
+
+                  {/* Apply to CV — also auto-saves */}
                   <button
                     type="button"
                     onClick={handleGoToPreview}
-                    disabled={saving}
+                    disabled={saving || !isHumanVerified}
                     className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-xl text-xs font-black uppercase tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                   >
                     {saving ? (
@@ -439,7 +458,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                       </>
                     ) : (
                       <>
-                        <span>Apply to Template</span>
+                        <span>Apply to CV</span>
                         <ChevronRight className="w-3.5 h-3.5" />
                       </>
                     )}

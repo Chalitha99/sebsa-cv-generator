@@ -169,6 +169,11 @@ export default function UpdateProfileClient({
   // Save states
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Parsed CV state for verification
+  const [parsedCv, setParsedCv] = useState<CvProfile | null>(null);
+  const [isHumanVerified, setIsHumanVerified] = useState<boolean>(false);
 
   // Snapshot of {profile, email, department} as-loaded, so the Save button can stay disabled
   // until the Admin actually changes something rather than being enabled by default.
@@ -178,6 +183,10 @@ export default function UpdateProfileClient({
 
   // Load selected employee details
   useEffect(() => {
+    setSuccessMessage(null);
+    setParsedCv(null);
+    setIsHumanVerified(false);
+
     if (!selectedId) {
       setActiveProfile(null);
       setProfile(emptyCvProfile());
@@ -235,6 +244,9 @@ export default function UpdateProfileClient({
     setCvDroppedFile({ name: file.name, size: sizeStr });
     setCvStatus('extracting');
     setCvErrorMsg(null);
+    setSuccessMessage(null);
+    setParsedCv(null);
+    setIsHumanVerified(false);
 
     let rawText: string;
     try {
@@ -261,7 +273,8 @@ export default function UpdateProfileClient({
       }
 
       const parsed = (await res.json()) as CvProfile;
-      setProfile(parsed);
+      setParsedCv(parsed);
+      setIsHumanVerified(false);
       setCvStatus('done');
     } catch (err) {
       console.error('CV parsing failed:', err);
@@ -269,6 +282,15 @@ export default function UpdateProfileClient({
       setCvErrorMsg(err instanceof Error ? err.message : 'AI parsing failed. Please try again.');
     }
   }, []);
+
+  const handleApplyCv = useCallback(() => {
+    if (!parsedCv) return;
+    setProfile(parsedCv);
+    setSuccessMessage(null);
+    setSaveError(null);
+    setParsedCv(null);
+    setIsHumanVerified(false);
+  }, [parsedCv]);
 
   const handleCvDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -382,6 +404,7 @@ export default function UpdateProfileClient({
     if (!activeProfile) return;
 
     setSaveError(null);
+    setSuccessMessage(null);
     setIsSaving(true);
 
     try {
@@ -408,7 +431,31 @@ export default function UpdateProfileClient({
       };
 
       await updateEmployeeAction(activeProfile.rowId, input);
-      router.push('/repository');
+      setSuccessMessage('Profile successfully updated.');
+
+      // Refresh form with the newly saved details silently
+      const detailedEmp = await getEmployeeDetailsAction(selectedId);
+      if (detailedEmp) {
+        setActiveProfile(detailedEmp);
+        const loadedProfile: CvProfile = {
+          name: detailedEmp.name,
+          currentPosition: detailedEmp.role,
+          summary: detailedEmp.summary ?? '',
+          experience: detailedEmp.cvExperience || [],
+          academic: detailedEmp.cvAcademic || [],
+          specialProjects: detailedEmp.specialProjects || [],
+          certifications: detailedEmp.cvCertifications || [],
+        };
+        setProfile(loadedProfile);
+        setEmail(detailedEmp.email);
+        setDepartment(detailedEmp.department);
+        setProfileImagePreview(detailedEmp.avatar);
+        setProfileImageFile(null); // Keep null to flag no changes yet
+        setInitialSnapshot(
+          JSON.stringify({ profile: loadedProfile, email: detailedEmp.email, department: detailedEmp.department })
+        );
+      }
+      setIsSaving(false);
       router.refresh();
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to update employee profile.');
@@ -424,20 +471,47 @@ export default function UpdateProfileClient({
     }
     setSelectedId('');
     setSaveError(null);
+    setSuccessMessage(null);
   };
 
-  const handleCancel = () => {
+  const handleCancel = async () => {
     if (isDirty) {
       if (!confirm('You have unsaved changes. Are you sure you want to discard them?')) {
         return;
       }
     }
-    if (initialId) {
-      router.push(`/repository/${initialId}`);
-    } else {
-      setSelectedId('');
-      setSearchTerm('');
-      setSaveError(null);
+    setSaveError(null);
+    setSuccessMessage(null);
+    setParsedCv(null);
+    setIsHumanVerified(false);
+
+    try {
+      setLoadingProfile(true);
+      const detailedEmp = await getEmployeeDetailsAction(selectedId);
+      if (detailedEmp) {
+        setActiveProfile(detailedEmp);
+        const loadedProfile: CvProfile = {
+          name: detailedEmp.name,
+          currentPosition: detailedEmp.role,
+          summary: detailedEmp.summary ?? '',
+          experience: detailedEmp.cvExperience || [],
+          academic: detailedEmp.cvAcademic || [],
+          specialProjects: detailedEmp.specialProjects || [],
+          certifications: detailedEmp.cvCertifications || [],
+        };
+        setProfile(loadedProfile);
+        setEmail(detailedEmp.email);
+        setDepartment(detailedEmp.department);
+        setProfileImagePreview(detailedEmp.avatar);
+        setProfileImageFile(null);
+        setInitialSnapshot(
+          JSON.stringify({ profile: loadedProfile, email: detailedEmp.email, department: detailedEmp.department })
+        );
+      }
+    } catch (err) {
+      console.error('Failed to revert profile changes:', err);
+    } finally {
+      setLoadingProfile(false);
     }
   };
 
@@ -542,6 +616,12 @@ export default function UpdateProfileClient({
               {saveError && (
                 <p className="text-[11px] font-semibold text-rose-600 max-w-[240px] truncate" title={saveError}>
                   {saveError}
+                </p>
+              )}
+              {successMessage && (
+                <p className="text-[11px] font-semibold text-emerald-600 max-w-[240px] truncate flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  {successMessage}
                 </p>
               )}
               <button
@@ -701,6 +781,30 @@ export default function UpdateProfileClient({
                   </span>
                 </div>
               )}
+
+              {cvStatus === 'done' && parsedCv && (
+                <div className="mt-4 p-3 border border-slate-200 rounded-xl bg-indigo-50/20 flex flex-col gap-3">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      id="human-verified-checkbox"
+                      type="checkbox"
+                      checked={isHumanVerified}
+                      onChange={(e) => setIsHumanVerified(e.target.checked)}
+                      className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20 cursor-pointer"
+                    />
+                    <span className="text-xs font-bold text-slate-700">Human Verified</span>
+                  </label>
+                  <button
+                    type="button"
+                    disabled={!isHumanVerified}
+                    onClick={handleApplyCv}
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-sans text-xs font-black uppercase tracking-wider py-2 px-4 rounded-lg shadow-md shadow-indigo-600/10 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-sky-200" />
+                    <span>Apply to CV</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -748,7 +852,11 @@ export default function UpdateProfileClient({
                     required
                     placeholder="e.g. s.chen@corp.com"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setSuccessMessage(null);
+                      setSaveError(null);
+                      setEmail(e.target.value);
+                    }}
                     className={INPUT_CLS}
                   />
                 </div>
@@ -756,7 +864,11 @@ export default function UpdateProfileClient({
                   <FieldLabel>Department</FieldLabel>
                   <select
                     value={department}
-                    onChange={(e) => setDepartment(e.target.value)}
+                    onChange={(e) => {
+                      setSuccessMessage(null);
+                      setSaveError(null);
+                      setDepartment(e.target.value);
+                    }}
                     className={INPUT_CLS}
                   >
                     {departments.map((d) => (
