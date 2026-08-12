@@ -20,6 +20,7 @@ export interface CvAcademicEntry {
 export interface CvProjectEntry {
   title: string;
   brief: string;
+  skills: string[];
 }
 
 export interface CvCertificationEntry {

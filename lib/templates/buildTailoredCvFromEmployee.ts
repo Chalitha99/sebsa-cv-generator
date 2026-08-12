@@ -31,6 +31,7 @@ export function buildTailoredCvFromEmployee(employee: Employee): TailoredCv {
       : (employee.projects ?? []).map((proj) => ({
           title: proj.name,
           brief: proj.desc,
+          skills: [],
         }));
 
   const certifications =

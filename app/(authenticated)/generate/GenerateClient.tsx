@@ -3,12 +3,13 @@
 import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import CvPreviewTemplate from './CvPreviewTemplate';
 import CvSectionEditor from './CvSectionEditor';
+import CvSuggestionSelector, { type CvSuggestionSelection } from './CvSuggestionSelector';
 import { useSearchParams } from 'next/navigation';
 import { PageWrapper } from '../../components/PageWrapper';
 import type { Employee } from '@/types/domain';
-import type { TailoredCv } from './types';
+import type { TailoredCv, CvSuggestion } from './types';
 import {
-  customizeCvAction,
+  suggestCvContentAction,
   saveGeneratedCvAction,
 } from './actions';
 import { exportToPdf } from '@/lib/cvExport';
@@ -62,7 +63,12 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
   const [customizingLoading, setCustomizingLoading] = useState(false);
   const [customizingError, setCustomizingError] = useState<string | null>(null);
 
-  // ── CV content state ────────────────────────────────────────────────────────
+  // ── AI suggestion + CV content state ────────────────────────────────────────
+  // suggestion: the AI's relevance flags paired with the employee's real profile data (never
+  // shown to the user until they've reviewed/adjusted it via CvSuggestionSelector). tailoredCv is
+  // only set once the user continues past that selection step — from then on it behaves exactly
+  // like the old flow (CvSectionEditor for a light wording pass, then Apply to CV).
+  const [suggestion, setSuggestion] = useState<CvSuggestion | null>(null);
   const [tailoredCv, setTailoredCv] = useState<TailoredCv | null>(null);
 
   // ── Save state ──────────────────────────────────────────────────────────────
@@ -93,8 +99,10 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
   // ── Handlers ────────────────────────────────────────────────────────────────
 
   /**
-   * Always generates a completely fresh CV from Gemini using the current
-   * employee profile and customer requirements. No saved draft is used.
+   * Asks the AI which of the employee's existing projects/experience/certifications are
+   * relevant to this opportunity (plus a customized Objective) — never a rewrite of the profile.
+   * The result is reviewed/adjusted by the user in CvSuggestionSelector before anything is
+   * actually applied to a CV (handleSelectionContinue below).
    */
   const handleCustomize = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,26 +110,48 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
     setCustomizingLoading(true);
     setCustomizingError(null);
     setSaveSuccess(false);
+    setSuggestion(null);
     setTailoredCv(null);
     setIsHumanVerified(false);
     setWizardStep(2);
 
     try {
-      const tailored = await customizeCvAction(
+      const result = await suggestCvContentAction(
         selectedEmployee,
         customerName,
         requiredSkills,
-        preferredExp,
-        [] // Always empty — fresh generation every time
+        preferredExp
       );
-      setTailoredCv(tailored);
+      setSuggestion(result);
     } catch (err) {
       setCustomizingError(
-        err instanceof Error ? err.message : 'AI customization failed. Please check setup.'
+        err instanceof Error ? err.message : 'AI suggestion failed. Please check setup.'
       );
     } finally {
       setCustomizingLoading(false);
     }
+  };
+
+  /**
+   * Called once the user has reviewed/adjusted the AI's suggested selection in
+   * CvSuggestionSelector. Builds the actual TailoredCv from only the selected content, then hands
+   * off to the existing CvSectionEditor for a light wording pass before Apply to CV — from here
+   * on, behavior is unchanged from the old flow.
+   */
+  const handleSelectionContinue = (selection: CvSuggestionSelection) => {
+    if (!selectedEmployee) return;
+    setTailoredCv({
+      name: selectedEmployee.name,
+      currentPosition: selectedEmployee.currentPosition || selectedEmployee.role,
+      summary: selection.summary,
+      customerName,
+      skillsAligned: [],
+      academic: selection.academic,
+      experience: selection.experience,
+      specialProjects: selection.specialProjects,
+      certifications: selection.certifications,
+      avatar: selectedEmployee.avatar,
+    });
   };
 
   /**
@@ -236,7 +266,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
               wizardStep === 2 ? 'bg-white text-indigo-650 shadow-sm' : 'text-slate-400'
             }`}
           >
-            2. REVIEW &amp; EDIT
+            2. SELECT &amp; REVIEW
           </span>
           <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
           <span
@@ -493,12 +523,12 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                 </div>
                 <div className="text-center space-y-1">
                   <p className="text-sm font-black text-slate-800">
-                    Generating Customized CV…
+                    Analyzing Profile…
                   </p>
                   <p className="text-xs text-slate-500 max-w-xs leading-relaxed">
-                    AI is tailoring{' '}
+                    AI is reviewing{' '}
                     <span className="font-bold text-slate-700">{selectedEmployee?.name}</span>'s
-                    profile for{' '}
+                    existing profile against{' '}
                     <span className="font-bold text-slate-700">{customerName}</span>
                   </p>
                 </div>
@@ -525,17 +555,24 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
               </div>
             )}
 
-            {/* Section editor — shown when CV is ready */}
+            {/* Suggestion selector — shown once the AI has flagged relevant existing content,
+                before anything is applied to a CV */}
+            {suggestion && !tailoredCv && !customizingLoading && !customizingError && (
+              <CvSuggestionSelector suggestion={suggestion} onContinue={handleSelectionContinue} />
+            )}
+
+            {/* Section editor — shown once the user has continued past selection, for a light
+                wording pass over only the content they picked */}
             {tailoredCv && !customizingLoading && !customizingError && (
               <>
                 {/* Context banner */}
                 <div className="mb-4 px-5 py-3.5 bg-indigo-50 border border-indigo-100 rounded-xl flex items-center justify-between">
                   <div>
                     <p className="text-xs font-black text-indigo-800">
-                      AI Generated — Review &amp; Edit Before Saving
+                      Built From Your Selection — Review Wording Before Saving
                     </p>
                     <p className="text-[10px] text-indigo-600 font-medium mt-0.5">
-                      All sections are editable. Expand collapsed sections to see more.
+                      Only the content you selected is included. Expand collapsed sections to see more.
                     </p>
                   </div>
                   {saveSuccess && (
