@@ -69,6 +69,9 @@ export async function createEmployeeAction(input: CreateEmployeeInput): Promise<
   if (!isReviewerOrAbove(user.role)) {
     throw new Error('Unauthorized: Admin, Super Admin, or CV Reviewer role required. Employees self-register their own profile at /onboarding.');
   }
+  if (!input.avatarUrl) {
+    throw new Error('A profile photo is required.');
+  }
 
   // 2. Perform all DB writes using the service-role client that bypasses RLS.
   //    The service-role key is server-only and never sent to the browser.

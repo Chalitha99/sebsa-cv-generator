@@ -435,7 +435,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                       htmlFor="generate-human-verified-checkbox"
                       className="text-xs font-bold text-slate-600 select-none cursor-pointer"
                     >
-                      Human Verified
+                      I Verified the Generated Content
                     </label>
                   </div>
 

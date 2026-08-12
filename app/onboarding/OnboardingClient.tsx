@@ -224,9 +224,12 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
         )}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-bold text-slate-700">Profile Picture</p>
+        <p className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+          Profile Picture
+          <span className="text-rose-500 font-bold normal-case tracking-normal text-[10px] bg-rose-50 border border-rose-100/60 px-2 py-0.5 rounded-full">Required</span>
+        </p>
         <p className="text-[11px] text-slate-400 mt-0.5">
-          {avatarUploading ? 'Uploading...' : avatarUrl ? 'Uploaded' : "Not extracted from your CV — add one now (optional)."}
+          {avatarUploading ? 'Uploading...' : avatarUrl ? 'Uploaded' : 'Not extracted from your CV — add one now.'}
         </p>
         {avatarError && <p className="text-[11px] text-rose-600 mt-1">{avatarError}</p>}
       </div>
@@ -403,7 +406,8 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
             )}
             <button
               type="submit"
-              disabled={isSubmitting || !profileValue.name || !profileValue.role}
+              disabled={isSubmitting || !profileValue.name || !profileValue.role || !avatarUrl}
+              title={!avatarUrl ? 'A profile photo is required' : undefined}
               className="bg-indigo-600 hover:bg-indigo-700 text-white font-sans text-xs font-black uppercase tracking-wider px-6 py-3.5 rounded-xl shadow-md active:scale-95 transition-transform flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <span>{isSubmitting ? 'Submitting...' : 'Submit for Review'}</span>
@@ -517,7 +521,8 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
 
               <button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting || !avatarUrl}
+                title={!avatarUrl ? 'A profile photo is required' : undefined}
                 className="mt-2 bg-indigo-600 hover:bg-indigo-700 text-white font-sans text-xs font-black uppercase tracking-wider px-6 py-3.5 rounded-xl shadow-md active:scale-95 transition-transform flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <span>{isSubmitting ? 'Submitting...' : 'Submit for Review'}</span>

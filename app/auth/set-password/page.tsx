@@ -11,7 +11,7 @@ import { Eye, EyeOff, KeyRound } from 'lucide-react';
 
 /**
  * Landing page after an invited employee clicks their invite email link (see
- * app/auth/callback/route.ts and docs/04-rbac-security.md §14). The callback route has already
+ * app/auth/callback/page.tsx and docs/04-rbac-security.md §14). The callback page has already
  * exchanged the invite link for a session, so this page just needs the employee to pick their
  * own password — Supabase never puts a password in the invite email itself.
  */

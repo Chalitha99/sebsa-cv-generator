@@ -42,14 +42,17 @@ export async function notifyUser(
 }
 
 /**
- * Notifies every Super Admin and CV Reviewer — the maker-checker approval queue's reviewers
- * (docs/04-rbac-security.md §12) — used when something new lands in /review.
+ * Notifies everyone who can act on the maker-checker approval queue — Super Admin, Admin, and CV
+ * Reviewer (docs/04-rbac-security.md §12) — used when something new lands in /review. Admin was
+ * originally left out here (only Super Admin/CV Reviewer), even though Admin has always had full
+ * approve/reject rights via isReviewerOrAbove() — meaning an Admin's only way to find out
+ * something was pending was to check /review manually.
  */
 export async function notifyReviewers(adminClient: SupabaseClient, payload: NotifyPayload): Promise<void> {
   const { data: reviewers, error } = await adminClient
     .from('user_roles')
     .select('user_id')
-    .in('role', ['super_admin', 'cv_reviewer']);
+    .in('role', ['super_admin', 'admin', 'cv_reviewer']);
 
   if (error) {
     console.error('Failed to look up reviewers for notification:', error);
