@@ -163,7 +163,7 @@ export const Header: React.FC<HeaderProps> = ({
               {user.fullName}
             </p>
             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider leading-none mt-0.5">
-              {user.role}
+              {user.role.replace(/_/g, ' ')}
             </p>
           </div>
           <div

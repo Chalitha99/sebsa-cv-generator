@@ -138,6 +138,9 @@ export async function createOwnProfileAction(input: OnboardingSubmission): Promi
   if (user.hasLinkedProfile) {
     throw new Error('You already have a profile on file.');
   }
+  if (!input.avatarUrl) {
+    throw new Error('A profile photo is required.');
+  }
 
   const supabase = await createClient();
   await createEmployee(

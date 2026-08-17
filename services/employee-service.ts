@@ -121,7 +121,7 @@ export async function getEmployeeById(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .sort((a: any, b: any) => a.display_order - b.display_order)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .map((p: any) => ({ title: p.name, brief: p.description ?? '' }));
+    .map((p: any) => ({ title: p.name, brief: p.description ?? '', skills: p.skills ?? [] }));
 
   // ── Certifications mapping ────────────────────────────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

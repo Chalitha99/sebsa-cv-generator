@@ -143,6 +143,78 @@ export function SkillsSection({
   );
 }
 
+/**
+ * Compact skill-chip editor for embedding inside a single project card (not its own collapsible
+ * SectionCard, unlike SkillsSection above — same chip interaction, just lighter-weight). Shared
+ * by ProjectsSection here plus the hand-rolled project forms in upload/page.tsx and
+ * UpdateProfileClient.tsx, which don't reuse ProjectsSection itself.
+ */
+export function ProjectSkillsInput({
+  skills,
+  onChange,
+}: {
+  skills: string[];
+  onChange: (v: string[]) => void;
+}) {
+  const [newSkill, setNewSkill] = React.useState('');
+
+  const add = () => {
+    const t = newSkill.trim();
+    if (!t || skills.includes(t)) return;
+    onChange([...skills, t]);
+    setNewSkill('');
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <label className="text-[10px] font-bold text-slate-500 uppercase block">Skills</label>
+      <div className="flex flex-wrap gap-1.5 min-h-[28px]">
+        {skills.length === 0 && (
+          <p className="text-[11px] text-slate-400 italic self-center">No skills added yet.</p>
+        )}
+        {skills.map((skill, idx) => (
+          <span
+            key={idx}
+            className="flex items-center gap-1 px-2.5 py-1 bg-indigo-50 border border-indigo-100/80 text-indigo-700 text-[10.5px] font-bold rounded-full"
+          >
+            {skill}
+            <button
+              type="button"
+              onClick={() => onChange(skills.filter((_, i) => i !== idx))}
+              className="text-indigo-400 hover:text-rose-500 leading-none transition-colors ml-0.5"
+              aria-label={`Remove ${skill}`}
+            >
+              ×
+            </button>
+          </span>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={newSkill}
+          onChange={(e) => setNewSkill(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              add();
+            }
+          }}
+          placeholder="Type a skill and press Enter..."
+          className={inputCls}
+        />
+        <button
+          type="button"
+          onClick={add}
+          className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10.5px] font-bold transition-colors flex items-center gap-1 cursor-pointer shrink-0"
+        >
+          <Plus className="w-3 h-3" /> Add
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function ExperienceSection({
   experience,
   expanded,
@@ -249,9 +321,13 @@ export function ProjectsSection({
             <label className="text-[10px] font-bold text-slate-500 uppercase block">Brief Description</label>
             <textarea rows={3} value={proj.brief} onChange={(e) => onChange(projects.map((p, i) => (i === idx ? { ...p, brief: e.target.value } : p)))} placeholder="Describe the project scope, your role, and the outcome..." className={textareaCls} />
           </div>
+          <ProjectSkillsInput
+            skills={proj.skills ?? []}
+            onChange={(skills) => onChange(projects.map((p, i) => (i === idx ? { ...p, skills } : p)))}
+          />
         </div>
       ))}
-      <button type="button" onClick={() => onChange([...projects, { title: '', brief: '' }])} className={dottedAddBtnCls}>
+      <button type="button" onClick={() => onChange([...projects, { title: '', brief: '', skills: [] }])} className={dottedAddBtnCls}>
         <Plus className="w-3.5 h-3.5" /> Add Project
       </button>
     </SectionCard>

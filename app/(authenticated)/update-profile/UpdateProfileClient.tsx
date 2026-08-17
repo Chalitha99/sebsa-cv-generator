@@ -5,12 +5,12 @@ import { useRouter } from 'next/navigation';
 import { PageWrapper } from '../../components/PageWrapper';
 import { uploadProfilePictureAction } from '../upload/actions';
 import { getEmployeeDetailsAction, updateEmployeeAction } from './actions';
+import { ProjectSkillsInput } from '@/app/components/CvEntrySections';
 import {
   emptyCvProfile,
   type CvProfile,
   type CvExperienceEntry,
   type CvAcademicEntry,
-  type CvProjectEntry,
   type CvCertificationEntry,
 } from '@/lib/cvTypes';
 import type { Employee, CreateEmployeeInput } from '@/types/domain';
@@ -377,13 +377,18 @@ export default function UpdateProfileClient({
 
   // Special Projects
   const addProject = () =>
-    updateField('specialProjects', [...profile.specialProjects, { title: '', brief: '' }]);
+    updateField('specialProjects', [...profile.specialProjects, { title: '', brief: '', skills: [] }]);
   const removeProject = (i: number) =>
     updateField('specialProjects', profile.specialProjects.filter((_, idx) => idx !== i));
-  const updateProject = (i: number, field: keyof CvProjectEntry, value: string) =>
+  const updateProject = (i: number, field: 'title' | 'brief', value: string) =>
     updateField(
       'specialProjects',
       profile.specialProjects.map((p, idx) => (idx === i ? { ...p, [field]: value } : p))
+    );
+  const updateProjectSkills = (i: number, skills: string[]) =>
+    updateField(
+      'specialProjects',
+      profile.specialProjects.map((p, idx) => (idx === i ? { ...p, skills } : p))
     );
 
   // Certifications
@@ -1087,6 +1092,10 @@ export default function UpdateProfileClient({
                           className={TEXTAREA_CLS}
                         />
                       </div>
+                      <ProjectSkillsInput
+                        skills={proj.skills ?? []}
+                        onChange={(skills) => updateProjectSkills(i, skills)}
+                      />
                     </div>
                   ))}
                   <button
