@@ -196,6 +196,12 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
     setWizardStep(3);
   };
 
+  const handleBackToSelection = () => {
+    setTailoredCv(null);
+    setIsHumanVerified(false);
+    setWizardStep(2);
+  };
+
   const handleDownloadDocx = async () => {
     if (!tailoredCv) return;
     try {
@@ -401,7 +407,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
               {suggestion && (suggestionDraft || tailoredCv) && !customizingLoading && (
                 <button
                   type="button"
-                  onClick={() => setWizardStep(2)}
+                  onClick={handleBackToSelection}
                   className="py-3.5 bg-white border border-indigo-200 hover:bg-indigo-50 text-indigo-700 rounded-xl font-sans text-sm font-black active:scale-[0.98] transition-all flex items-center justify-center gap-2.5 cursor-pointer"
                 >
                   <span>Continue with Draft</span>
@@ -627,8 +633,9 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
             <div className="flex items-center gap-2.5">
               <button
                 type="button"
-                onClick={() => setWizardStep(2)}
+                onClick={handleBackToSelection}
                 className="p-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg transition-colors cursor-pointer active:scale-95"
+                aria-label="Back to Select and Preview"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
