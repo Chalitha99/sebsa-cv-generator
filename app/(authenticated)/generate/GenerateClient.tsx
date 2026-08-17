@@ -3,7 +3,10 @@
 import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import CvPreviewTemplate from './CvPreviewTemplate';
 import CvSectionEditor from './CvSectionEditor';
-import CvSuggestionSelector, { type CvSuggestionSelection } from './CvSuggestionSelector';
+import CvSuggestionSelector, {
+  type CvSuggestionDraft,
+  type CvSuggestionSelection,
+} from './CvSuggestionSelector';
 import { useSearchParams } from 'next/navigation';
 import { PageWrapper } from '../../components/PageWrapper';
 import type { Employee } from '@/types/domain';
@@ -69,6 +72,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
   // only set once the user continues past that selection step — from then on it behaves exactly
   // like the old flow (CvSectionEditor for a light wording pass, then Apply to CV).
   const [suggestion, setSuggestion] = useState<CvSuggestion | null>(null);
+  const [suggestionDraft, setSuggestionDraft] = useState<CvSuggestionDraft | null>(null);
   const [tailoredCv, setTailoredCv] = useState<TailoredCv | null>(null);
 
   // ── Save state ──────────────────────────────────────────────────────────────
@@ -111,6 +115,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
     setCustomizingError(null);
     setSaveSuccess(false);
     setSuggestion(null);
+    setSuggestionDraft(null);
     setTailoredCv(null);
     setIsHumanVerified(false);
     setWizardStep(2);
@@ -123,6 +128,12 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
         preferredExp
       );
       setSuggestion(result);
+      setSuggestionDraft({
+        objective: result.objective,
+        experience: result.experience,
+        projects: result.projects,
+        certifications: result.certifications,
+      });
     } catch (err) {
       setCustomizingError(
         err instanceof Error ? err.message : 'AI suggestion failed. Please check setup.'
@@ -183,6 +194,12 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
     const ok = await handleSave();
     if (!ok) return;
     setWizardStep(3);
+  };
+
+  const handleBackToSelection = () => {
+    setTailoredCv(null);
+    setIsHumanVerified(false);
+    setWizardStep(2);
   };
 
   const handleDownloadDocx = async () => {
@@ -386,6 +403,17 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                 <BrainCircuit className="w-5 h-5" />
                 <span>Customize CV</span>
               </button>
+
+              {suggestion && (suggestionDraft || tailoredCv) && !customizingLoading && (
+                <button
+                  type="button"
+                  onClick={handleBackToSelection}
+                  className="py-3.5 bg-white border border-indigo-200 hover:bg-indigo-50 text-indigo-700 rounded-xl font-sans text-sm font-black active:scale-[0.98] transition-all flex items-center justify-center gap-2.5 cursor-pointer"
+                >
+                  <span>Continue with Draft</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              )}
             </form>
           </div>
         </div>
@@ -557,8 +585,13 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
 
             {/* Suggestion selector — shown once the AI has flagged relevant existing content,
                 before anything is applied to a CV */}
-            {suggestion && !tailoredCv && !customizingLoading && !customizingError && (
-              <CvSuggestionSelector suggestion={suggestion} onContinue={handleSelectionContinue} />
+            {suggestion && suggestionDraft && !tailoredCv && !customizingLoading && !customizingError && (
+              <CvSuggestionSelector
+                suggestion={suggestion}
+                draft={suggestionDraft}
+                onDraftChange={setSuggestionDraft}
+                onContinue={handleSelectionContinue}
+              />
             )}
 
             {/* Section editor — shown once the user has continued past selection, for a light
@@ -600,8 +633,9 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
             <div className="flex items-center gap-2.5">
               <button
                 type="button"
-                onClick={() => setWizardStep(2)}
+                onClick={handleBackToSelection}
                 className="p-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg transition-colors cursor-pointer active:scale-95"
+                aria-label="Back to Select and Preview"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import { FileText, Briefcase, Lightbulb, Award, ArrowRight, Sparkles } from 'lucide-react';
 import { SectionCard, EducationSection, textareaCls } from '@/app/components/CvEntrySections';
 import type { CvExperienceEntry, CvProjectEntry, CvCertificationEntry } from '@/lib/cvTypes';
@@ -19,8 +19,17 @@ export interface CvSuggestionSelection {
   certifications: CvCertificationEntry[];
 }
 
+export interface CvSuggestionDraft {
+  objective: string;
+  experience: CvSuggestionExperience[];
+  projects: CvSuggestionProject[];
+  certifications: CvSuggestionCertification[];
+}
+
 interface CvSuggestionSelectorProps {
   suggestion: CvSuggestion;
+  draft: CvSuggestionDraft;
+  onDraftChange: (draft: CvSuggestionDraft) => void;
   onContinue: (selection: CvSuggestionSelection) => void;
 }
 
@@ -34,36 +43,51 @@ const checkboxCls = 'w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring
  * GenerateClient, which loads it into the existing CvSectionEditor for a light wording pass
  * before Apply to CV — this component itself never lets the user edit wording, only pick items.
  */
-export default function CvSuggestionSelector({ suggestion, onContinue }: CvSuggestionSelectorProps) {
-  const [objective, setObjective] = useState(suggestion.objective);
-  const [experience, setExperience] = useState<CvSuggestionExperience[]>(suggestion.experience);
-  const [projects, setProjects] = useState<CvSuggestionProject[]>(suggestion.projects);
-  const [certifications, setCertifications] = useState<CvSuggestionCertification[]>(suggestion.certifications);
+export default function CvSuggestionSelector({
+  suggestion,
+  draft,
+  onDraftChange,
+  onContinue,
+}: CvSuggestionSelectorProps) {
+  const { objective, experience, projects, certifications } = draft;
 
   const toggleExperience = (index: number) =>
-    setExperience((prev) => prev.map((e) => (e.index === index ? { ...e, relevant: !e.relevant } : e)));
+    onDraftChange({
+      ...draft,
+      experience: experience.map((e) => (e.index === index ? { ...e, relevant: !e.relevant } : e)),
+    });
   const toggleTask = (expIndex: number, taskIndex: number) =>
-    setExperience((prev) =>
-      prev.map((e) =>
+    onDraftChange({
+      ...draft,
+      experience: experience.map((e) =>
         e.index !== expIndex
           ? e
           : { ...e, tasks: e.tasks.map((t) => (t.index === taskIndex ? { ...t, relevant: !t.relevant } : t)) }
-      )
-    );
+      ),
+    });
 
   const toggleProject = (index: number) =>
-    setProjects((prev) => prev.map((p) => (p.index === index ? { ...p, relevant: !p.relevant } : p)));
+    onDraftChange({
+      ...draft,
+      projects: projects.map((p) => (p.index === index ? { ...p, relevant: !p.relevant } : p)),
+    });
   const toggleProjectSkill = (projIndex: number, skillIndex: number) =>
-    setProjects((prev) =>
-      prev.map((p) =>
+    onDraftChange({
+      ...draft,
+      projects: projects.map((p) =>
         p.index !== projIndex
           ? p
           : { ...p, skills: p.skills.map((s) => (s.index === skillIndex ? { ...s, relevant: !s.relevant } : s)) }
-      )
-    );
+      ),
+    });
 
   const toggleCertification = (index: number) =>
-    setCertifications((prev) => prev.map((c) => (c.index === index ? { ...c, relevant: !c.relevant } : c)));
+    onDraftChange({
+      ...draft,
+      certifications: certifications.map((c) =>
+        c.index === index ? { ...c, relevant: !c.relevant } : c
+      ),
+    });
 
   const selectedExperienceCount = experience.filter((e) => e.relevant).length;
   const selectedProjectCount = projects.filter((p) => p.relevant).length;
@@ -112,7 +136,7 @@ export default function CvSuggestionSelector({ suggestion, onContinue }: CvSugge
         <textarea
           rows={5}
           value={objective}
-          onChange={(e) => setObjective(e.target.value)}
+          onChange={(e) => onDraftChange({ ...draft, objective: e.target.value })}
           placeholder="Customized objective for this opportunity..."
           className={textareaCls}
         />
