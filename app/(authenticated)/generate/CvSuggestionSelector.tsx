@@ -110,7 +110,7 @@ export default function CvSuggestionSelector({
         .map((p) => ({
           title: p.title,
           brief: p.brief,
-          skills: p.skills.filter((s) => s.relevant).map((s) => s.text),
+          skills: [],
         })),
       certifications: certifications
         .filter((c) => c.relevant)

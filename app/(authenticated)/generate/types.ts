@@ -54,6 +54,8 @@ export interface CvSuggestionCertification {
 }
 
 export interface CvSuggestion {
+  /** The employee's original profile Objective/Summary, preserved verbatim for comparison. */
+  originalObjective: string;
   /** AI-generated, customized Objective — the only free-text content the AI produces. */
   objective: string;
   /** Verbatim from the profile — never filtered or shown as selectable ("use existing academic

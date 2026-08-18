@@ -86,6 +86,52 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
     [employees, selectedCandidateId]
   );
 
+  const originalProfileCv = useMemo(
+    () =>
+      selectedEmployee && suggestion
+        ? {
+            name: selectedEmployee.name,
+            currentPosition: selectedEmployee.currentPosition || selectedEmployee.role,
+            summary: suggestion.originalObjective,
+            customerName: '',
+            skillsAligned: selectedEmployee.skills,
+            academic: suggestion.academic,
+            experience: suggestion.experience.map((entry) => ({
+              position: entry.position,
+              company: entry.company,
+              period: entry.period,
+              tasks: entry.tasks.map((task) => task.text),
+            })),
+            specialProjects: suggestion.projects.map((project) => ({
+              title: project.title,
+              brief: project.brief,
+              skills: project.skills.map((skill) => skill.text),
+            })),
+            certifications: suggestion.certifications.map((certification) => ({
+              name: certification.name,
+              issuer: certification.issuer,
+              year: certification.year,
+            })),
+            avatar: selectedEmployee.avatar,
+          }
+        : null,
+    [selectedEmployee, suggestion]
+  );
+
+  const customizedPreviewCv = useMemo(
+    () =>
+      tailoredCv
+        ? {
+            ...tailoredCv,
+            specialProjects: tailoredCv.specialProjects.map((project) => ({
+              ...project,
+              skills: [],
+            })),
+          }
+        : null,
+    [tailoredCv]
+  );
+
   // ── Pre-select employee from query param ────────────────────────────────────
   useEffect(() => {
     if (employees.length === 0) return;
@@ -626,7 +672,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
       {/* ════════════════════════════════════════════════════════════════════
           STEP 3 — PREVIEW & EXPORT
       ════════════════════════════════════════════════════════════════════ */}
-      {wizardStep === 3 && tailoredCv && (
+      {wizardStep === 3 && tailoredCv && customizedPreviewCv && originalProfileCv && (
         <div className="flex flex-col gap-6">
           {/* Action toolbar */}
           <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -641,10 +687,10 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
               </button>
               <div>
                 <h4 className="text-sm font-black text-slate-800">
-                  Final CV Preview &amp; Export Panel
+                  Original and Customized CV Preview
                 </h4>
                 <p className="text-[11px] text-slate-450 font-medium">
-                  Verify the filled template before downloading.
+                  Compare the complete employee profile with the selected customer-specific content.
                 </p>
               </div>
             </div>
@@ -670,14 +716,39 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
             </div>
           </div>
 
-          {/* Full-width interactive HTML preview showing the customized CV template */}
-          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 shadow-inner flex justify-center">
-            <CvPreviewTemplate
-              cv={{
-                ...tailoredCv,
-                avatar: selectedEmployee?.avatar || null,
-              }}
-            />
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+            <section className="min-w-0 space-y-3">
+              <div className="px-1">
+                <h5 className="text-xs font-black uppercase tracking-widest text-slate-600">
+                  Complete Profile CV
+                </h5>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Original overview, skills, experience, projects, academics, and certifications.
+                </p>
+              </div>
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 shadow-inner flex justify-center">
+                <CvPreviewTemplate cv={originalProfileCv} id="original-cv-preview-root" />
+              </div>
+            </section>
+
+            <section className="min-w-0 space-y-3">
+              <div className="px-1">
+                <h5 className="text-xs font-black uppercase tracking-widest text-indigo-700">
+                  Customized CV
+                </h5>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Contains only the content selected in the previous step. Project skills are hidden.
+                </p>
+              </div>
+              <div className="bg-slate-50 p-4 rounded-2xl border border-indigo-100 shadow-inner flex justify-center">
+                <CvPreviewTemplate
+                  cv={{
+                    ...customizedPreviewCv,
+                    avatar: selectedEmployee?.avatar || null,
+                  }}
+                />
+              </div>
+            </section>
           </div>
         </div>
       )}
