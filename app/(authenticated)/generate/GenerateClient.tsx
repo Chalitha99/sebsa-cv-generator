@@ -106,7 +106,9 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
             specialProjects: suggestion.projects.map((project) => ({
               title: project.title,
               brief: project.brief,
-              skills: project.skills.map((skill) => skill.text),
+              // Project skills are editing/selection metadata and should not appear
+              // beneath projects in the final Complete Profile CV preview.
+              skills: [],
             })),
             certifications: suggestion.certifications.map((certification) => ({
               name: certification.name,
