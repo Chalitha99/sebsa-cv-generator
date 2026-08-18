@@ -24,7 +24,6 @@ import {
   ChevronRight,
   ChevronLeft,
   Download,
-  FolderSync,
   Loader2,
   AlertCircle,
   CheckCircle2,
@@ -156,52 +155,6 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
     return () => observer.disconnect();
   }, [hasLivePreview]);
 
-  const originalProfileCv = useMemo(
-    () =>
-      selectedEmployee && suggestion
-        ? {
-            name: selectedEmployee.name,
-            currentPosition: selectedEmployee.currentPosition || selectedEmployee.role,
-            summary: suggestion.originalObjective,
-            customerName: '',
-            skillsAligned: selectedEmployee.skills,
-            academic: suggestion.academic,
-            experience: suggestion.experience.map((entry) => ({
-              position: entry.position,
-              company: entry.company,
-              period: entry.period,
-              tasks: entry.tasks.map((task) => task.text),
-            })),
-            specialProjects: suggestion.projects.map((project) => ({
-              title: project.title,
-              brief: project.brief,
-              skills: project.skills.map((skill) => skill.text),
-            })),
-            certifications: suggestion.certifications.map((certification) => ({
-              name: certification.name,
-              issuer: certification.issuer,
-              year: certification.year,
-            })),
-            avatar: selectedEmployee.avatar,
-          }
-        : null,
-    [selectedEmployee, suggestion]
-  );
-
-  const customizedPreviewCv = useMemo(
-    () =>
-      tailoredCv
-        ? {
-            ...tailoredCv,
-            specialProjects: tailoredCv.specialProjects.map((project) => ({
-              ...project,
-              skills: [],
-            })),
-          }
-        : null,
-    [tailoredCv]
-  );
-
   // ── Pre-select employee from query param ────────────────────────────────────
   useEffect(() => {
     if (employees.length === 0) return;
@@ -330,16 +283,6 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
     } catch (err) {
       console.error('PDF export failed:', err);
       alert(err instanceof Error ? `Could not export to PDF: ${err.message}` : 'Could not export to PDF.');
-    }
-  };
-
-  const handleSyncToCrm = async () => {
-    if (!tailoredCv) return;
-    try {
-      await saveGeneratedCvAction(selectedEmployee.rowId, tailoredCv);
-      alert('Successfully synchronized tailored CV to CRM database.');
-    } catch (err: any) {
-      alert(`Could not sync to CRM: ${err.message}`);
     }
   };
 
@@ -768,25 +711,24 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
       {/* ════════════════════════════════════════════════════════════════════
           STEP 3 — PREVIEW & EXPORT
       ════════════════════════════════════════════════════════════════════ */}
-      {wizardStep === 3 && tailoredCv && customizedPreviewCv && originalProfileCv && (
+      {wizardStep === 3 && tailoredCv && (
         <div className="flex flex-col gap-6">
           {/* Action toolbar */}
           <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-2.5">
               <button
                 type="button"
-                onClick={handleBackToSelection}
+                onClick={() => setWizardStep(2)}
                 className="p-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg transition-colors cursor-pointer active:scale-95"
-                aria-label="Back to Select and Preview"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
               <div>
                 <h4 className="text-sm font-black text-slate-800">
-                  Original and Customized CV Preview
+                  Final CV Preview &amp; Export Panel
                 </h4>
                 <p className="text-[11px] text-slate-450 font-medium">
-                  Compare the complete employee profile with the selected customer-specific content.
+                  Verify the filled template before downloading.
                 </p>
               </div>
             </div>
@@ -800,51 +742,17 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                 <Download className="w-4 h-4 text-rose-500" />
                 <span>Export PDF</span>
               </button>
-
-              <button
-                type="button"
-                onClick={handleSyncToCrm}
-                className="flex items-center gap-2 px-5 py-2.5 bg-indigo-650 text-white font-black rounded-xl text-xs hover:bg-indigo-750 transition-colors cursor-pointer active:scale-95 shadow-md"
-              >
-                <FolderSync className="w-4 h-4 text-sky-200" />
-                <span>Sync to CRM</span>
-              </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
-            <section className="min-w-0 space-y-3">
-              <div className="px-1">
-                <h5 className="text-xs font-black uppercase tracking-widest text-slate-600">
-                  Complete Profile CV
-                </h5>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Original overview, skills, experience, projects, academics, and certifications.
-                </p>
-              </div>
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 shadow-inner flex justify-center">
-                <CvPreviewTemplate cv={originalProfileCv} id="original-cv-preview-root" />
-              </div>
-            </section>
-
-            <section className="min-w-0 space-y-3">
-              <div className="px-1">
-                <h5 className="text-xs font-black uppercase tracking-widest text-indigo-700">
-                  Customized CV
-                </h5>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Contains only the content selected in the previous step. Project skills are hidden.
-                </p>
-              </div>
-              <div className="bg-slate-50 p-4 rounded-2xl border border-indigo-100 shadow-inner flex justify-center">
-                <CvPreviewTemplate
-                  cv={{
-                    ...customizedPreviewCv,
-                    avatar: selectedEmployee?.avatar || null,
-                  }}
-                />
-              </div>
-            </section>
+          {/* Full-width interactive HTML preview showing the customized CV template */}
+          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 shadow-inner flex justify-center">
+            <CvPreviewTemplate
+              cv={{
+                ...tailoredCv,
+                avatar: selectedEmployee?.avatar || null,
+              }}
+            />
           </div>
         </div>
       )}
