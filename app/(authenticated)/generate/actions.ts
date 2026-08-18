@@ -246,6 +246,7 @@ Preferred Requirements / Job Specs: ${preferredExp}
   });
 
   return {
+    originalObjective: fullEmployee.summary || '',
     objective: typeof raw.objective === 'string' && raw.objective.trim() ? raw.objective : fullEmployee.summary || '',
     academic,
     experience,
