@@ -1,7 +1,7 @@
 'use client';
 
-import React from 'react';
-import { FileText, Briefcase, Lightbulb, Award, ArrowRight, Sparkles } from 'lucide-react';
+import React, { useState } from 'react';
+import { FileText, Briefcase, Lightbulb, Award, ArrowRight, Sparkles, Loader2 } from 'lucide-react';
 import { SectionCard, EducationSection, textareaCls } from '@/app/components/CvEntrySections';
 import type { CvExperienceEntry, CvProjectEntry, CvCertificationEntry } from '@/lib/cvTypes';
 import type {
@@ -30,7 +30,8 @@ interface CvSuggestionSelectorProps {
   suggestion: CvSuggestion;
   draft: CvSuggestionDraft;
   onDraftChange: (draft: CvSuggestionDraft) => void;
-  onContinue: (selection: CvSuggestionSelection) => void;
+  onApply: (selection: CvSuggestionSelection) => Promise<void>;
+  applying: boolean;
 }
 
 const checkboxCls = 'w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20 cursor-pointer shrink-0';
@@ -73,16 +74,18 @@ export function buildSelectionFromDraft(
  * Review step for the AI's content SELECTION (never generation — see suggestCvContentAction's
  * doc comment) — every project/experience/skill/task/certification shown here is the employee's
  * own real data with the AI's relevance flag as the initial checkbox state, which the user can
- * freely override. Only Objective is AI-written text. "Continue" hands the selected subset up to
- * GenerateClient, which loads it into the existing CvSectionEditor for a light wording pass
- * before Apply to CV — this component itself never lets the user edit wording, only pick items.
+ * freely override. Only Objective is AI-written text. Checking "I verified the generated content"
+ * and clicking Apply saves the selected subset directly as the CV and moves to Preview & Export —
+ * this component never lets the user edit wording, only pick which existing items are included.
  */
 export default function CvSuggestionSelector({
   suggestion,
   draft,
   onDraftChange,
-  onContinue,
+  onApply,
+  applying,
 }: CvSuggestionSelectorProps) {
+  const [isVerified, setIsVerified] = useState(false);
   const { objective, experience, projects, certifications } = draft;
 
   const toggleExperience = (index: number) =>
@@ -127,8 +130,9 @@ export default function CvSuggestionSelector({
   const selectedProjectCount = projects.filter((p) => p.relevant).length;
   const selectedCertCount = certifications.filter((c) => c.relevant).length;
 
-  const handleContinue = () => {
-    onContinue(buildSelectionFromDraft(draft, suggestion.academic));
+  const handleApply = async () => {
+    if (!isVerified || applying) return;
+    await onApply(buildSelectionFromDraft(draft, suggestion.academic));
   };
 
   return (
@@ -268,14 +272,36 @@ export default function CvSuggestionSelector({
         ))}
       </SectionCard>
 
-      <button
-        type="button"
-        onClick={handleContinue}
-        className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm"
-      >
-        <span>Continue with Selection</span>
-        <ArrowRight className="w-3.5 h-3.5" />
-      </button>
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-sm">
+        <label className="flex items-center gap-2.5 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={isVerified}
+            onChange={(event) => setIsVerified(event.target.checked)}
+            className={checkboxCls}
+          />
+          <span className="text-xs font-bold text-slate-700">I verified the generated content</span>
+        </label>
+
+        <button
+          type="button"
+          onClick={handleApply}
+          disabled={!isVerified || applying}
+          className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-xs font-black uppercase tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+        >
+          {applying ? (
+            <>
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              <span>Applying...</span>
+            </>
+          ) : (
+            <>
+              <span>Apply to CV</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </>
+          )}
+        </button>
+      </div>
     </div>
   );
 }

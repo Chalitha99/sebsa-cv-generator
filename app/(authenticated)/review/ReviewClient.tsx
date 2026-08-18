@@ -230,7 +230,21 @@ export default function ReviewClient({ initialItems }: ReviewClientProps) {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="p-6 overflow-y-auto bg-slate-100 flex-1 flex justify-center items-start">
+            <div className="p-6 overflow-y-auto bg-slate-100 flex-1 flex flex-col items-center gap-4">
+              {previewItem.type === 'change' && previewItem.changedFields && previewItem.changedFields.length > 0 && (
+                <div className="w-full max-w-[800px] bg-amber-50 border border-amber-200 rounded-xl p-4 shadow-sm">
+                  <p className="text-[11px] font-black uppercase tracking-wider text-amber-800">Changed in this proposal</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {previewItem.changedFields.map((diff) => (
+                      <div key={diff.field} className="text-xs text-amber-900 bg-white/80 border border-amber-200 rounded-lg px-3 py-2">
+                        <span className="font-black">{diff.field}</span>
+                        {diff.before && diff.after && <span className="font-medium">: {diff.before} → {diff.after}</span>}
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-amber-700 mt-2">Applicable CV sections are highlighted below. Profile-only fields such as Department are listed here.</p>
+                </div>
+              )}
               {previewLoading && (
                 <div className="flex flex-col items-center justify-center py-20 gap-3">
                   <Loader2 className="w-7 h-7 animate-spin text-indigo-600" />
@@ -242,7 +256,13 @@ export default function ReviewClient({ initialItems }: ReviewClientProps) {
                   {previewError}
                 </p>
               )}
-              {previewCv && !previewLoading && <CvPreviewTemplate cv={previewCv} id="cv-preview-review" />}
+              {previewCv && !previewLoading && (
+                <CvPreviewTemplate
+                  cv={previewCv}
+                  id="cv-preview-review"
+                  highlightFields={previewItem.changedFields?.map((diff) => diff.field) ?? []}
+                />
+              )}
             </div>
           </div>
         </div>

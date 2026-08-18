@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, Suspense } from 'react';
+import Image from 'next/image';
 import CvPreviewTemplate from './CvPreviewTemplate';
 import CvSectionEditor from './CvSectionEditor';
 import CvSuggestionSelector, {
@@ -47,9 +48,9 @@ const PREVIEW_NATURAL_WIDTH_PX = 800;
 const PREVIEW_FRAME_WIDTH_PX = Math.round(PREVIEW_NATURAL_WIDTH_PX * PREVIEW_SCALE);
 const PREVIEW_FRAME_HEIGHT_PX = Math.round(PREVIEW_NATURAL_WIDTH_PX * (A4_HEIGHT_MM / A4_WIDTH_MM) * PREVIEW_SCALE);
 
-/** Shared by handleSelectionContinue and the live preview memo below — one place that turns a
+/** Shared by handleSelectionApply and the live preview memo below — one place that turns a
  *  selected-content payload into the actual TailoredCv shape, so the preview never drifts from
- *  what "Continue"/"Apply to CV" actually produces. */
+ *  what "Apply to CV" actually produces. */
 function buildTailoredCv(employee: Employee, customerName: string, selection: CvSuggestionSelection): TailoredCv {
   return {
     name: employee.name,
@@ -100,15 +101,15 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
   // ── AI suggestion + CV content state ────────────────────────────────────────
   // suggestion: the AI's relevance flags paired with the employee's real profile data (never
   // shown to the user until they've reviewed/adjusted it via CvSuggestionSelector). tailoredCv is
-  // only set once the user continues past that selection step — from then on it behaves exactly
-  // like the old flow (CvSectionEditor for a light wording pass, then Apply to CV).
+  // only set once the user verifies and applies their selection there — at that point it's
+  // already been saved and Step 3 (comparison preview + export) is shown.
   const [suggestion, setSuggestion] = useState<CvSuggestion | null>(null);
   const [suggestionDraft, setSuggestionDraft] = useState<CvSuggestionDraft | null>(null);
   const [tailoredCv, setTailoredCv] = useState<TailoredCv | null>(null);
 
   // ── Save state ──────────────────────────────────────────────────────────────
   const [saving, setSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveSuccess] = useState(false);
   const [isHumanVerified, setIsHumanVerified] = useState(false);
 
   // ── Derived ─────────────────────────────────────────────────────────────────
@@ -155,6 +156,59 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
     return () => observer.disconnect();
   }, [hasLivePreview]);
 
+  // ── Step 3 "before / after" comparison (Complete Profile CV vs Customized CV) ──────────────
+  // originalProfileCv: unfiltered "before" view of the whole profile, display-only.
+  const originalProfileCv = useMemo(
+    () =>
+      selectedEmployee && suggestion
+        ? {
+            name: selectedEmployee.name,
+            currentPosition: selectedEmployee.currentPosition || selectedEmployee.role,
+            summary: suggestion.originalObjective,
+            customerName: '',
+            skillsAligned: [],
+            academic: suggestion.academic,
+            experience: suggestion.experience.map((entry) => ({
+              position: entry.position,
+              company: entry.company,
+              period: entry.period,
+              tasks: entry.tasks.map((task) => task.text),
+            })),
+            specialProjects: suggestion.projects.map((project) => ({
+              title: project.title,
+              brief: project.brief,
+              // Project skills are editing/selection metadata and should not appear
+              // beneath projects in the final Complete Profile CV preview.
+              skills: [],
+            })),
+            certifications: suggestion.certifications.map((certification) => ({
+              name: certification.name,
+              issuer: certification.issuer,
+              year: certification.year,
+            })),
+            avatar: selectedEmployee.avatar,
+          }
+        : null,
+    [selectedEmployee, suggestion]
+  );
+
+  // customizedPreviewCv: "after" view for the same comparison — same tailoredCv used for the
+  // real export, just with project skills hidden from this particular side-by-side display (the
+  // hidden full-fidelity copy rendered in Step 3 below is what actually gets exported).
+  const customizedPreviewCv = useMemo(
+    () =>
+      tailoredCv
+        ? {
+            ...tailoredCv,
+            specialProjects: tailoredCv.specialProjects.map((project) => ({
+              ...project,
+              skills: [],
+            })),
+          }
+        : null,
+    [tailoredCv]
+  );
+
   // ── Pre-select employee from query param ────────────────────────────────────
   useEffect(() => {
     if (employees.length === 0) return;
@@ -175,18 +229,16 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
    * Asks the AI which of the employee's existing projects/experience/certifications are
    * relevant to this opportunity (plus a customized Objective) — never a rewrite of the profile.
    * The result is reviewed/adjusted by the user in CvSuggestionSelector before anything is
-   * actually applied to a CV (handleSelectionContinue below).
+   * actually applied to a CV (handleSelectionApply below).
    */
   const handleCustomize = async (e: React.FormEvent) => {
     e.preventDefault();
 
     setCustomizingLoading(true);
     setCustomizingError(null);
-    setSaveSuccess(false);
     setSuggestion(null);
     setSuggestionDraft(null);
     setTailoredCv(null);
-    setIsHumanVerified(false);
     setWizardStep(2);
 
     try {
@@ -213,52 +265,44 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
   };
 
   /**
-   * Called once the user has reviewed/adjusted the AI's suggested selection in
-   * CvSuggestionSelector. Builds the actual TailoredCv from only the selected content, then hands
-   * off to the existing CvSectionEditor for a light wording pass before Apply to CV — from here
-   * on, behavior is unchanged from the old flow.
+   * Called once the user has verified and applied their selection in CvSuggestionSelector.
+   * Builds the actual TailoredCv from only the selected content, saves it, and advances straight
+   * to Step 3 (comparison preview + export) — there is no separate wording-edit step in this flow.
    */
-  const handleSelectionContinue = (selection: CvSuggestionSelection) => {
+  const handleSelectionApply = async (selection: CvSuggestionSelection) => {
     if (!selectedEmployee) return;
-    setTailoredCv(buildTailoredCv(selectedEmployee, customerName, selection));
-  };
+    const cv = buildTailoredCv(selectedEmployee, customerName, selection);
 
-  /**
-   * Saves the current (possibly edited) tailoredCv to the generated_cvs table.
-   * Returns true on success, false on failure.
-   */
-  const handleSave = async (): Promise<boolean> => {
-    if (!tailoredCv || !selectedEmployee) return false;
     setSaving(true);
     try {
-      await saveGeneratedCvAction(selectedEmployee.rowId, tailoredCv);
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 4000);
-      return true;
-    } catch (err: any) {
-      alert(`Save failed: ${err.message}`);
-      return false;
+      await saveGeneratedCvAction(selectedEmployee.rowId, cv);
+      setTailoredCv(cv);
+      setWizardStep(3);
+    } catch (err) {
+      alert(err instanceof Error ? `Save failed: ${err.message}` : 'Could not apply the selected content.');
     } finally {
       setSaving(false);
     }
   };
 
   /**
+   * Saves the current (possibly edited) tailoredCv to the generated_cvs table.
+   * Returns true on success, false on failure.
+   */
+
+
+  /**
    * Always saves the CV then navigates to Step 3 preview.
    * (The "Apply to Template" button is the single action — it saves + previews.)
    */
-  const handleGoToPreview = async () => {
-    if (!tailoredCv) return;
-    const ok = await handleSave();
-    if (!ok) return;
-    setWizardStep(3);
-  };
+
 
   const handleBackToSelection = () => {
     setTailoredCv(null);
-    setIsHumanVerified(false);
     setWizardStep(2);
   };
+
+  const handleGoToPreview = () => setWizardStep(3);
 
   const handleDownloadDocx = async () => {
     if (!tailoredCv) return;
@@ -308,7 +352,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
       <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-3xl font-black tracking-tight text-slate-900 font-sans leading-none">
-            Customize CVs
+            Customize CV
           </h2>
           <p className="text-sm font-medium text-slate-500 mt-2">
             Tailor, customize, and export high-fidelity CVs aligned perfectly to customer
@@ -472,6 +516,16 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
       ════════════════════════════════════════════════════════════════════ */}
       {wizardStep === 2 && (
         <div className="grid grid-cols-12 gap-6">
+          <div className="col-span-12">
+            <button
+              type="button"
+              onClick={() => setWizardStep(1)}
+              className="flex items-center gap-2 px-3 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg transition-colors cursor-pointer active:scale-95 text-[11px] font-bold"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              <span>Back to Parameters</span>
+            </button>
+          </div>
           {/* ── Left sidebar: context + action buttons (sticky) ─────────── */}
           <div className="col-span-12 lg:col-span-3">
             <div className="sticky top-6 flex flex-col gap-4">
@@ -613,15 +667,6 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                 </div>
               )}
 
-              {/* Back button */}
-              <button
-                type="button"
-                onClick={() => setWizardStep(1)}
-                className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400 hover:text-slate-600 transition-colors self-start"
-              >
-                <ChevronLeft className="w-3.5 h-3.5" />
-                Back to Parameters
-              </button>
             </div>
           </div>
 
@@ -630,16 +675,27 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
             {/* Loading state */}
             {customizingLoading && (
               <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm flex flex-col items-center justify-center py-28 gap-5">
-                <div className="relative">
-                  <div className="w-16 h-16 rounded-full border-4 border-indigo-100 border-t-indigo-600 animate-spin" />
-                  <Sparkles className="w-6 h-6 text-indigo-600 absolute inset-0 m-auto" />
+                <div className="relative w-24 h-24 flex items-center justify-center">
+                  <div className="absolute inset-0 rounded-full border border-sky-200 animate-ping opacity-40" />
+                  <div className="absolute inset-2 rounded-full border-2 border-transparent border-t-sky-500 border-r-indigo-500 animate-spin" />
+                  <div className="absolute inset-4 rounded-full border border-dashed border-indigo-300 animate-[spin_3s_linear_infinite_reverse]" />
+                  <div className="relative w-12 h-12 rounded-2xl bg-slate-900 shadow-lg shadow-indigo-500/20 flex items-center justify-center animate-pulse">
+                    <Image
+                      src="/images/seb-logo-2.png"
+                      alt="SEBSA"
+                      width={34}
+                      height={34}
+                      className="object-contain"
+                      priority
+                    />
+                  </div>
                 </div>
                 <div className="text-center space-y-1">
                   <p className="text-sm font-black text-slate-800">
                     Analyzing Profile…
                   </p>
                   <p className="text-xs text-slate-500 max-w-xs leading-relaxed">
-                    AI is reviewing{' '}
+                    Reviewing{' '}
                     <span className="font-bold text-slate-700">{selectedEmployee?.name}</span>'s
                     existing profile against{' '}
                     <span className="font-bold text-slate-700">{customerName}</span>
@@ -675,7 +731,8 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                 suggestion={suggestion}
                 draft={suggestionDraft}
                 onDraftChange={setSuggestionDraft}
-                onContinue={handleSelectionContinue}
+                onApply={handleSelectionApply}
+                applying={saving}
               />
             )}
 
@@ -711,24 +768,25 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
       {/* ════════════════════════════════════════════════════════════════════
           STEP 3 — PREVIEW & EXPORT
       ════════════════════════════════════════════════════════════════════ */}
-      {wizardStep === 3 && tailoredCv && (
+      {wizardStep === 3 && tailoredCv && customizedPreviewCv && originalProfileCv && (
         <div className="flex flex-col gap-6">
           {/* Action toolbar */}
           <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-2.5">
               <button
                 type="button"
-                onClick={() => setWizardStep(2)}
+                onClick={handleBackToSelection}
                 className="p-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg transition-colors cursor-pointer active:scale-95"
+                aria-label="Back to Select and Preview"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
               <div>
                 <h4 className="text-sm font-black text-slate-800">
-                  Final CV Preview &amp; Export Panel
+                  Original and Customized CV Preview
                 </h4>
                 <p className="text-[11px] text-slate-450 font-medium">
-                  Verify the filled template before downloading.
+                  Compare the complete employee profile with the selected customer-specific content.
                 </p>
               </div>
             </div>
@@ -745,8 +803,50 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
             </div>
           </div>
 
-          {/* Full-width interactive HTML preview showing the customized CV template */}
-          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 shadow-inner flex justify-center">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+            <section className="min-w-0 space-y-3">
+              <div className="px-1">
+                <h5 className="text-xs font-black uppercase tracking-widest text-slate-600">
+                  Complete Profile CV
+                </h5>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Original overview, experience, projects, academics, and certifications.
+                </p>
+              </div>
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 shadow-inner flex justify-center">
+                <CvPreviewTemplate cv={originalProfileCv} id="original-cv-preview-root" />
+              </div>
+            </section>
+
+            <section className="min-w-0 space-y-3">
+              <div className="px-1">
+                <h5 className="text-xs font-black uppercase tracking-widest text-indigo-700">
+                  Customized CV
+                </h5>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Contains only the content selected in the previous step. Project skills are hidden here for a
+                  cleaner comparison — they're still included in the exported PDF.
+                </p>
+              </div>
+              <div className="bg-slate-50 p-4 rounded-2xl border border-indigo-100 shadow-inner flex justify-center">
+                <CvPreviewTemplate
+                  cv={{
+                    ...customizedPreviewCv,
+                    avatar: selectedEmployee?.avatar || null,
+                  }}
+                  id="customized-cv-preview-display"
+                />
+              </div>
+            </section>
+          </div>
+
+          {/* Hidden, full-width, untransformed copy of the real tailoredCv — this is what
+              lib/cvExport.ts actually screenshots, not either comparison panel above. Keeping the
+              real export target out of the half-width comparison grid is what keeps the exported
+              PDF at full resolution and correctly paginated regardless of how the on-screen
+              comparison is laid out — same fix already used for this exact class of bug in
+              EmployeeProfileClient.tsx's hidden capture copy. */}
+          <div style={{ position: 'fixed', top: 0, left: '-10000px', zIndex: -1 }} aria-hidden="true">
             <CvPreviewTemplate
               cv={{
                 ...tailoredCv,

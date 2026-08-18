@@ -28,7 +28,7 @@ export const cvTemplateSource = `
       <td style="vertical-align: top; padding-left: 6px;">
         <img src="/images/seb-logo-1.png" alt="SEBSA" style="width: 100px; height: auto; display: block; margin-bottom: 8px;" />
         <h1 style="color: #262626; font-size: 24px; font-weight: 800; margin: 0 0 4px 0;">{{name}}</h1>
-        <h2 style="color: #028BDE; font-size: 13px; font-weight: 700; margin: 0 0 4px 0; text-transform: uppercase; letter-spacing: 0.6px;">{{currentPosition}}</h2>
+        <h2 data-cv-field="Role" style="color: #028BDE; font-size: 13px; font-weight: 700; margin: 0 0 4px 0; text-transform: uppercase; letter-spacing: 0.6px;">{{currentPosition}}</h2>
         {{#if academic.[0].qualification}}
         <p style="color: #7F7F7F; font-size: 12px; margin: 0;">{{academic.[0].qualification}}</p>
         {{/if}}
@@ -42,14 +42,14 @@ export const cvTemplateSource = `
       <!-- Left column: Objective + Academic + Skills + Certifications -->
       <td style="width: 34%; vertical-align: top; padding-right: 18px;">
         {{#if summary}}
-        <div style="margin-bottom: 22px;">
+        <div data-cv-field="Objective" style="margin-bottom: 22px;">
           <div style="display: flex; align-items: center; width: 100%; box-sizing: border-box; background: linear-gradient(to right, #7650E1, #4E1C90); color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; padding: 0px 0px 12px 16px; line-height: 1; height: 30px; border-radius: 10px 0 10px 0; margin-bottom: 10px;">Objective</div>
           <p style="font-size: 12px; margin: 0; color: #404040; text-align: justify;">{{summary}}</p>
         </div>
         {{/if}}
 
         {{#if academic}}
-        <div style="margin-bottom: 22px;">
+        <div data-cv-field="Education" style="margin-bottom: 22px;">
           <div style="display: flex; align-items: center; width: 100%; box-sizing: border-box; background: linear-gradient(to right, #7650E1, #4E1C90); color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; padding: 0px 0px 12px 16px; line-height: 1; height: 30px; border-radius: 10px 0 10px 0; margin-bottom: 10px;">Academic</div>
           {{#each academic}}
           <div style="margin-bottom: 12px;">
@@ -59,7 +59,7 @@ export const cvTemplateSource = `
           {{/each}}
 
           {{#each certifications}}
-          <div style="margin-bottom: 12px;">
+          <div data-cv-field="Certifications" style="margin-bottom: 12px;">
             <p style="font-size: 12.5px; font-weight: 700; color: #262626; margin: 0;">{{name}}</p>
             <p style="font-size: 11.5px; color: #7F7F7F; margin: 2px 0 0 0;">{{issuer}}{{#if year}} ({{year}}){{/if}}</p>
           </div>
@@ -67,7 +67,7 @@ export const cvTemplateSource = `
         </div>
         {{else}}
           {{#if certifications}}
-          <div style="margin-bottom: 22px;">
+          <div data-cv-field="Certifications" style="margin-bottom: 22px;">
             <div style="display: flex; align-items: center; width: 100%; box-sizing: border-box; background: linear-gradient(to right, #7650E1, #4E1C90); color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; padding: 0px 0px 12px 16px; line-height: 1; height: 30px; border-radius: 10px 0 10px 0; margin-bottom: 10px;">Academic</div>
             {{#each certifications}}
             <div style="margin-bottom: 12px;">
@@ -80,7 +80,7 @@ export const cvTemplateSource = `
         {{/if}}
 
         {{#if skillsAligned}}
-        <div style="margin-bottom: 22px;">
+        <div data-cv-field="Skills" style="margin-bottom: 22px;">
           <div style="display: flex; align-items: center; width: 100%; box-sizing: border-box; background: linear-gradient(to right, #7650E1, #4E1C90); color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; padding: 0px 0px 12px 16px; line-height: 1; height: 30px; border-radius: 10px 0 10px 0; margin-bottom: 10px;">Skills</div>
           <div style="font-size: 11.5px; color: #404040; line-height: 2;">
             {{#each skillsAligned}}
@@ -94,7 +94,7 @@ export const cvTemplateSource = `
       <!-- Right column: Experience + Special Projects -->
       <td style="width: 66%; vertical-align: top; padding-left: 18px;">
         {{#if experience}}
-        <div style="margin-bottom: 22px;">
+        <div data-cv-field="Work Experience" style="margin-bottom: 22px;">
           <div style="display: flex; align-items: center; width: 100%; box-sizing: border-box; background: linear-gradient(to right, #7650E1, #4E1C90); color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; padding: 0px 0px 12px 16px; line-height: 1; height: 30px; border-radius: 10px 0 10px 0; margin-bottom: 12px;">Experience</div>
           {{#each experience}}
           <div style="margin-bottom: 14px;">
@@ -118,7 +118,7 @@ export const cvTemplateSource = `
         {{/if}}
 
         {{#if specialProjects}}
-        <div style="margin-bottom: 22px;">
+        <div data-cv-field="Special Projects" style="margin-bottom: 22px;">
           <div style="display: flex; align-items: center; width: 100%; box-sizing: border-box; background: linear-gradient(to right, #7650E1, #4E1C90); color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; padding: 0px 0px 12px 16px; line-height: 1; height: 30px; border-radius: 10px 0 10px 0; margin-bottom: 12px;">Special Projects</div>
           <table style="width: 100%; border-collapse: collapse; margin-top: 4px;">
             {{#each specialProjects}}

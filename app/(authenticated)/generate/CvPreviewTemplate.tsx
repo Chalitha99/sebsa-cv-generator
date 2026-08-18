@@ -7,6 +7,7 @@ import type { TailoredCv } from './types';
 
 interface CvPreviewTemplateProps {
   cv: TailoredCv;
+  highlightFields?: string[];
   onChange?: (updated: TailoredCv) => void;
   /**
    * Defaults to 'cv-preview-root' — the id `lib/cvExport.ts`'s `exportToPdf` screenshots. Pass a
@@ -18,17 +19,22 @@ interface CvPreviewTemplateProps {
   id?: string;
 }
 
-export default function CvPreviewTemplate({ cv, onChange, id = 'cv-preview-root' }: CvPreviewTemplateProps) {
+export default function CvPreviewTemplate({ cv, onChange, id = 'cv-preview-root', highlightFields = [] }: CvPreviewTemplateProps) {
   // Compile the Handlebars template with the current CV data
   const compiledHtml = useMemo(() => {
     try {
       const template = Handlebars.compile(cvTemplateSource);
-      return template(cv);
+      const html = template(cv);
+      if (highlightFields.length === 0) return html;
+      const selectors = highlightFields
+        .map((field) => `[data-cv-field="${field.replace(/["\\]/g, '')}"]`)
+        .join(',');
+      return `<style>${selectors}{outline:3px solid #F59E0B;outline-offset:4px;background-color:#FFFBEB!important;border-radius:6px;}</style>${html}`;
     } catch (error) {
       console.error('Handlebars compilation error:', error);
       return '<div class="text-rose-500">Error compiling preview template.</div>';
     }
-  }, [cv]);
+  }, [cv, highlightFields]);
 
   return (
     <div
