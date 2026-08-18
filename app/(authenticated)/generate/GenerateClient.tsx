@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, Suspense } from 'react';
+import Image from 'next/image';
 import CvPreviewTemplate from './CvPreviewTemplate';
 import CvSectionEditor from './CvSectionEditor';
 import CvSuggestionSelector, {
@@ -77,7 +78,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
 
   // ── Save state ──────────────────────────────────────────────────────────────
   const [saving, setSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveSuccess] = useState(false);
   const [isHumanVerified, setIsHumanVerified] = useState(false);
 
   // ── Derived ─────────────────────────────────────────────────────────────────
@@ -94,7 +95,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
             currentPosition: selectedEmployee.currentPosition || selectedEmployee.role,
             summary: suggestion.originalObjective,
             customerName: '',
-            skillsAligned: selectedEmployee.skills,
+            skillsAligned: [],
             academic: suggestion.academic,
             experience: suggestion.experience.map((entry) => ({
               position: entry.position,
@@ -159,11 +160,9 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
 
     setCustomizingLoading(true);
     setCustomizingError(null);
-    setSaveSuccess(false);
     setSuggestion(null);
     setSuggestionDraft(null);
     setTailoredCv(null);
-    setIsHumanVerified(false);
     setWizardStep(2);
 
     try {
@@ -195,9 +194,9 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
    * off to the existing CvSectionEditor for a light wording pass before Apply to CV — from here
    * on, behavior is unchanged from the old flow.
    */
-  const handleSelectionContinue = (selection: CvSuggestionSelection) => {
+  const handleSelectionApply = async (selection: CvSuggestionSelection) => {
     if (!selectedEmployee) return;
-    setTailoredCv({
+    const cv: TailoredCv = {
       name: selectedEmployee.name,
       currentPosition: selectedEmployee.currentPosition || selectedEmployee.role,
       summary: selection.summary,
@@ -208,45 +207,38 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
       specialProjects: selection.specialProjects,
       certifications: selection.certifications,
       avatar: selectedEmployee.avatar,
-    });
-  };
+    };
 
-  /**
-   * Saves the current (possibly edited) tailoredCv to the generated_cvs table.
-   * Returns true on success, false on failure.
-   */
-  const handleSave = async (): Promise<boolean> => {
-    if (!tailoredCv || !selectedEmployee) return false;
     setSaving(true);
     try {
-      await saveGeneratedCvAction(selectedEmployee.rowId, tailoredCv);
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 4000);
-      return true;
-    } catch (err: any) {
-      alert(`Save failed: ${err.message}`);
-      return false;
+      await saveGeneratedCvAction(selectedEmployee.rowId, cv);
+      setTailoredCv(cv);
+      setWizardStep(3);
+    } catch (err) {
+      alert(err instanceof Error ? `Save failed: ${err.message}` : 'Could not apply the selected content.');
     } finally {
       setSaving(false);
     }
   };
 
   /**
+   * Saves the current (possibly edited) tailoredCv to the generated_cvs table.
+   * Returns true on success, false on failure.
+   */
+
+
+  /**
    * Always saves the CV then navigates to Step 3 preview.
    * (The "Apply to Template" button is the single action — it saves + previews.)
    */
-  const handleGoToPreview = async () => {
-    if (!tailoredCv) return;
-    const ok = await handleSave();
-    if (!ok) return;
-    setWizardStep(3);
-  };
+
 
   const handleBackToSelection = () => {
     setTailoredCv(null);
-    setIsHumanVerified(false);
     setWizardStep(2);
   };
+
+  const handleGoToPreview = () => setWizardStep(3);
 
   const handleDownloadDocx = async () => {
     if (!tailoredCv) return;
@@ -306,7 +298,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
       <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-3xl font-black tracking-tight text-slate-900 font-sans leading-none">
-            Customize CVs
+            Customize CV
           </h2>
           <p className="text-sm font-medium text-slate-500 mt-2">
             Tailor, customize, and export high-fidelity CVs aligned perfectly to customer
@@ -470,6 +462,16 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
       ════════════════════════════════════════════════════════════════════ */}
       {wizardStep === 2 && (
         <div className="grid grid-cols-12 gap-6">
+          <div className="col-span-12">
+            <button
+              type="button"
+              onClick={() => setWizardStep(1)}
+              className="flex items-center gap-2 px-3 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg transition-colors cursor-pointer active:scale-95 text-[11px] font-bold"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              <span>Back to Parameters</span>
+            </button>
+          </div>
           {/* ── Left sidebar: context + action buttons (sticky) ─────────── */}
           <div className="col-span-12 lg:col-span-3">
             <div className="sticky top-6 flex flex-col gap-4">
@@ -574,15 +576,6 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                 </div>
               )}
 
-              {/* Back button */}
-              <button
-                type="button"
-                onClick={() => setWizardStep(1)}
-                className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400 hover:text-slate-600 transition-colors self-start"
-              >
-                <ChevronLeft className="w-3.5 h-3.5" />
-                Back to Parameters
-              </button>
             </div>
           </div>
 
@@ -591,16 +584,27 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
             {/* Loading state */}
             {customizingLoading && (
               <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm flex flex-col items-center justify-center py-28 gap-5">
-                <div className="relative">
-                  <div className="w-16 h-16 rounded-full border-4 border-indigo-100 border-t-indigo-600 animate-spin" />
-                  <Sparkles className="w-6 h-6 text-indigo-600 absolute inset-0 m-auto" />
+                <div className="relative w-24 h-24 flex items-center justify-center">
+                  <div className="absolute inset-0 rounded-full border border-sky-200 animate-ping opacity-40" />
+                  <div className="absolute inset-2 rounded-full border-2 border-transparent border-t-sky-500 border-r-indigo-500 animate-spin" />
+                  <div className="absolute inset-4 rounded-full border border-dashed border-indigo-300 animate-[spin_3s_linear_infinite_reverse]" />
+                  <div className="relative w-12 h-12 rounded-2xl bg-slate-900 shadow-lg shadow-indigo-500/20 flex items-center justify-center animate-pulse">
+                    <Image
+                      src="/images/seb-logo-2.png"
+                      alt="SEBSA"
+                      width={34}
+                      height={34}
+                      className="object-contain"
+                      priority
+                    />
+                  </div>
                 </div>
                 <div className="text-center space-y-1">
                   <p className="text-sm font-black text-slate-800">
                     Analyzing Profile…
                   </p>
                   <p className="text-xs text-slate-500 max-w-xs leading-relaxed">
-                    AI is reviewing{' '}
+                    Reviewing{' '}
                     <span className="font-bold text-slate-700">{selectedEmployee?.name}</span>'s
                     existing profile against{' '}
                     <span className="font-bold text-slate-700">{customerName}</span>
@@ -636,7 +640,8 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                 suggestion={suggestion}
                 draft={suggestionDraft}
                 onDraftChange={setSuggestionDraft}
-                onContinue={handleSelectionContinue}
+                onApply={handleSelectionApply}
+                applying={saving}
               />
             )}
 
@@ -723,7 +728,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                   Complete Profile CV
                 </h5>
                 <p className="text-[11px] text-slate-400 mt-1">
-                  Original overview, skills, experience, projects, academics, and certifications.
+                  Original overview, experience, projects, academics, and certifications.
                 </p>
               </div>
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 shadow-inner flex justify-center">
