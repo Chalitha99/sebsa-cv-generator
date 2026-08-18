@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import CvPreviewTemplate from './CvPreviewTemplate';
 import CvSectionEditor from './CvSectionEditor';
 import CvSuggestionSelector, {
+  buildSelectionFromDraft,
   type CvSuggestionDraft,
   type CvSuggestionSelection,
 } from './CvSuggestionSelector';
@@ -32,6 +33,37 @@ import {
 
 interface GenerateClientProps {
   employees: Employee[];
+}
+
+// ── One-page preview frame sizing ───────────────────────────────────────────────
+// CvPreviewTemplate renders at a natural 800px width (its own maxWidth). Treating that 800px as
+// "210mm of real A4 width" is the same assumption lib/cvExport.ts's PDF export makes when it fits
+// the screenshot to a 210mm page — so measuring this same live DOM node's natural (pre-transform)
+// height and converting via that ratio tells us, accurately, whether the content the user is
+// selecting/editing will actually fit on one exported page.
+const PREVIEW_SCALE = 0.28;
+const A4_WIDTH_MM = 210;
+const A4_HEIGHT_MM = 297;
+const PREVIEW_NATURAL_WIDTH_PX = 800;
+const PREVIEW_FRAME_WIDTH_PX = Math.round(PREVIEW_NATURAL_WIDTH_PX * PREVIEW_SCALE);
+const PREVIEW_FRAME_HEIGHT_PX = Math.round(PREVIEW_NATURAL_WIDTH_PX * (A4_HEIGHT_MM / A4_WIDTH_MM) * PREVIEW_SCALE);
+
+/** Shared by handleSelectionContinue and the live preview memo below — one place that turns a
+ *  selected-content payload into the actual TailoredCv shape, so the preview never drifts from
+ *  what "Continue"/"Apply to CV" actually produces. */
+function buildTailoredCv(employee: Employee, customerName: string, selection: CvSuggestionSelection): TailoredCv {
+  return {
+    name: employee.name,
+    currentPosition: employee.currentPosition || employee.role,
+    summary: selection.summary,
+    customerName,
+    skillsAligned: [],
+    academic: selection.academic,
+    experience: selection.experience,
+    specialProjects: selection.specialProjects,
+    certifications: selection.certifications,
+    avatar: employee.avatar,
+  };
 }
 
 export default function GenerateClient({ employees }: GenerateClientProps) {
@@ -85,6 +117,44 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
     () => employees.find((emp) => emp.rowId === selectedCandidateId) || employees[0],
     [employees, selectedCandidateId]
   );
+
+  // Live preview of what "Continue"/"Apply to CV" would currently produce — recomputed on every
+  // checkbox toggle in CvSuggestionSelector (select phase) so the sidebar preview below reacts in
+  // real time. Once past that step, tailoredCv (kept live by CvSectionEditor's onChange) takes
+  // over as the source, so the same preview keeps working while the user adds/edits content there.
+  const draftPreviewCv = useMemo(
+    () =>
+      selectedEmployee && suggestion && suggestionDraft
+        ? buildTailoredCv(selectedEmployee, customerName, buildSelectionFromDraft(suggestionDraft, suggestion.academic))
+        : null,
+    [selectedEmployee, suggestion, suggestionDraft, customerName]
+  );
+  const livePreviewCv = tailoredCv ?? draftPreviewCv;
+
+  // Measures the live preview's real rendered height against a true A4 page (see the
+  // PREVIEW_* constants above) so the "exceeds one page" warning reflects actual layout — not a
+  // guess — and reacts to anything that changes it (selection, edits, even font loading), via
+  // ResizeObserver rather than a one-shot calculation.
+  const previewFrameRef = useRef<HTMLDivElement>(null);
+  const [previewOverflowMm, setPreviewOverflowMm] = useState(0);
+  const hasLivePreview = livePreviewCv !== null;
+
+  useEffect(() => {
+    const el = previewFrameRef.current;
+    if (!el) {
+      setPreviewOverflowMm(0);
+      return;
+    }
+    const measure = () => {
+      if (!el.offsetWidth) return;
+      const heightMm = (el.offsetHeight / el.offsetWidth) * A4_WIDTH_MM;
+      setPreviewOverflowMm(Math.max(0, heightMm - A4_HEIGHT_MM));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasLivePreview]);
 
   const originalProfileCv = useMemo(
     () =>
@@ -197,18 +267,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
    */
   const handleSelectionContinue = (selection: CvSuggestionSelection) => {
     if (!selectedEmployee) return;
-    setTailoredCv({
-      name: selectedEmployee.name,
-      currentPosition: selectedEmployee.currentPosition || selectedEmployee.role,
-      summary: selection.summary,
-      customerName,
-      skillsAligned: [],
-      academic: selection.academic,
-      experience: selection.experience,
-      specialProjects: selection.specialProjects,
-      certifications: selection.certifications,
-      avatar: selectedEmployee.avatar,
-    });
+    setTailoredCv(buildTailoredCv(selectedEmployee, customerName, selection));
   };
 
   /**
@@ -517,6 +576,43 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                     </p>
                   </div>
                 </div>
+
+                {/* Live one-page CV preview — reflects the current selection (or, once past that
+                    step, the edited content) in real time, so the one-page limit is visible while
+                    choosing/adding content rather than discovered later at export time. */}
+                {livePreviewCv && (
+                  <div className="pt-4 border-t border-slate-100 space-y-2">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      CV Preview (1 Page)
+                    </p>
+                    <div
+                      className="mx-auto border border-slate-200 rounded-lg overflow-hidden bg-white shadow-sm"
+                      style={{ width: PREVIEW_FRAME_WIDTH_PX, height: PREVIEW_FRAME_HEIGHT_PX }}
+                    >
+                      <div
+                        ref={previewFrameRef}
+                        style={{
+                          transform: `scale(${PREVIEW_SCALE})`,
+                          transformOrigin: 'top left',
+                          width: `${100 / PREVIEW_SCALE}%`,
+                        }}
+                      >
+                        <CvPreviewTemplate cv={livePreviewCv} id="cv-preview-context-thumb" />
+                      </div>
+                    </div>
+                    {previewOverflowMm > 0 ? (
+                      <p className="flex items-center gap-1.5 text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-100 rounded-lg px-2.5 py-1.5 leading-snug">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        Exceeds one page — some content may be cut off when exported.
+                      </p>
+                    ) : (
+                      <p className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-600">
+                        <CheckCircle2 className="w-3 h-3 shrink-0" />
+                        Fits on one page
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Action buttons */}
