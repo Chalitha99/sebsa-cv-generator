@@ -52,6 +52,25 @@ function computeChangedFields(current: Employee, proposed: CreateEmployeeInput):
     });
   }
 
+  const normalizeText = (value: unknown) => String(value ?? '').trim();
+  const normalizers: Record<string, (entry: any) => unknown> = {
+    'Work Experience': (entry) => ({
+      position: normalizeText(entry.position), company: normalizeText(entry.company),
+      period: normalizeText(entry.period), tasks: (entry.tasks ?? []).map(normalizeText),
+    }),
+    Education: (entry) => ({
+      qualification: normalizeText(entry.qualification), institution: normalizeText(entry.institution),
+      period: normalizeText(entry.period),
+    }),
+    'Special Projects': (entry) => ({
+      title: normalizeText(entry.title), brief: normalizeText(entry.brief),
+      skills: (entry.skills ?? []).map(normalizeText),
+    }),
+    Certifications: (entry) => ({
+      name: normalizeText(entry.name), issuer: normalizeText(entry.issuer), year: normalizeText(entry.year),
+    }),
+  };
+
   const listField = (
     label: string,
     currentList: unknown[] | undefined,
@@ -59,7 +78,10 @@ function computeChangedFields(current: Employee, proposed: CreateEmployeeInput):
   ) => {
     const before = currentList ?? [];
     const after = proposedList ?? [];
-    if (JSON.stringify(before) !== JSON.stringify(after)) {
+    const normalize = normalizers[label];
+    const normalizedBefore = normalize ? before.map(normalize) : before;
+    const normalizedAfter = normalize ? after.map(normalize) : after;
+    if (JSON.stringify(normalizedBefore) !== JSON.stringify(normalizedAfter)) {
       diffs.push({ field: label, before: `${before.length} entries`, after: `${after.length} entries` });
     }
   };
