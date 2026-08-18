@@ -1,7 +1,7 @@
 'use client';
 
-import React from 'react';
-import { FileText, Briefcase, Lightbulb, Award, ArrowRight, Sparkles } from 'lucide-react';
+import React, { useState } from 'react';
+import { FileText, Briefcase, Lightbulb, Award, ArrowRight, Sparkles, Loader2 } from 'lucide-react';
 import { SectionCard, EducationSection, textareaCls } from '@/app/components/CvEntrySections';
 import type { CvExperienceEntry, CvProjectEntry, CvCertificationEntry } from '@/lib/cvTypes';
 import type {
@@ -30,7 +30,8 @@ interface CvSuggestionSelectorProps {
   suggestion: CvSuggestion;
   draft: CvSuggestionDraft;
   onDraftChange: (draft: CvSuggestionDraft) => void;
-  onContinue: (selection: CvSuggestionSelection) => void;
+  onApply: (selection: CvSuggestionSelection) => Promise<void>;
+  applying: boolean;
 }
 
 const checkboxCls = 'w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20 cursor-pointer shrink-0';
@@ -47,8 +48,10 @@ export default function CvSuggestionSelector({
   suggestion,
   draft,
   onDraftChange,
-  onContinue,
+  onApply,
+  applying,
 }: CvSuggestionSelectorProps) {
+  const [isVerified, setIsVerified] = useState(false);
   const { objective, experience, projects, certifications } = draft;
 
   const toggleExperience = (index: number) =>
@@ -93,8 +96,9 @@ export default function CvSuggestionSelector({
   const selectedProjectCount = projects.filter((p) => p.relevant).length;
   const selectedCertCount = certifications.filter((c) => c.relevant).length;
 
-  const handleContinue = () => {
-    onContinue({
+  const handleApply = async () => {
+    if (!isVerified || applying) return;
+    await onApply({
       summary: objective,
       academic: suggestion.academic,
       experience: experience
@@ -255,14 +259,36 @@ export default function CvSuggestionSelector({
         ))}
       </SectionCard>
 
-      <button
-        type="button"
-        onClick={handleContinue}
-        className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm"
-      >
-        <span>Continue with Selection</span>
-        <ArrowRight className="w-3.5 h-3.5" />
-      </button>
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-sm">
+        <label className="flex items-center gap-2.5 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={isVerified}
+            onChange={(event) => setIsVerified(event.target.checked)}
+            className={checkboxCls}
+          />
+          <span className="text-xs font-bold text-slate-700">I verified the generated content</span>
+        </label>
+
+        <button
+          type="button"
+          onClick={handleApply}
+          disabled={!isVerified || applying}
+          className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-xs font-black uppercase tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+        >
+          {applying ? (
+            <>
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              <span>Applying...</span>
+            </>
+          ) : (
+            <>
+              <span>Apply to CV</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </>
+          )}
+        </button>
+      </div>
     </div>
   );
 }
