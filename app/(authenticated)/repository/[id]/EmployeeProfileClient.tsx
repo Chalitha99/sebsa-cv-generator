@@ -8,7 +8,6 @@ import type { CvExperienceEntry } from '@/lib/cvTypes';
 import { isAdminOrAbove, type UserRole } from '@/lib/roles';
 import CvPreviewTemplate from '../../generate/CvPreviewTemplate';
 import { buildTailoredCvFromEmployee } from '@/lib/templates/buildTailoredCvFromEmployee';
-import { exportToPdf } from '@/lib/cvExport';
 import {
   ArrowLeft,
   Mail,
@@ -18,7 +17,6 @@ import {
   Sparkles,
   Download,
   Eye,
-  Loader2,
   ExternalLink,
   BadgeCheck,
   Clock,
@@ -45,40 +43,24 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
     router.push('/repository');
   };
 
-  // ── Preview & export the actual CV template (docs/04-rbac-security.md §15) ─────────────────
-  // Available to whoever can view this page — most usefully an Employee viewing/downloading
-  // their own CV, but also lets Admins/Reviewers grab a quick copy without the full "Customize
-  // CVs" wizard. No AI tailoring here — just the employee's current profile data as-is.
+  // ── Preview the actual CV template (docs/04-rbac-security.md §15) ──────────────────────────
+  // Available to whoever can view this page — most usefully an Employee viewing their own CV, but
+  // also lets Admins/Reviewers see a quick copy without the full "Customize CVs" wizard.
   const [showPreview, setShowPreview] = useState(false);
-  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   const tailoredCv = useMemo(() => buildTailoredCvFromEmployee(employee), [employee]);
-  const exportFilename = `${employee.name.replace(/\s+/g, '_')}_CV`;
 
   // A self-service signup (or an Admin-provisioned account, §14) links `user_id` immediately —
   // separate from whether the profile itself has cleared review yet. Show "Pending Approval"
   // while status is still 'draft' rather than a misleading "Active".
   const isPendingApproval = employee.status === 'draft';
 
-  // Employees viewing their own profile (this route never shows anyone else's, docs/04-rbac-
-  // security.md §2) get routed to the Download CV content-selection screen instead of an instant
-  // export, so the same one-page-limit checkbox flow governs self-service downloads too. Admins/
-  // Reviewers quick-downloading someone else's CV from here keep the direct export — /download-cv
-  // only ever renders the logged-in user's own profile, so it can't stand in for that case.
-  const handleDownloadPdf = async () => {
-    if (viewerRole === 'employee') {
-      router.push('/download-cv');
-      return;
-    }
-    setDownloadingPdf(true);
-    try {
-      await exportToPdf('cv-preview-root', exportFilename);
-    } catch (err) {
-      console.error('PDF export failed:', err);
-      alert(err instanceof Error ? `Could not export to PDF: ${err.message}` : 'Could not export to PDF.');
-    } finally {
-      setDownloadingPdf(false);
-    }
+  // Download PDF never exports straight from here — for anyone viewing this page (Employee on
+  // their own profile, or Admin/Reviewer on any profile, as long as they're not already inside the
+  // AI "Customize this CV" flow) it hands off to the Download CV content-selection/checkbox
+  // screen, so the same one-page-limit gating governs every plain (non-customized) download.
+  const handleDownloadPdf = () => {
+    router.push(`/download-cv?id=${encodeURIComponent(employee.rowId)}`);
   };
 
   // ── Prefer structured CV fields; fall back to legacy or demo data ─────────
@@ -442,7 +424,8 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
                 </span>
               </div>
               {/* Scaled-down live CV template preview — decorative only, given its own id so it
-                  can't collide with the real 'cv-preview-root' export target below. */}
+                  never collides with the default 'cv-preview-root' id CvPreviewTemplate/exportToPdf
+                  use elsewhere in the app. */}
               <div
                 className="pointer-events-none absolute top-0 left-0 origin-top-left"
                 style={{ transform: 'scale(0.28)', width: '357%', transformOrigin: 'top left' }}
@@ -456,10 +439,9 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
               <button
                 type="button"
                 onClick={handleDownloadPdf}
-                disabled={downloadingPdf}
-                className="flex items-center justify-center gap-1.5 py-3 border border-slate-200 text-slate-700 font-semibold rounded-xl text-xs hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed transition-colors active:scale-95 cursor-pointer"
+                className="flex items-center justify-center gap-1.5 py-3 border border-slate-200 text-slate-700 font-semibold rounded-xl text-xs hover:bg-slate-50 transition-colors active:scale-95 cursor-pointer"
               >
-                {downloadingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                <Download className="w-4 h-4" />
                 <span>Download PDF</span>
               </button>
             </div>
@@ -482,10 +464,9 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
                 <button
                   type="button"
                   onClick={handleDownloadPdf}
-                  disabled={downloadingPdf}
-                  className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 text-slate-700 font-bold rounded-lg text-[11px] hover:bg-slate-50 disabled:opacity-60 transition-colors cursor-pointer"
+                  className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 text-slate-700 font-bold rounded-lg text-[11px] hover:bg-slate-50 transition-colors cursor-pointer"
                 >
-                  {downloadingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5 text-rose-500" />}
+                  <Download className="w-3.5 h-3.5 text-rose-500" />
                   <span>PDF</span>
                 </button>
                 <button
@@ -505,15 +486,6 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
           </div>
         </div>
       )}
-
-      {/* Dedicated, always-mounted export target for handleDownloadPdf — kept off-screen but in
-          normal document flow (no scale transform, no scrollable/fixed/blurred ancestor), so
-          html2canvas captures a clean, correctly-laid-out copy regardless of whether the preview
-          modal is open. Fixes PDF export previously screenshotting the scaled-down sidebar
-          thumbnail instead (docs/04-rbac-security.md §15). */}
-      <div style={{ position: 'fixed', top: 0, left: '-10000px', zIndex: -1 }} aria-hidden="true">
-        <CvPreviewTemplate cv={tailoredCv} />
-      </div>
     </PageWrapper>
   );
 }
