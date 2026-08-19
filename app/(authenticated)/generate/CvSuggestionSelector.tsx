@@ -37,12 +37,46 @@ interface CvSuggestionSelectorProps {
 const checkboxCls = 'w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20 cursor-pointer shrink-0';
 
 /**
+ * Pure projection from the in-progress draft (checkbox state) to the actual selected content —
+ * the same shape "Continue" hands to GenerateClient. Exported so GenerateClient can derive a live
+ * preview CV from the draft as the user checks/unchecks items, without duplicating this filtering
+ * logic or drifting from what "Continue" actually applies.
+ */
+export function buildSelectionFromDraft(
+  draft: CvSuggestionDraft,
+  academic: CvSuggestion['academic']
+): CvSuggestionSelection {
+  return {
+    summary: draft.objective,
+    academic,
+    experience: draft.experience
+      .filter((e) => e.relevant)
+      .map((e) => ({
+        position: e.position,
+        company: e.company,
+        period: e.period,
+        tasks: e.tasks.filter((t) => t.relevant).map((t) => t.text),
+      })),
+    specialProjects: draft.projects
+      .filter((p) => p.relevant)
+      .map((p) => ({
+        title: p.title,
+        brief: p.brief,
+        skills: p.skills.filter((s) => s.relevant).map((s) => s.text),
+      })),
+    certifications: draft.certifications
+      .filter((c) => c.relevant)
+      .map((c) => ({ name: c.name, issuer: c.issuer, year: c.year })),
+  };
+}
+
+/**
  * Review step for the AI's content SELECTION (never generation — see suggestCvContentAction's
  * doc comment) — every project/experience/skill/task/certification shown here is the employee's
  * own real data with the AI's relevance flag as the initial checkbox state, which the user can
- * freely override. Only Objective is AI-written text. "Continue" hands the selected subset up to
- * GenerateClient, which loads it into the existing CvSectionEditor for a light wording pass
- * before Apply to CV — this component itself never lets the user edit wording, only pick items.
+ * freely override. Only Objective is AI-written text. Checking "I verified the generated content"
+ * and clicking Apply saves the selected subset directly as the CV and moves to Preview & Export —
+ * this component never lets the user edit wording, only pick which existing items are included.
  */
 export default function CvSuggestionSelector({
   suggestion,
@@ -98,28 +132,7 @@ export default function CvSuggestionSelector({
 
   const handleApply = async () => {
     if (!isVerified || applying) return;
-    await onApply({
-      summary: objective,
-      academic: suggestion.academic,
-      experience: experience
-        .filter((e) => e.relevant)
-        .map((e) => ({
-          position: e.position,
-          company: e.company,
-          period: e.period,
-          tasks: e.tasks.filter((t) => t.relevant).map((t) => t.text),
-        })),
-      specialProjects: projects
-        .filter((p) => p.relevant)
-        .map((p) => ({
-          title: p.title,
-          brief: p.brief,
-          skills: [],
-        })),
-      certifications: certifications
-        .filter((c) => c.relevant)
-        .map((c) => ({ name: c.name, issuer: c.issuer, year: c.year })),
-    });
+    await onApply(buildSelectionFromDraft(draft, suggestion.academic));
   };
 
   return (

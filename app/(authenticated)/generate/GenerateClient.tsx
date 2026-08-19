@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import Image from 'next/image';
 import CvPreviewTemplate from './CvPreviewTemplate';
 import CvSectionEditor from './CvSectionEditor';
 import CvSuggestionSelector, {
+  buildSelectionFromDraft,
   type CvSuggestionDraft,
   type CvSuggestionSelection,
 } from './CvSuggestionSelector';
@@ -24,7 +25,6 @@ import {
   ChevronRight,
   ChevronLeft,
   Download,
-  FolderSync,
   Loader2,
   AlertCircle,
   CheckCircle2,
@@ -33,6 +33,37 @@ import {
 
 interface GenerateClientProps {
   employees: Employee[];
+}
+
+// ── One-page preview frame sizing ───────────────────────────────────────────────
+// CvPreviewTemplate renders at a natural 800px width (its own maxWidth). Treating that 800px as
+// "210mm of real A4 width" is the same assumption lib/cvExport.ts's PDF export makes when it fits
+// the screenshot to a 210mm page — so measuring this same live DOM node's natural (pre-transform)
+// height and converting via that ratio tells us, accurately, whether the content the user is
+// selecting/editing will actually fit on one exported page.
+const PREVIEW_SCALE = 0.28;
+const A4_WIDTH_MM = 210;
+const A4_HEIGHT_MM = 297;
+const PREVIEW_NATURAL_WIDTH_PX = 800;
+const PREVIEW_FRAME_WIDTH_PX = Math.round(PREVIEW_NATURAL_WIDTH_PX * PREVIEW_SCALE);
+const PREVIEW_FRAME_HEIGHT_PX = Math.round(PREVIEW_NATURAL_WIDTH_PX * (A4_HEIGHT_MM / A4_WIDTH_MM) * PREVIEW_SCALE);
+
+/** Shared by handleSelectionApply and the live preview memo below — one place that turns a
+ *  selected-content payload into the actual TailoredCv shape, so the preview never drifts from
+ *  what "Apply to CV" actually produces. */
+function buildTailoredCv(employee: Employee, customerName: string, selection: CvSuggestionSelection): TailoredCv {
+  return {
+    name: employee.name,
+    currentPosition: employee.currentPosition || employee.role,
+    summary: selection.summary,
+    customerName,
+    skillsAligned: [],
+    academic: selection.academic,
+    experience: selection.experience,
+    specialProjects: selection.specialProjects,
+    certifications: selection.certifications,
+    avatar: employee.avatar,
+  };
 }
 
 export default function GenerateClient({ employees }: GenerateClientProps) {
@@ -70,8 +101,8 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
   // ── AI suggestion + CV content state ────────────────────────────────────────
   // suggestion: the AI's relevance flags paired with the employee's real profile data (never
   // shown to the user until they've reviewed/adjusted it via CvSuggestionSelector). tailoredCv is
-  // only set once the user continues past that selection step — from then on it behaves exactly
-  // like the old flow (CvSectionEditor for a light wording pass, then Apply to CV).
+  // only set once the user verifies and applies their selection there — at that point it's
+  // already been saved and Step 3 (comparison preview + export) is shown.
   const [suggestion, setSuggestion] = useState<CvSuggestion | null>(null);
   const [suggestionDraft, setSuggestionDraft] = useState<CvSuggestionDraft | null>(null);
   const [tailoredCv, setTailoredCv] = useState<TailoredCv | null>(null);
@@ -87,6 +118,46 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
     [employees, selectedCandidateId]
   );
 
+  // Live preview of what "Continue"/"Apply to CV" would currently produce — recomputed on every
+  // checkbox toggle in CvSuggestionSelector (select phase) so the sidebar preview below reacts in
+  // real time. Once past that step, tailoredCv (kept live by CvSectionEditor's onChange) takes
+  // over as the source, so the same preview keeps working while the user adds/edits content there.
+  const draftPreviewCv = useMemo(
+    () =>
+      selectedEmployee && suggestion && suggestionDraft
+        ? buildTailoredCv(selectedEmployee, customerName, buildSelectionFromDraft(suggestionDraft, suggestion.academic))
+        : null,
+    [selectedEmployee, suggestion, suggestionDraft, customerName]
+  );
+  const livePreviewCv = tailoredCv ?? draftPreviewCv;
+
+  // Measures the live preview's real rendered height against a true A4 page (see the
+  // PREVIEW_* constants above) so the "exceeds one page" warning reflects actual layout — not a
+  // guess — and reacts to anything that changes it (selection, edits, even font loading), via
+  // ResizeObserver rather than a one-shot calculation.
+  const previewFrameRef = useRef<HTMLDivElement>(null);
+  const [previewOverflowMm, setPreviewOverflowMm] = useState(0);
+  const hasLivePreview = livePreviewCv !== null;
+
+  useEffect(() => {
+    const el = previewFrameRef.current;
+    if (!el) {
+      setPreviewOverflowMm(0);
+      return;
+    }
+    const measure = () => {
+      if (!el.offsetWidth) return;
+      const heightMm = (el.offsetHeight / el.offsetWidth) * A4_WIDTH_MM;
+      setPreviewOverflowMm(Math.max(0, heightMm - A4_HEIGHT_MM));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasLivePreview]);
+
+  // ── Step 3 "before / after" comparison (Complete Profile CV vs Customized CV) ──────────────
+  // originalProfileCv: unfiltered "before" view of the whole profile, display-only.
   const originalProfileCv = useMemo(
     () =>
       selectedEmployee && suggestion
@@ -121,6 +192,9 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
     [selectedEmployee, suggestion]
   );
 
+  // customizedPreviewCv: "after" view for the same comparison — same tailoredCv used for the
+  // real export, just with project skills hidden from this particular side-by-side display (the
+  // hidden full-fidelity copy rendered in Step 3 below is what actually gets exported).
   const customizedPreviewCv = useMemo(
     () =>
       tailoredCv
@@ -155,7 +229,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
    * Asks the AI which of the employee's existing projects/experience/certifications are
    * relevant to this opportunity (plus a customized Objective) — never a rewrite of the profile.
    * The result is reviewed/adjusted by the user in CvSuggestionSelector before anything is
-   * actually applied to a CV (handleSelectionContinue below).
+   * actually applied to a CV (handleSelectionApply below).
    */
   const handleCustomize = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -191,25 +265,13 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
   };
 
   /**
-   * Called once the user has reviewed/adjusted the AI's suggested selection in
-   * CvSuggestionSelector. Builds the actual TailoredCv from only the selected content, then hands
-   * off to the existing CvSectionEditor for a light wording pass before Apply to CV — from here
-   * on, behavior is unchanged from the old flow.
+   * Called once the user has verified and applied their selection in CvSuggestionSelector.
+   * Builds the actual TailoredCv from only the selected content, saves it, and advances straight
+   * to Step 3 (comparison preview + export) — there is no separate wording-edit step in this flow.
    */
   const handleSelectionApply = async (selection: CvSuggestionSelection) => {
     if (!selectedEmployee) return;
-    const cv: TailoredCv = {
-      name: selectedEmployee.name,
-      currentPosition: selectedEmployee.currentPosition || selectedEmployee.role,
-      summary: selection.summary,
-      customerName,
-      skillsAligned: [],
-      academic: selection.academic,
-      experience: selection.experience,
-      specialProjects: selection.specialProjects,
-      certifications: selection.certifications,
-      avatar: selectedEmployee.avatar,
-    };
+    const cv = buildTailoredCv(selectedEmployee, customerName, selection);
 
     setSaving(true);
     try {
@@ -265,16 +327,6 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
     } catch (err) {
       console.error('PDF export failed:', err);
       alert(err instanceof Error ? `Could not export to PDF: ${err.message}` : 'Could not export to PDF.');
-    }
-  };
-
-  const handleSyncToCrm = async () => {
-    if (!tailoredCv) return;
-    try {
-      await saveGeneratedCvAction(selectedEmployee.rowId, tailoredCv);
-      alert('Successfully synchronized tailored CV to CRM database.');
-    } catch (err: any) {
-      alert(`Could not sync to CRM: ${err.message}`);
     }
   };
 
@@ -521,6 +573,43 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                     </p>
                   </div>
                 </div>
+
+                {/* Live one-page CV preview — reflects the current selection (or, once past that
+                    step, the edited content) in real time, so the one-page limit is visible while
+                    choosing/adding content rather than discovered later at export time. */}
+                {livePreviewCv && (
+                  <div className="pt-4 border-t border-slate-100 space-y-2">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      CV Preview (1 Page)
+                    </p>
+                    <div
+                      className="mx-auto border border-slate-200 rounded-lg overflow-hidden bg-white shadow-sm"
+                      style={{ width: PREVIEW_FRAME_WIDTH_PX, height: PREVIEW_FRAME_HEIGHT_PX }}
+                    >
+                      <div
+                        ref={previewFrameRef}
+                        style={{
+                          transform: `scale(${PREVIEW_SCALE})`,
+                          transformOrigin: 'top left',
+                          width: `${100 / PREVIEW_SCALE}%`,
+                        }}
+                      >
+                        <CvPreviewTemplate cv={livePreviewCv} id="cv-preview-context-thumb" />
+                      </div>
+                    </div>
+                    {previewOverflowMm > 0 ? (
+                      <p className="flex items-center gap-1.5 text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-100 rounded-lg px-2.5 py-1.5 leading-snug">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        Exceeds one page — some content may be cut off when exported.
+                      </p>
+                    ) : (
+                      <p className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-600">
+                        <CheckCircle2 className="w-3 h-3 shrink-0" />
+                        Fits on one page
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Action buttons */}
@@ -711,15 +800,6 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                 <Download className="w-4 h-4 text-rose-500" />
                 <span>Export PDF</span>
               </button>
-
-              <button
-                type="button"
-                onClick={handleSyncToCrm}
-                className="flex items-center gap-2 px-5 py-2.5 bg-indigo-650 text-white font-black rounded-xl text-xs hover:bg-indigo-750 transition-colors cursor-pointer active:scale-95 shadow-md"
-              >
-                <FolderSync className="w-4 h-4 text-sky-200" />
-                <span>Sync to CRM</span>
-              </button>
             </div>
           </div>
 
@@ -744,7 +824,8 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                   Customized CV
                 </h5>
                 <p className="text-[11px] text-slate-400 mt-1">
-                  Contains only the content selected in the previous step. Project skills are hidden.
+                  Contains only the content selected in the previous step. Project skills are hidden here for a
+                  cleaner comparison — they're still included in the exported PDF.
                 </p>
               </div>
               <div className="bg-slate-50 p-4 rounded-2xl border border-indigo-100 shadow-inner flex justify-center">
@@ -753,9 +834,25 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                     ...customizedPreviewCv,
                     avatar: selectedEmployee?.avatar || null,
                   }}
+                  id="customized-cv-preview-display"
                 />
               </div>
             </section>
+          </div>
+
+          {/* Hidden, full-width, untransformed copy of the real tailoredCv — this is what
+              lib/cvExport.ts actually screenshots, not either comparison panel above. Keeping the
+              real export target out of the half-width comparison grid is what keeps the exported
+              PDF at full resolution and correctly paginated regardless of how the on-screen
+              comparison is laid out — same fix already used for this exact class of bug in
+              EmployeeProfileClient.tsx's hidden capture copy. */}
+          <div style={{ position: 'fixed', top: 0, left: '-10000px', zIndex: -1 }} aria-hidden="true">
+            <CvPreviewTemplate
+              cv={{
+                ...tailoredCv,
+                avatar: selectedEmployee?.avatar || null,
+              }}
+            />
           </div>
         </div>
       )}
