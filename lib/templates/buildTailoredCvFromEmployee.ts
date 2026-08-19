@@ -57,6 +57,41 @@ export function buildTailoredCvFromEmployee(employee: Employee): TailoredCv {
   };
 }
 
+/** The subset of TailoredCv a user has picked to include — same shape whether the picker was a
+ *  human (Download CV, no AI) or an AI suggestion the human then adjusted (Customize CVs). */
+export interface TailoredCvSelection {
+  summary: string;
+  academic: TailoredCv['academic'];
+  experience: TailoredCv['experience'];
+  specialProjects: TailoredCv['specialProjects'];
+  certifications: TailoredCv['certifications'];
+}
+
+/**
+ * Merges a selected-content payload with the employee's identity fields into a full TailoredCv —
+ * shared by the Customize CVs flow (AI-suggested, human-adjusted selection) and the Download CV
+ * flow (human-only selection, no AI involved) so both ever only differ in how `selection` was
+ * produced, never in how it's turned into the thing that gets previewed/exported/saved.
+ */
+export function buildTailoredCvFromSelection(
+  employee: Employee,
+  customerName: string,
+  selection: TailoredCvSelection
+): TailoredCv {
+  return {
+    name: employee.name,
+    currentPosition: employee.currentPosition || employee.role,
+    summary: selection.summary,
+    customerName,
+    skillsAligned: [],
+    academic: selection.academic,
+    experience: selection.experience,
+    specialProjects: selection.specialProjects,
+    certifications: selection.certifications,
+    avatar: employee.avatar,
+  };
+}
+
 /**
  * Converts a proposed-but-not-yet-approved edit (`profiles.pending_change`, a full
  * `CreateEmployeeInput` — see app/(authenticated)/my-profile/actions.ts) into `TailoredCv` so a
