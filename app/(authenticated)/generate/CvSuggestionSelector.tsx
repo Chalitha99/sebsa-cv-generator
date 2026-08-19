@@ -32,6 +32,9 @@ interface CvSuggestionSelectorProps {
   onDraftChange: (draft: CvSuggestionDraft) => void;
   onApply: (selection: CvSuggestionSelection) => Promise<void>;
   applying: boolean;
+  /** True once the live one-page preview (driven by this same draft, measured by the parent)
+   *  exceeds one page — blocks Apply until the selection is trimmed back down. */
+  pageLimitExceeded?: boolean;
 }
 
 const checkboxCls = 'w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20 cursor-pointer shrink-0';
@@ -84,6 +87,7 @@ export default function CvSuggestionSelector({
   onDraftChange,
   onApply,
   applying,
+  pageLimitExceeded = false,
 }: CvSuggestionSelectorProps) {
   const [isVerified, setIsVerified] = useState(false);
   const { objective, experience, projects, certifications } = draft;
@@ -131,7 +135,7 @@ export default function CvSuggestionSelector({
   const selectedCertCount = certifications.filter((c) => c.relevant).length;
 
   const handleApply = async () => {
-    if (!isVerified || applying) return;
+    if (!isVerified || applying || pageLimitExceeded) return;
     await onApply(buildSelectionFromDraft(draft, suggestion.academic));
   };
 
@@ -286,7 +290,7 @@ export default function CvSuggestionSelector({
         <button
           type="button"
           onClick={handleApply}
-          disabled={!isVerified || applying}
+          disabled={!isVerified || applying || pageLimitExceeded}
           className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-xs font-black uppercase tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm"
         >
           {applying ? (
@@ -301,6 +305,11 @@ export default function CvSuggestionSelector({
             </>
           )}
         </button>
+        {pageLimitExceeded && (
+          <p className="text-[10px] font-bold text-rose-600 text-center leading-relaxed">
+            Your selection exceeds one page — uncheck some content before applying.
+          </p>
+        )}
       </div>
     </div>
   );

@@ -220,11 +220,17 @@ export function ExperienceSection({
   expanded,
   onToggle,
   onChange,
+  positionLocked = false,
 }: {
   experience: CvExperienceEntry[];
   expanded: boolean;
   onToggle: () => void;
   onChange: (v: CvExperienceEntry[]) => void;
+  /** Locks Position/Title to the profile's existing value — only appropriate in the Customize CV
+   *  flow, where the AI is a content selector and must never introduce a title the profile doesn't
+   *  already have. Profile creation/editing (onboarding, my-profile) needs this field editable, so
+   *  it defaults to false. */
+  positionLocked?: boolean;
 }) {
   const updateEntry = (idx: number, patch: Partial<CvExperienceEntry>) =>
     onChange(experience.map((e, i) => (i === idx ? { ...e, ...patch } : e)));
@@ -247,17 +253,29 @@ export function ExperienceSection({
             </button>
           </div>
 
-          {/* Position — READ-ONLY: locked from profile, not customizable */}
+          {/* Position — locked (read-only) only in the Customize CV flow; editable everywhere else */}
           <div className="space-y-1">
             <div className="flex items-center gap-1.5">
               <label className="text-[10px] font-bold text-slate-500 uppercase block">Position / Title</label>
-              <span className="flex items-center gap-0.5 text-[9px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">
-                <Lock className="w-2.5 h-2.5" /> Locked
-              </span>
+              {positionLocked && (
+                <span className="flex items-center gap-0.5 text-[9px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">
+                  <Lock className="w-2.5 h-2.5" /> Locked
+                </span>
+              )}
             </div>
-            <div className="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-600 select-none">
-              {exp.position || <span className="text-slate-400 italic">No position set</span>}
-            </div>
+            {positionLocked ? (
+              <div className="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-600 select-none">
+                {exp.position || <span className="text-slate-400 italic">No position set</span>}
+              </div>
+            ) : (
+              <input
+                type="text"
+                value={exp.position}
+                onChange={(e) => updateEntry(idx, { position: e.target.value })}
+                placeholder="e.g. Senior Software Engineer"
+                className={inputCls}
+              />
+            )}
           </div>
 
           <div className="space-y-1">
