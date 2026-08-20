@@ -147,6 +147,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
     [selectedEmployee, suggestion]
   );
 
+<<<<<<< HEAD
   // customizedPreviewCv: "after" view for the same comparison — same tailoredCv used for the
   // real export, just with project skills hidden from this particular side-by-side display (the
   // hidden full-fidelity copy rendered in Step 3 below is what actually gets exported).
@@ -163,6 +164,9 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
         : null,
     [tailoredCv]
   );
+=======
+  const customizedPreviewCv = tailoredCv;
+>>>>>>> f855865 (manual add options added)
 
   // ── Pre-select employee from query param ────────────────────────────────────
   useEffect(() => {
@@ -230,8 +234,8 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
 
     setSaving(true);
     try {
-      await saveGeneratedCvAction(selectedEmployee.rowId, cv);
-      setTailoredCv(cv);
+      const savedCv = await saveGeneratedCvAction(selectedEmployee.rowId, cv);
+      setTailoredCv(savedCv as TailoredCv);
       setWizardStep(3);
     } catch (err) {
       alert(err instanceof Error ? `Save failed: ${err.message}` : 'Could not apply the selected content.');
@@ -758,8 +762,12 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                   Customized CV
                 </h5>
                 <p className="text-[11px] text-slate-400 mt-1">
+<<<<<<< HEAD
                   Contains only the content selected in the previous step. Project skills are hidden here for a
                   cleaner comparison — they're still included in the exported PDF.
+=======
+                  Contains the selected and manually added content saved in this customized CV.
+>>>>>>> f855865 (manual add options added)
                 </p>
               </div>
               <div className="bg-slate-50 p-4 rounded-2xl border border-indigo-100 shadow-inner flex justify-center">
