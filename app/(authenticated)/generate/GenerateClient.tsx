@@ -121,19 +121,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
     [selectedEmployee, suggestion]
   );
 
-  const customizedPreviewCv = useMemo(
-    () =>
-      tailoredCv
-        ? {
-            ...tailoredCv,
-            specialProjects: tailoredCv.specialProjects.map((project) => ({
-              ...project,
-              skills: [],
-            })),
-          }
-        : null,
-    [tailoredCv]
-  );
+  const customizedPreviewCv = tailoredCv;
 
   // ── Pre-select employee from query param ────────────────────────────────────
   useEffect(() => {
@@ -213,8 +201,8 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
 
     setSaving(true);
     try {
-      await saveGeneratedCvAction(selectedEmployee.rowId, cv);
-      setTailoredCv(cv);
+      const savedCv = await saveGeneratedCvAction(selectedEmployee.rowId, cv);
+      setTailoredCv(savedCv as TailoredCv);
       setWizardStep(3);
     } catch (err) {
       alert(err instanceof Error ? `Save failed: ${err.message}` : 'Could not apply the selected content.');
@@ -744,7 +732,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                   Customized CV
                 </h5>
                 <p className="text-[11px] text-slate-400 mt-1">
-                  Contains only the content selected in the previous step. Project skills are hidden.
+                  Contains the selected and manually added content saved in this customized CV.
                 </p>
               </div>
               <div className="bg-slate-50 p-4 rounded-2xl border border-indigo-100 shadow-inner flex justify-center">
