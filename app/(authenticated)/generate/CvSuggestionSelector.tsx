@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { FileText, Briefcase, Lightbulb, Award, ArrowRight, Sparkles, Loader2 } from 'lucide-react';
+import { FileText, Briefcase, Lightbulb, Award, ArrowRight, Sparkles, Loader2, Plus, Trash2 } from 'lucide-react';
 import { SectionCard, EducationSection, textareaCls } from '@/app/components/CvEntrySections';
 import type { CvExperienceEntry, CvProjectEntry, CvCertificationEntry } from '@/lib/cvTypes';
 import type {
@@ -38,6 +38,11 @@ interface CvSuggestionSelectorProps {
 }
 
 const checkboxCls = 'w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20 cursor-pointer shrink-0';
+const inputCls = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100';
+const smallInputCls = `${inputCls} py-1.5 text-[11px]`;
+
+const nextIndex = (items: { index: number }[]) =>
+  items.length === 0 ? 0 : Math.max(...items.map((item) => item.index)) + 1;
 
 /**
  * Pure projection from the in-progress draft (checkbox state) to the actual selected content —
@@ -79,7 +84,8 @@ export function buildSelectionFromDraft(
  * own real data with the AI's relevance flag as the initial checkbox state, which the user can
  * freely override. Only Objective is AI-written text. Checking "I verified the generated content"
  * and clicking Apply saves the selected subset directly as the CV and moves to Preview & Export —
- * this component never lets the user edit wording, only pick which existing items are included.
+ * Edits and manually added items live only in this local draft. Applying projects the checked
+ * draft into generated_cvs.content; no profile mutation is performed anywhere in this flow.
  */
 export default function CvSuggestionSelector({
   suggestion,
@@ -130,6 +136,47 @@ export default function CvSuggestionSelector({
       ),
     });
 
+  const updateExperience = (index: number, patch: Partial<CvSuggestionExperience>) =>
+    onDraftChange({ ...draft, experience: experience.map((item) => item.index === index ? { ...item, ...patch } : item) });
+  const updateTask = (expIndex: number, taskIndex: number, text: string) =>
+    onDraftChange({
+      ...draft,
+      experience: experience.map((item) => item.index === expIndex
+        ? { ...item, tasks: item.tasks.map((task) => task.index === taskIndex ? { ...task, text } : task) }
+        : item),
+    });
+  const addExperience = () => onDraftChange({
+    ...draft,
+    experience: [...experience, {
+      index: nextIndex(experience), position: '', company: '', period: '', relevant: true,
+      tasks: [{ index: 0, text: '', relevant: true }],
+    }],
+  });
+
+  const updateProject = (index: number, patch: Partial<CvSuggestionProject>) =>
+    onDraftChange({ ...draft, projects: projects.map((item) => item.index === index ? { ...item, ...patch } : item) });
+  const updateProjectSkill = (projectIndex: number, skillIndex: number, text: string) =>
+    onDraftChange({
+      ...draft,
+      projects: projects.map((item) => item.index === projectIndex
+        ? { ...item, skills: item.skills.map((skill) => skill.index === skillIndex ? { ...skill, text } : skill) }
+        : item),
+    });
+  const addProject = () => onDraftChange({
+    ...draft,
+    projects: [...projects, {
+      index: nextIndex(projects), title: '', brief: '', relevant: true,
+      skills: [{ index: 0, text: '', relevant: true }],
+    }],
+  });
+
+  const updateCertification = (index: number, patch: Partial<CvSuggestionCertification>) =>
+    onDraftChange({ ...draft, certifications: certifications.map((item) => item.index === index ? { ...item, ...patch } : item) });
+  const addCertification = () => onDraftChange({
+    ...draft,
+    certifications: [...certifications, { index: nextIndex(certifications), name: '', issuer: '', year: '', relevant: true }],
+  });
+
   const selectedExperienceCount = experience.filter((e) => e.relevant).length;
   const selectedProjectCount = projects.filter((p) => p.relevant).length;
   const selectedCertCount = certifications.filter((c) => c.relevant).length;
@@ -146,8 +193,8 @@ export default function CvSuggestionSelector({
         <div>
           <p className="text-xs font-black text-indigo-800">AI Suggested Selection — Review Before Continuing</p>
           <p className="text-[10px] text-indigo-600 font-medium mt-0.5">
-            Everything below is pulled from the employee's real profile. The AI only pre-checks what looks relevant —
-            nothing is invented. Adjust the selection, then continue to fine-tune wording.
+            AI suggestions start from the employee profile. Edit or add CV-only content here, choose what to include,
+            then apply it to this customized CV. The employee profile will not be changed.
           </p>
         </div>
       </div>
@@ -177,38 +224,41 @@ export default function CvSuggestionSelector({
         {experience.length === 0 && <p className="text-xs text-slate-400 italic">No experience on record.</p>}
         {experience.map((exp) => (
           <div key={exp.index} className="border border-slate-200 rounded-xl p-4 bg-slate-50/30 space-y-2.5">
-            <label className="flex items-start gap-2.5 cursor-pointer">
+            <div className="flex items-start gap-2.5">
               <input
                 type="checkbox"
                 checked={exp.relevant}
                 onChange={() => toggleExperience(exp.index)}
                 className={`${checkboxCls} mt-0.5`}
               />
-              <div className="min-w-0">
-                <p className="text-xs font-black text-slate-800">
-                  {exp.position} <span className="font-semibold text-slate-500">— {exp.company}</span>
-                </p>
-                <p className="text-[10px] text-slate-400 font-semibold mt-0.5">{exp.period}</p>
+              <div className="min-w-0 flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <input value={exp.position} onChange={(e) => updateExperience(exp.index, { position: e.target.value })} placeholder="Role" className={inputCls} />
+                <input value={exp.company} onChange={(e) => updateExperience(exp.index, { company: e.target.value })} placeholder="Company" className={inputCls} />
+                <input value={exp.period} onChange={(e) => updateExperience(exp.index, { period: e.target.value })} placeholder="Period (optional)" className={`${smallInputCls} sm:col-span-2`} />
               </div>
-            </label>
+              <button type="button" onClick={() => onDraftChange({ ...draft, experience: experience.filter((item) => item.index !== exp.index) })} className="p-1.5 text-slate-400 hover:text-rose-600" aria-label="Remove work experience"><Trash2 className="w-4 h-4" /></button>
+            </div>
 
-            {exp.relevant && exp.tasks.length > 0 && (
+            {exp.relevant && (
               <div className="pl-6.5 space-y-1.5">
                 {exp.tasks.map((task) => (
-                  <label key={task.index} className="flex items-start gap-2 cursor-pointer">
+                  <div key={task.index} className="flex items-start gap-2">
                     <input
                       type="checkbox"
                       checked={task.relevant}
                       onChange={() => toggleTask(exp.index, task.index)}
                       className={`${checkboxCls} mt-0.5`}
                     />
-                    <span className="text-[11px] text-slate-600 leading-relaxed">{task.text}</span>
-                  </label>
+                    <textarea rows={2} value={task.text} onChange={(e) => updateTask(exp.index, task.index, e.target.value)} placeholder="Responsibility" className={smallInputCls} />
+                    <button type="button" onClick={() => updateExperience(exp.index, { tasks: exp.tasks.filter((item) => item.index !== task.index) })} className="p-1 text-slate-400 hover:text-rose-600" aria-label="Remove responsibility"><Trash2 className="w-3.5 h-3.5" /></button>
+                  </div>
                 ))}
+                <button type="button" onClick={() => updateExperience(exp.index, { tasks: [...exp.tasks, { index: nextIndex(exp.tasks), text: '', relevant: true }] })} className="flex items-center gap-1 text-[10px] font-bold text-indigo-600"><Plus className="w-3 h-3" /> Add responsibility</button>
               </div>
             )}
           </div>
         ))}
+        <button type="button" onClick={addExperience} className="flex items-center gap-2 px-3 py-2 border border-dashed border-indigo-300 rounded-lg text-xs font-bold text-indigo-700 hover:bg-indigo-50"><Plus className="w-4 h-4" /> Add work experience</button>
       </SectionCard>
 
       {/* Special Projects */}
@@ -216,48 +266,44 @@ export default function CvSuggestionSelector({
         {projects.length === 0 && <p className="text-xs text-slate-400 italic">No special projects on record.</p>}
         {projects.map((proj) => (
           <div key={proj.index} className="border border-slate-200 rounded-xl p-4 bg-slate-50/30 space-y-2.5">
-            <label className="flex items-start gap-2.5 cursor-pointer">
+            <div className="flex items-start gap-2.5">
               <input
                 type="checkbox"
                 checked={proj.relevant}
                 onChange={() => toggleProject(proj.index)}
                 className={`${checkboxCls} mt-0.5`}
               />
-              <div className="min-w-0">
-                <p className="text-xs font-black text-slate-800">{proj.title}</p>
-                <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">{proj.brief}</p>
+              <div className="min-w-0 flex-1 space-y-2">
+                <input value={proj.title} onChange={(e) => updateProject(proj.index, { title: e.target.value })} placeholder="Project title" className={inputCls} />
+                <textarea rows={3} value={proj.brief} onChange={(e) => updateProject(proj.index, { brief: e.target.value })} placeholder="Project description" className={smallInputCls} />
               </div>
-            </label>
+              <button type="button" onClick={() => onDraftChange({ ...draft, projects: projects.filter((item) => item.index !== proj.index) })} className="p-1.5 text-slate-400 hover:text-rose-600" aria-label="Remove project"><Trash2 className="w-4 h-4" /></button>
+            </div>
 
-            {proj.relevant && proj.skills.length > 0 && (
-              <div className="pl-6.5 flex flex-wrap gap-1.5">
+            {proj.relevant && (
+              <div className="pl-6.5 space-y-1.5">
                 {proj.skills.map((skill) => (
-                  <button
-                    key={skill.index}
-                    type="button"
-                    onClick={() => toggleProjectSkill(proj.index, skill.index)}
-                    className={`text-[10.5px] font-bold px-2.5 py-1 rounded-full border transition-colors cursor-pointer ${
-                      skill.relevant
-                        ? 'bg-indigo-50 border-indigo-100/80 text-indigo-700'
-                        : 'bg-white border-slate-200 text-slate-400 hover:border-slate-300'
-                    }`}
-                  >
-                    {skill.text}
-                  </button>
+                  <div key={skill.index} className="flex items-center gap-2">
+                    <input type="checkbox" checked={skill.relevant} onChange={() => toggleProjectSkill(proj.index, skill.index)} className={checkboxCls} aria-label="Include project skill" />
+                    <input value={skill.text} onChange={(e) => updateProjectSkill(proj.index, skill.index, e.target.value)} placeholder="Skill" className={smallInputCls} />
+                    <button type="button" onClick={() => updateProject(proj.index, { skills: proj.skills.filter((item) => item.index !== skill.index) })} className="p-1 text-slate-400 hover:text-rose-600" aria-label="Remove skill"><Trash2 className="w-3.5 h-3.5" /></button>
+                  </div>
                 ))}
+                <button type="button" onClick={() => updateProject(proj.index, { skills: [...proj.skills, { index: nextIndex(proj.skills), text: '', relevant: true }] })} className="flex items-center gap-1 text-[10px] font-bold text-indigo-600"><Plus className="w-3 h-3" /> Add skill</button>
               </div>
             )}
           </div>
         ))}
+        <button type="button" onClick={addProject} className="flex items-center gap-2 px-3 py-2 border border-dashed border-indigo-300 rounded-lg text-xs font-bold text-indigo-700 hover:bg-indigo-50"><Plus className="w-4 h-4" /> Add project</button>
       </SectionCard>
 
       {/* Certifications */}
       <SectionCard label="Certifications" icon={Award} count={selectedCertCount} expanded onToggle={() => {}}>
         {certifications.length === 0 && <p className="text-xs text-slate-400 italic">No certifications on record.</p>}
         {certifications.map((cert) => (
-          <label
+          <div
             key={cert.index}
-            className="flex items-start gap-2.5 cursor-pointer border border-slate-200 rounded-xl p-4 bg-slate-50/30"
+            className="flex items-start gap-2.5 border border-slate-200 rounded-xl p-4 bg-slate-50/30"
           >
             <input
               type="checkbox"
@@ -265,15 +311,15 @@ export default function CvSuggestionSelector({
               onChange={() => toggleCertification(cert.index)}
               className={`${checkboxCls} mt-0.5`}
             />
-            <div className="min-w-0">
-              <p className="text-xs font-black text-slate-800">{cert.name}</p>
-              <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
-                {cert.issuer}
-                {cert.year && ` (${cert.year})`}
-              </p>
+            <div className="min-w-0 flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <input value={cert.name} onChange={(e) => updateCertification(cert.index, { name: e.target.value })} placeholder="Certification name" className={`${inputCls} sm:col-span-2`} />
+              <input value={cert.issuer} onChange={(e) => updateCertification(cert.index, { issuer: e.target.value })} placeholder="Issuer (optional)" className={smallInputCls} />
+              <input value={cert.year} onChange={(e) => updateCertification(cert.index, { year: e.target.value })} placeholder="Year (optional)" className={smallInputCls} />
             </div>
-          </label>
+            <button type="button" onClick={() => onDraftChange({ ...draft, certifications: certifications.filter((item) => item.index !== cert.index) })} className="p-1.5 text-slate-400 hover:text-rose-600" aria-label="Remove certification"><Trash2 className="w-4 h-4" /></button>
+          </div>
         ))}
+        <button type="button" onClick={addCertification} className="flex items-center gap-2 px-3 py-2 border border-dashed border-indigo-300 rounded-lg text-xs font-bold text-indigo-700 hover:bg-indigo-50"><Plus className="w-4 h-4" /> Add certification</button>
       </SectionCard>
 
       <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-sm">

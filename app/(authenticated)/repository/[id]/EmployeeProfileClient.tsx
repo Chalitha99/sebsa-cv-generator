@@ -442,7 +442,7 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
                 className="flex items-center justify-center gap-1.5 py-3 border border-slate-200 text-slate-700 font-semibold rounded-xl text-xs hover:bg-slate-50 transition-colors active:scale-95 cursor-pointer"
               >
                 <Download className="w-4 h-4" />
-                <span>Download PDF</span>
+                <span>Download CV</span>
               </button>
             </div>
           </div>
@@ -467,7 +467,7 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
                   className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 text-slate-700 font-bold rounded-lg text-[11px] hover:bg-slate-50 transition-colors cursor-pointer"
                 >
                   <Download className="w-3.5 h-3.5 text-rose-500" />
-                  <span>PDF</span>
+                  <span>Download CV</span>
                 </button>
                 <button
                   type="button"

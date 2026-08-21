@@ -6,7 +6,7 @@ import { PageWrapper } from '../../components/PageWrapper';
 import OnePagePreview from '@/app/components/OnePagePreview';
 import CvPreviewTemplate from '../generate/CvPreviewTemplate';
 import { SectionCard, EducationSection } from '@/app/components/CvEntrySections';
-import { buildTailoredCvFromEmployee, buildTailoredCvFromSelection } from '@/lib/templates/buildTailoredCvFromEmployee';
+import { anonymizeTailoredCv, buildTailoredCvFromEmployee, buildTailoredCvFromSelection } from '@/lib/templates/buildTailoredCvFromEmployee';
 import { buildSelectionFromDraft, type CvSuggestionDraft } from '../generate/CvSuggestionSelector';
 import type { Employee } from '@/types/domain';
 import { exportToPdf } from '@/lib/cvExport';
@@ -71,6 +71,7 @@ export default function DownloadCvClient({ employee, isOwnProfile }: DownloadCvC
     () => buildTailoredCvFromSelection(employee, '', buildSelectionFromDraft(draft, baseCv.academic)),
     [employee, draft, baseCv.academic]
   );
+  const anonymousPreviewCv = useMemo(() => anonymizeTailoredCv(previewCv), [previewCv]);
 
   const { experience, projects, certifications } = draft;
 
@@ -112,9 +113,12 @@ export default function DownloadCvClient({ employee, isOwnProfile }: DownloadCvC
   const selectedProjectCount = projects.filter((p) => p.relevant).length;
   const selectedCertCount = certifications.filter((c) => c.relevant).length;
 
-  const handleDownloadPdf = async () => {
+  const handleDownloadPdf = async (anonymous = false) => {
     try {
-      await exportToPdf('cv-preview-root', `${employee.name.replace(/\s+/g, '_')}_CV`);
+      await exportToPdf(
+        anonymous ? 'anonymous-cv-preview-root' : 'cv-preview-root',
+        anonymous ? 'ABC_Philip_Anonymous_CV' : `${employee.name.replace(/\s+/g, '_')}_CV`
+      );
     } catch (err) {
       alert(err instanceof Error ? `Could not export to PDF: ${err.message}` : 'Could not export to PDF.');
     }
@@ -141,15 +145,14 @@ export default function DownloadCvClient({ employee, isOwnProfile }: DownloadCvC
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={handleDownloadPdf}
-              disabled={pageOverflowMm > 0}
-              className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer active:scale-95 shadow-sm"
-            >
-              <Download className="w-4 h-4 text-rose-500" />
-              <span>Export PDF</span>
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => handleDownloadPdf(false)} disabled={pageOverflowMm > 0} className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-sm">
+                <Download className="w-4 h-4 text-rose-500" /><span>Download CV</span>
+              </button>
+              <button type="button" onClick={() => handleDownloadPdf(true)} disabled={pageOverflowMm > 0} className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 text-white font-bold rounded-xl text-xs hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-sm">
+                <Download className="w-4 h-4" /><span>Anonymous CV Download</span>
+              </button>
+            </div>
           </div>
 
           {pageOverflowMm > 0 && (
@@ -160,6 +163,9 @@ export default function DownloadCvClient({ employee, isOwnProfile }: DownloadCvC
 
           <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 shadow-inner flex justify-center">
             <CvPreviewTemplate cv={previewCv} />
+          </div>
+          <div style={{ position: 'fixed', top: 0, left: '-10000px', zIndex: -1 }} aria-hidden="true">
+            <CvPreviewTemplate cv={anonymousPreviewCv} id="anonymous-cv-preview-root" />
           </div>
         </div>
       </PageWrapper>

@@ -19,7 +19,7 @@ import {
   saveGeneratedCvAction,
 } from './actions';
 import { exportToPdf } from '@/lib/cvExport';
-import { buildTailoredCvFromSelection } from '@/lib/templates/buildTailoredCvFromEmployee';
+import { anonymizeTailoredCv, buildTailoredCvFromSelection } from '@/lib/templates/buildTailoredCvFromEmployee';
 import {
   BrainCircuit,
   Sparkles,
@@ -147,22 +147,9 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
     [selectedEmployee, suggestion]
   );
 
-  // customizedPreviewCv: "after" view for the same comparison — same tailoredCv used for the
-  // real export, just with project skills hidden from this particular side-by-side display (the
-  // hidden full-fidelity copy rendered in Step 3 below is what actually gets exported).
-  const customizedPreviewCv = useMemo(
-    () =>
-      tailoredCv
-        ? {
-            ...tailoredCv,
-            specialProjects: tailoredCv.specialProjects.map((project) => ({
-              ...project,
-              skills: [],
-            })),
-          }
-        : null,
-    [tailoredCv]
-  );
+  // The final preview uses the exact object persisted to generated_cvs.content, including edited
+  // and manually added project skills. This keeps Preview & Export faithful to Apply to CV.
+  const customizedPreviewCv = tailoredCv;
 
   // ── Pre-select employee from query param ────────────────────────────────────
   useEffect(() => {
@@ -272,12 +259,14 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
     }
   };
 
-  const handleDownloadPdf = async () => {
+  const handleDownloadPdf = async (anonymous = false) => {
     if (!tailoredCv) return;
     try {
       await exportToPdf(
-        'cv-preview-root',
-        `${(tailoredCv.name ?? 'CV').replace(/\s+/g, '_')}_Tailored_CV`
+        anonymous ? 'anonymous-generated-cv-preview-root' : 'cv-preview-root',
+        anonymous
+          ? 'ABC_Philip_Anonymous_CV'
+          : `${(tailoredCv.name ?? 'CV').replace(/\s+/g, '_')}_Tailored_CV`
       );
     } catch (err) {
       console.error('PDF export failed:', err);
@@ -726,13 +715,11 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
             </div>
 
             <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={handleDownloadPdf}
-                className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-50 transition-colors cursor-pointer active:scale-95 shadow-sm"
-              >
-                <Download className="w-4 h-4 text-rose-500" />
-                <span>Export PDF</span>
+              <button type="button" onClick={() => handleDownloadPdf(false)} className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-50 transition-colors cursor-pointer shadow-sm">
+                <Download className="w-4 h-4 text-rose-500" /><span>Download CV</span>
+              </button>
+              <button type="button" onClick={() => handleDownloadPdf(true)} className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 text-white font-bold rounded-xl text-xs hover:bg-slate-900 transition-colors cursor-pointer shadow-sm">
+                <Download className="w-4 h-4" /><span>Anonymous CV Download</span>
               </button>
             </div>
           </div>
@@ -758,8 +745,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                   Customized CV
                 </h5>
                 <p className="text-[11px] text-slate-400 mt-1">
-                  Contains only the content selected in the previous step. Project skills are hidden here for a
-                  cleaner comparison — they're still included in the exported PDF.
+                  Contains the exact selected and edited content saved for this customized CV.
                 </p>
               </div>
               <div className="bg-slate-50 p-4 rounded-2xl border border-indigo-100 shadow-inner flex justify-center">
@@ -786,6 +772,10 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                 ...tailoredCv,
                 avatar: selectedEmployee?.avatar || null,
               }}
+            />
+            <CvPreviewTemplate
+              cv={anonymizeTailoredCv(tailoredCv)}
+              id="anonymous-generated-cv-preview-root"
             />
           </div>
         </div>

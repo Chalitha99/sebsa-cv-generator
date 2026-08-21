@@ -92,6 +92,15 @@ export function buildTailoredCvFromSelection(
   };
 }
 
+/** Creates an export-only anonymous copy. The source object and persisted CV/profile stay intact. */
+export function anonymizeTailoredCv(cv: TailoredCv): TailoredCv {
+  return {
+    ...cv,
+    name: 'ABC Philip',
+    avatar: null,
+  };
+}
+
 /**
  * Converts a proposed-but-not-yet-approved edit (`profiles.pending_change`, a full
  * `CreateEmployeeInput` — see app/(authenticated)/my-profile/actions.ts) into `TailoredCv` so a
