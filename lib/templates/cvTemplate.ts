@@ -133,13 +133,6 @@ export const cvTemplateSource = `
               <td style="width: 12px; vertical-align: top; font-size: 12px; color: #404040; line-height: 1.55; padding: 0;">•</td>
               <td style="vertical-align: top; font-size: 12px; color: #404040; line-height: 1.55; padding: 0 0 10px 0; text-align: justify;">
                 <span style="font-weight: 700; color: #262626;">{{title}}</span> - {{brief}}
-                {{#if skills}}
-                <div style="margin-top: 4px;">
-                  {{#each skills}}
-                  <span style="display: inline-block; background-color: #F3EEFC; color: #4E1C90; font-size: 10.5px; font-weight: 600; padding: 2px 7px; margin: 2px 4px 2px 0; border-radius: 4px;">{{this}}</span>
-                  {{/each}}
-                </div>
-                {{/if}}
               </td>
             </tr>
             {{/each}}

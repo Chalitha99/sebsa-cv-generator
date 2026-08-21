@@ -62,7 +62,16 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
   // while status is still 'draft' rather than a misleading "Active".
   const isPendingApproval = employee.status === 'draft';
 
+  // Employees viewing their own profile (this route never shows anyone else's, docs/04-rbac-
+  // security.md §2) get routed to the Download CV content-selection screen instead of an instant
+  // export, so the same one-page-limit checkbox flow governs self-service downloads too. Admins/
+  // Reviewers quick-downloading someone else's CV from here keep the direct export — /download-cv
+  // only ever renders the logged-in user's own profile, so it can't stand in for that case.
   const handleDownloadPdf = async () => {
+    if (viewerRole === 'employee') {
+      router.push('/download-cv');
+      return;
+    }
     setDownloadingPdf(true);
     try {
       await exportToPdf('cv-preview-root', exportFilename);

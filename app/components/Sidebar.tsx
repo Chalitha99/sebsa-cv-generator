@@ -18,7 +18,9 @@ import {
   User,
   ClipboardCheck,
   LogOut,
-  UserCircle
+  UserCircle,
+  Download,
+  PenLine
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -41,7 +43,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ user }) => {
   // templates, and review pending approvals, but can't edit others' profiles or generate CVs;
   // Admin/Super Admin keep the full set.
   const navItems = user.role === 'employee'
-    ? [{ name: 'My Profile', path: `/repository/${user.profileId}`, icon: User }]
+    ? [
+        { name: 'My Profile', path: `/repository/${user.profileId}`, icon: User },
+        { name: 'Update Profile', path: '/my-profile', icon: PenLine },
+        { name: 'Download CV', path: '/download-cv', icon: Download },
+      ]
     : [
         ...(isAdminOrAbove(user.role) ? [{ name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard }] : []),
         { name: 'Employee Profiles', path: '/repository', icon: FolderOpen },
