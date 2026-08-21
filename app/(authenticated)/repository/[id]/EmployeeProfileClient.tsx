@@ -8,7 +8,7 @@ import type { CvExperienceEntry } from '@/lib/cvTypes';
 import { isAdminOrAbove, type UserRole } from '@/lib/roles';
 import CvPreviewTemplate from '../../generate/CvPreviewTemplate';
 import { buildTailoredCvFromEmployee } from '@/lib/templates/buildTailoredCvFromEmployee';
-import { exportToPdf } from '@/lib/cvExport';
+import { anonymizeCv, exportToPdf } from '@/lib/cvExport';
 import {
   ArrowLeft,
   Mail,
@@ -51,8 +51,10 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
   // CVs" wizard. No AI tailoring here — just the employee's current profile data as-is.
   const [showPreview, setShowPreview] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [downloadingAnonymousPdf, setDownloadingAnonymousPdf] = useState(false);
 
   const tailoredCv = useMemo(() => buildTailoredCvFromEmployee(employee), [employee]);
+  const anonymousCv = useMemo(() => anonymizeCv(tailoredCv), [tailoredCv]);
   const exportFilename = `${employee.name.replace(/\s+/g, '_')}_CV`;
 
   // A self-service signup (or an Admin-provisioned account, §14) links `user_id` immediately —
@@ -69,6 +71,18 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
       alert(err instanceof Error ? `Could not export to PDF: ${err.message}` : 'Could not export to PDF.');
     } finally {
       setDownloadingPdf(false);
+    }
+  };
+
+  const handleDownloadAnonymousPdf = async () => {
+    setDownloadingAnonymousPdf(true);
+    try {
+      await exportToPdf('anonymous-cv-preview-root', 'ABC_Philip_Anonymous_CV');
+    } catch (err) {
+      console.error('Anonymous PDF export failed:', err);
+      alert(err instanceof Error ? `Could not export anonymous CV: ${err.message}` : 'Could not export anonymous CV.');
+    } finally {
+      setDownloadingAnonymousPdf(false);
     }
   };
 
@@ -451,7 +465,16 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
                 className="flex items-center justify-center gap-1.5 py-3 border border-slate-200 text-slate-700 font-semibold rounded-xl text-xs hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed transition-colors active:scale-95 cursor-pointer"
               >
                 {downloadingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                <span>Download PDF</span>
+                <span>Download CV</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadAnonymousPdf}
+                disabled={downloadingAnonymousPdf}
+                className="flex items-center justify-center gap-1.5 py-3 border border-slate-200 text-slate-700 font-semibold rounded-xl text-xs hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed transition-colors active:scale-95 cursor-pointer"
+              >
+                {downloadingAnonymousPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                <span>Anonymous CV Download</span>
               </button>
             </div>
           </div>
@@ -477,7 +500,16 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
                   className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 text-slate-700 font-bold rounded-lg text-[11px] hover:bg-slate-50 disabled:opacity-60 transition-colors cursor-pointer"
                 >
                   {downloadingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5 text-rose-500" />}
-                  <span>PDF</span>
+                  <span>Download CV</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownloadAnonymousPdf}
+                  disabled={downloadingAnonymousPdf}
+                  className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 text-slate-700 font-bold rounded-lg text-[11px] hover:bg-slate-50 disabled:opacity-60 transition-colors cursor-pointer"
+                >
+                  {downloadingAnonymousPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5 text-indigo-500" />}
+                  <span>Anonymous CV Download</span>
                 </button>
                 <button
                   type="button"
@@ -504,6 +536,7 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
           thumbnail instead (docs/04-rbac-security.md §15). */}
       <div style={{ position: 'fixed', top: 0, left: '-10000px', zIndex: -1 }} aria-hidden="true">
         <CvPreviewTemplate cv={tailoredCv} />
+        <CvPreviewTemplate cv={anonymousCv} id="anonymous-cv-preview-root" />
       </div>
     </PageWrapper>
   );

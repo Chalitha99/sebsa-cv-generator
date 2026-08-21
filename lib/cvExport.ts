@@ -11,6 +11,18 @@
 
 import type { TailoredCv } from '@/app/(authenticated)/generate/types';
 
+export const ANONYMOUS_CV_NAME = 'ABC Philip';
+
+/** Returns a new export-only CV value without changing the source CV or employee record. */
+export function anonymizeCv(cv: TailoredCv): TailoredCv {
+  return {
+    ...cv,
+    name: ANONYMOUS_CV_NAME,
+    avatar: null,
+    isAnonymous: true,
+  };
+}
+
 // ─── PDF Export ───────────────────────────────────────────────────────────────
 // Screenshots #cv-preview-root (the live Handlebars preview, lib/templates/cvTemplate.ts) via
 // html2canvas and tiles it across A4 pages. Requires that element and everything inside it to

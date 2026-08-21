@@ -16,7 +16,7 @@ import {
   suggestCvContentAction,
   saveGeneratedCvAction,
 } from './actions';
-import { exportToPdf } from '@/lib/cvExport';
+import { anonymizeCv, exportToPdf } from '@/lib/cvExport';
 import {
   BrainCircuit,
   Sparkles,
@@ -80,6 +80,8 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
   const [saving, setSaving] = useState(false);
   const [saveSuccess] = useState(false);
   const [isHumanVerified, setIsHumanVerified] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [downloadingAnonymousPdf, setDownloadingAnonymousPdf] = useState(false);
 
   // ── Derived ─────────────────────────────────────────────────────────────────
   const selectedEmployee = useMemo(
@@ -122,6 +124,10 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
   );
 
   const customizedPreviewCv = tailoredCv;
+  const anonymousCv = useMemo(
+    () => (tailoredCv ? anonymizeCv({ ...tailoredCv, avatar: selectedEmployee?.avatar || null }) : null),
+    [tailoredCv, selectedEmployee]
+  );
 
   // ── Pre-select employee from query param ────────────────────────────────────
   useEffect(() => {
@@ -245,6 +251,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
 
   const handleDownloadPdf = async () => {
     if (!tailoredCv) return;
+    setDownloadingPdf(true);
     try {
       await exportToPdf(
         'cv-preview-root',
@@ -253,6 +260,21 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
     } catch (err) {
       console.error('PDF export failed:', err);
       alert(err instanceof Error ? `Could not export to PDF: ${err.message}` : 'Could not export to PDF.');
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
+  const handleDownloadAnonymousPdf = async () => {
+    if (!anonymousCv) return;
+    setDownloadingAnonymousPdf(true);
+    try {
+      await exportToPdf('anonymous-cv-preview-root', 'ABC_Philip_Anonymous_CV');
+    } catch (err) {
+      console.error('Anonymous PDF export failed:', err);
+      alert(err instanceof Error ? `Could not export anonymous CV: ${err.message}` : 'Could not export anonymous CV.');
+    } finally {
+      setDownloadingAnonymousPdf(false);
     }
   };
 
@@ -694,10 +716,21 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
               <button
                 type="button"
                 onClick={handleDownloadPdf}
+                disabled={downloadingPdf}
                 className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-50 transition-colors cursor-pointer active:scale-95 shadow-sm"
               >
-                <Download className="w-4 h-4 text-rose-500" />
-                <span>Export PDF</span>
+                {downloadingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4 text-rose-500" />}
+                <span>Download CV</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDownloadAnonymousPdf}
+                disabled={downloadingAnonymousPdf}
+                className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed transition-colors cursor-pointer active:scale-95 shadow-sm"
+              >
+                {downloadingAnonymousPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4 text-indigo-500" />}
+                <span>Anonymous CV Download</span>
               </button>
 
               <button
@@ -745,6 +778,11 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
               </div>
             </section>
           </div>
+        </div>
+      )}
+      {anonymousCv && (
+        <div style={{ position: 'fixed', top: 0, left: '-10000px', zIndex: -1 }} aria-hidden="true">
+          <CvPreviewTemplate cv={anonymousCv} id="anonymous-cv-preview-root" />
         </div>
       )}
     </PageWrapper>

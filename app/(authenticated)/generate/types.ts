@@ -5,6 +5,8 @@ export interface TailoredCv extends CvProfile {
   customerName: string;      // Target opportunity
   skillsAligned: string[];   // Merged required + profile skills
   avatar?: string | null;    // Employee avatar image URL
+  /** Export-only presentation flag; never persisted as an employee profile change. */
+  isAnonymous?: boolean;
 }
 
 // ─── AI content-selection suggestion (Customize CVs flow) ─────────────────────
