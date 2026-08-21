@@ -20,19 +20,18 @@ export async function saveGeneratedCv(
     content: Record<string, any>;
     userId: string;
   }
-): Promise<Record<string, any>> {
+): Promise<void> {
   const existing = await getLatestGeneratedCvRow(supabase, params.profileId);
 
   if (existing) {
-    const saved = await updateGeneratedCvRow(
+    await updateGeneratedCvRow(
       supabase,
       existing.id,
       params.content,
       params.userId
     );
-    return saved.content;
   } else {
-    const saved = await insertGeneratedCvRow(supabase, {
+    await insertGeneratedCvRow(supabase, {
       profile_id: params.profileId,
       status: 'draft',
       content: params.content,
@@ -41,6 +40,5 @@ export async function saveGeneratedCv(
       created_by: params.userId,
       updated_by: params.userId,
     });
-    return saved.content;
   }
 }

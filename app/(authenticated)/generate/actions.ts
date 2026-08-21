@@ -267,16 +267,14 @@ export async function getSavedGeneratedCvAction(
 export async function saveGeneratedCvAction(
   profileId: string,
   content: Record<string, any>
-): Promise<Record<string, any>> {
+): Promise<void> {
   const user = await getCurrentUser();
   if (!user) throw new Error('Not authenticated.');
 
   const adminClient = createAdminClient();
-  const savedContent = await saveGeneratedCv(adminClient, {
+  await saveGeneratedCv(adminClient, {
     profileId,
     content,
     userId: user.id,
   });
-  revalidatePath('/generate');
-  return savedContent;
 }
