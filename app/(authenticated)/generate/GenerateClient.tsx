@@ -147,22 +147,9 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
     [selectedEmployee, suggestion]
   );
 
-  // customizedPreviewCv: "after" view for the same comparison — same tailoredCv used for the
-  // real export, just with project skills hidden from this particular side-by-side display (the
-  // hidden full-fidelity copy rendered in Step 3 below is what actually gets exported).
-  const customizedPreviewCv = useMemo(
-    () =>
-      tailoredCv
-        ? {
-            ...tailoredCv,
-            specialProjects: tailoredCv.specialProjects.map((project) => ({
-              ...project,
-              skills: [],
-            })),
-          }
-        : null,
-    [tailoredCv]
-  );
+  // The final preview uses the exact object persisted to generated_cvs.content, including edited
+  // and manually added project skills. This keeps Preview & Export faithful to Apply to CV.
+  const customizedPreviewCv = tailoredCv;
 
   // ── Pre-select employee from query param ────────────────────────────────────
   useEffect(() => {
@@ -758,8 +745,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                   Customized CV
                 </h5>
                 <p className="text-[11px] text-slate-400 mt-1">
-                  Contains only the content selected in the previous step. Project skills are hidden here for a
-                  cleaner comparison — they're still included in the exported PDF.
+                  Contains the exact selected and edited content saved for this customized CV.
                 </p>
               </div>
               <div className="bg-slate-50 p-4 rounded-2xl border border-indigo-100 shadow-inner flex justify-center">
