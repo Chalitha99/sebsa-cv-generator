@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { PageWrapper } from '../../components/PageWrapper';
 import OnePagePreview from '@/app/components/OnePagePreview';
 import CvPreviewTemplate from '../generate/CvPreviewTemplate';
@@ -13,6 +14,10 @@ import { FileDown, Briefcase, Lightbulb, Award, FileText, ChevronLeft, Download,
 
 interface DownloadCvClientProps {
   employee: Employee;
+  /** False when an Admin/Reviewer landed here from another employee's profile page (via
+   *  ?id=<employee>) rather than an Employee downloading their own — only changes copy/nav, never
+   *  what's selectable or how export works. */
+  isOwnProfile: boolean;
 }
 
 const checkboxCls = 'w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20 cursor-pointer shrink-0';
@@ -53,7 +58,8 @@ function buildInitialDraft(cv: ReturnType<typeof buildTailoredCvFromEmployee>): 
  * CvSuggestionSelector.tsx, minus the AI framing) followed by the same preview + PDF export step
  * used by the Customize CVs wizard's final step.
  */
-export default function DownloadCvClient({ employee }: DownloadCvClientProps) {
+export default function DownloadCvClient({ employee, isOwnProfile }: DownloadCvClientProps) {
+  const router = useRouter();
   const baseCv = useMemo(() => buildTailoredCvFromEmployee(employee), [employee]);
   const [phase, setPhase] = useState<'select' | 'preview'>('select');
   const [draft, setDraft] = useState<CvSuggestionDraft>(() => buildInitialDraft(baseCv));
@@ -162,19 +168,38 @@ export default function DownloadCvClient({ employee }: DownloadCvClientProps) {
 
   return (
     <PageWrapper className="p-8">
-      <div className="mb-8">
-        <h2 className="text-3xl font-black tracking-tight text-slate-900 font-sans leading-none">Download CV</h2>
-        <p className="text-sm font-medium text-slate-500 mt-2">
-          Pick which of your own experience, projects, and certifications to include — no AI, no wording changes,
-          just your existing profile content.
-        </p>
+      <div className="mb-8 flex flex-col gap-3">
+        {!isOwnProfile && (
+          <button
+            type="button"
+            onClick={() => router.push(`/repository/${employee.rowId}`)}
+            className="flex items-center gap-1.5 self-start px-3 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg transition-colors cursor-pointer active:scale-95 text-[11px] font-bold"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            <span>Back to Profile</span>
+          </button>
+        )}
+        <div>
+          <h2 className="text-3xl font-black tracking-tight text-slate-900 font-sans leading-none">
+            {isOwnProfile ? 'Download CV' : `Download CV — ${employee.name}`}
+          </h2>
+          <p className="text-sm font-medium text-slate-500 mt-2">
+            {isOwnProfile
+              ? 'Pick which of your own experience, projects, and certifications to include — no AI, no wording changes, just your existing profile content.'
+              : `Pick which of ${employee.name}'s experience, projects, and certifications to include — no AI, no wording changes, just their existing profile content.`}
+          </p>
+        </div>
       </div>
 
       <div className="grid grid-cols-12 gap-6">
         <div className="col-span-12 lg:col-span-8 space-y-4">
           <SectionCard label="Objective / Summary" icon={FileText} expanded onToggle={() => {}}>
             <p className="text-xs font-medium text-slate-600 leading-relaxed whitespace-pre-line">
-              {baseCv.summary || <span className="text-slate-400 italic">No objective set on your profile.</span>}
+              {baseCv.summary || (
+                <span className="text-slate-400 italic">
+                  {isOwnProfile ? 'No objective set on your profile.' : 'No objective set on this profile.'}
+                </span>
+              )}
             </p>
           </SectionCard>
 
