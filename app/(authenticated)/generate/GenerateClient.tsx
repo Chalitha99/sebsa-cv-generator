@@ -19,7 +19,7 @@ import {
   saveGeneratedCvAction,
 } from './actions';
 import { exportToPdf } from '@/lib/cvExport';
-import { buildTailoredCvFromSelection } from '@/lib/templates/buildTailoredCvFromEmployee';
+import { anonymizeTailoredCv, buildTailoredCvFromSelection } from '@/lib/templates/buildTailoredCvFromEmployee';
 import {
   BrainCircuit,
   Sparkles,
@@ -259,12 +259,14 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
     }
   };
 
-  const handleDownloadPdf = async () => {
+  const handleDownloadPdf = async (anonymous = false) => {
     if (!tailoredCv) return;
     try {
       await exportToPdf(
-        'cv-preview-root',
-        `${(tailoredCv.name ?? 'CV').replace(/\s+/g, '_')}_Tailored_CV`
+        anonymous ? 'anonymous-generated-cv-preview-root' : 'cv-preview-root',
+        anonymous
+          ? 'ABC_Philip_Anonymous_CV'
+          : `${(tailoredCv.name ?? 'CV').replace(/\s+/g, '_')}_Tailored_CV`
       );
     } catch (err) {
       console.error('PDF export failed:', err);
@@ -713,13 +715,11 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
             </div>
 
             <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={handleDownloadPdf}
-                className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-50 transition-colors cursor-pointer active:scale-95 shadow-sm"
-              >
-                <Download className="w-4 h-4 text-rose-500" />
-                <span>Export PDF</span>
+              <button type="button" onClick={() => handleDownloadPdf(false)} className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-50 transition-colors cursor-pointer shadow-sm">
+                <Download className="w-4 h-4 text-rose-500" /><span>Download CV</span>
+              </button>
+              <button type="button" onClick={() => handleDownloadPdf(true)} className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 text-white font-bold rounded-xl text-xs hover:bg-slate-900 transition-colors cursor-pointer shadow-sm">
+                <Download className="w-4 h-4" /><span>Anonymous CV Download</span>
               </button>
             </div>
           </div>
@@ -772,6 +772,10 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                 ...tailoredCv,
                 avatar: selectedEmployee?.avatar || null,
               }}
+            />
+            <CvPreviewTemplate
+              cv={anonymizeTailoredCv(tailoredCv)}
+              id="anonymous-generated-cv-preview-root"
             />
           </div>
         </div>

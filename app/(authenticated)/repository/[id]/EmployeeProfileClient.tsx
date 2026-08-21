@@ -59,8 +59,8 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
   // their own profile, or Admin/Reviewer on any profile, as long as they're not already inside the
   // AI "Customize this CV" flow) it hands off to the Download CV content-selection/checkbox
   // screen, so the same one-page-limit gating governs every plain (non-customized) download.
-  const handleDownloadPdf = () => {
-    router.push(`/download-cv?id=${encodeURIComponent(employee.rowId)}`);
+  const handleDownloadPdf = (anonymous = false) => {
+    router.push(`/download-cv?id=${encodeURIComponent(employee.rowId)}${anonymous ? '&mode=anonymous' : ''}`);
   };
 
   // ── Prefer structured CV fields; fall back to legacy or demo data ─────────
@@ -438,11 +438,19 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
             <div className="grid grid-cols-1 gap-3">
               <button
                 type="button"
-                onClick={handleDownloadPdf}
+                onClick={() => handleDownloadPdf(false)}
                 className="flex items-center justify-center gap-1.5 py-3 border border-slate-200 text-slate-700 font-semibold rounded-xl text-xs hover:bg-slate-50 transition-colors active:scale-95 cursor-pointer"
               >
                 <Download className="w-4 h-4" />
-                <span>Download PDF</span>
+                <span>Download CV</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDownloadPdf(true)}
+                className="flex items-center justify-center gap-1.5 py-3 bg-slate-800 text-white font-semibold rounded-xl text-xs hover:bg-slate-900 transition-colors active:scale-95 cursor-pointer"
+              >
+                <Download className="w-4 h-4" />
+                <span>Anonymous CV Download</span>
               </button>
             </div>
           </div>
@@ -463,11 +471,19 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={handleDownloadPdf}
+                  onClick={() => handleDownloadPdf(false)}
                   className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 text-slate-700 font-bold rounded-lg text-[11px] hover:bg-slate-50 transition-colors cursor-pointer"
                 >
                   <Download className="w-3.5 h-3.5 text-rose-500" />
-                  <span>PDF</span>
+                  <span>Download CV</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDownloadPdf(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 text-white font-bold rounded-lg text-[11px] hover:bg-slate-900 transition-colors cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Anonymous CV Download</span>
                 </button>
                 <button
                   type="button"
