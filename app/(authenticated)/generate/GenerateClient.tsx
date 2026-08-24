@@ -32,6 +32,7 @@ import {
   CheckCircle2,
   UserCircle,
 } from 'lucide-react';
+import { recordCvDownloadAction } from '../audit-actions';
 
 interface GenerateClientProps {
   employees: Employee[];
@@ -268,6 +269,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
           ? 'ABC_Philip_Anonymous_CV'
           : `${(tailoredCv.name ?? 'CV').replace(/\s+/g, '_')}_Tailored_CV`
       );
+      await recordCvDownloadAction(selectedEmployee.rowId, { anonymous, customized: true });
     } catch (err) {
       console.error('PDF export failed:', err);
       alert(err instanceof Error ? `Could not export to PDF: ${err.message}` : 'Could not export to PDF.');

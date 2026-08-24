@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
+  type GeneratedCvRow,
   getLatestGeneratedCvRow,
   insertGeneratedCvRow,
   updateGeneratedCvRow,
@@ -20,18 +21,19 @@ export async function saveGeneratedCv(
     content: Record<string, any>;
     userId: string;
   }
-): Promise<void> {
+): Promise<{ row: GeneratedCvRow; created: boolean }> {
   const existing = await getLatestGeneratedCvRow(supabase, params.profileId);
 
   if (existing) {
-    await updateGeneratedCvRow(
+    const row = await updateGeneratedCvRow(
       supabase,
       existing.id,
       params.content,
       params.userId
     );
+    return { row, created: false };
   } else {
-    await insertGeneratedCvRow(supabase, {
+    const row = await insertGeneratedCvRow(supabase, {
       profile_id: params.profileId,
       status: 'draft',
       content: params.content,
@@ -40,5 +42,6 @@ export async function saveGeneratedCv(
       created_by: params.userId,
       updated_by: params.userId,
     });
+    return { row, created: true };
   }
 }

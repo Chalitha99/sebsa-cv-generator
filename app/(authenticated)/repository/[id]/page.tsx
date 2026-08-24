@@ -16,6 +16,5 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
   // (profiles_select only allows is_reviewer_or_above() or user_id = auth.uid()), so this also
   // naturally 404s for "someone else's profile" without a separate ownership check here.
   if (!employee) notFound();
-
   return <EmployeeProfileClient employee={employee} viewerRole={user.role} />;
 }

@@ -27,12 +27,13 @@ function mapRow(row: any): AppNotification {
 }
 
 /** RLS (`notifications_select_own`) already scopes this to the caller's own rows. */
-export async function listNotifications(supabase: SupabaseClient, limit = 30): Promise<AppNotification[]> {
-  const { data, error } = await supabase
+export async function listNotifications(supabase: SupabaseClient, limit: number | null = 30): Promise<AppNotification[]> {
+  let query = supabase
     .from('notifications')
     .select(SELECT)
-    .order('created_at', { ascending: false })
-    .limit(limit);
+    .order('created_at', { ascending: false });
+  if (limit != null) query = query.limit(limit);
+  const { data, error } = await query;
 
   if (error) throw error;
   return (data ?? []).map(mapRow);

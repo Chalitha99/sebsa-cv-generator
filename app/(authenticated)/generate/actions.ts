@@ -9,6 +9,7 @@ import { getSavedGeneratedCv, saveGeneratedCv } from '@/services/generated-cv-se
 import { getEmployeeById } from '@/services/employee-service';
 import type { Employee } from '@/types/domain';
 import type { CvSuggestion } from './types';
+import { recordAuditLog } from '@/services/audit-service';
 
 const SYSTEM_PROMPT = `You are an AI recruiting assistant helping a staffing team assemble a CV for a specific
 customer opportunity.
@@ -272,9 +273,16 @@ export async function saveGeneratedCvAction(
   if (!user) throw new Error('Not authenticated.');
 
   const adminClient = createAdminClient();
-  await saveGeneratedCv(adminClient, {
+  const saved = await saveGeneratedCv(adminClient, {
     profileId,
     content,
     userId: user.id,
+  });
+  await recordAuditLog({
+    actorId: user.id,
+    action: saved.created ? 'CREATE' : 'UPDATE',
+    entityType: 'generated_cv',
+    entityId: saved.row.id,
+    metadata: { profile_id: profileId, content_sections: Object.keys(content) },
   });
 }

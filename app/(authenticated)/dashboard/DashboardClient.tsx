@@ -7,6 +7,7 @@ import { NotificationList } from '../../components/NotificationList';
 import { markNotificationReadAction } from '../notifications/actions';
 import type { Employee } from '@/types/domain';
 import type { AppNotification } from '@/services/notification-service';
+import type { AuditLogRecord } from '@/services/audit-service';
 import {
   Users,
   Sparkles,
@@ -18,9 +19,10 @@ interface DashboardClientProps {
   employees: Employee[];
   generatedCvCount: number;
   initialNotifications: AppNotification[];
+  recentAuditLogs: AuditLogRecord[];
 }
 
-export default function DashboardClient({ employees, generatedCvCount, initialNotifications }: DashboardClientProps) {
+export default function DashboardClient({ employees, generatedCvCount, initialNotifications, recentAuditLogs }: DashboardClientProps) {
   const router = useRouter();
   const [notifications, setNotifications] = useState(initialNotifications);
 
@@ -95,10 +97,25 @@ export default function DashboardClient({ employees, generatedCvCount, initialNo
         })}
       </div>
 
-      {/* Bento Grid Content */}
-      <div className="grid grid-cols-12 gap-8">
-        {/* Recent Activity (Full width) */}
-        <div className="col-span-12">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+        <div>
+          <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm h-full flex flex-col">
+            <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
+              <h4 className="text-sm font-black uppercase tracking-wider text-slate-800 flex items-center gap-2"><History className="w-4 h-4 text-indigo-600" />Recent Activities</h4>
+              <button type="button" onClick={() => router.push('/activity?tab=activity')} className="flex items-center gap-1.5 text-[11px] font-black text-indigo-600 hover:text-indigo-700 uppercase tracking-wide cursor-pointer">
+                <span>View Full Activity Log</span><ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <div className="space-y-2">
+              {recentAuditLogs.map((row) => <div key={row.id} className="flex items-start justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/50 p-3.5">
+                <div><p className="text-xs font-black text-slate-800">{row.action} <span className="font-semibold text-slate-500">{row.entityType ?? 'record'}</span></p><p className="text-[10px] font-semibold text-slate-400 mt-1">{row.actorName}</p></div>
+                <span className="text-[10px] text-slate-400 whitespace-nowrap">{new Date(row.createdAt).toLocaleString()}</span>
+              </div>)}
+              {recentAuditLogs.length === 0 && <p className="text-xs text-slate-400 text-center py-10">No recent activities.</p>}
+            </div>
+          </div>
+        </div>
+        <div>
           <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm h-full flex flex-col">
             <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
               <h4 className="font-sans text-sm font-black uppercase tracking-wider text-slate-800 flex items-center gap-2">
@@ -107,10 +124,10 @@ export default function DashboardClient({ employees, generatedCvCount, initialNo
               </h4>
               <button
                 type="button"
-                onClick={() => router.push('/activity')}
+                onClick={() => router.push('/activity?tab=notifications')}
                 className="flex items-center gap-1.5 text-[11px] font-black text-indigo-600 hover:text-indigo-700 uppercase tracking-wide transition-colors cursor-pointer"
               >
-                <span>Full Activity Log</span>
+                <span>View Full Notification Log</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>

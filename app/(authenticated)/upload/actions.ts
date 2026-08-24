@@ -8,6 +8,7 @@ import { getCurrentUser, isReviewerOrAbove } from '@/lib/auth';
 import { provisionEmployeeAccount } from '@/lib/auth/provisionAccount';
 import { notifyUser } from '@/lib/notifications';
 import type { CreateEmployeeInput } from '@/types/domain';
+import { recordAuditLog } from '@/services/audit-service';
 
 export interface CreateEmployeeResult {
   rowId: string;
@@ -48,6 +49,8 @@ export async function uploadProfilePictureAction(formData: FormData): Promise<st
   const { data: urlData } = adminClient.storage
     .from('profile-pictures')
     .getPublicUrl(uniqueName);
+
+  await recordAuditLog({ actorId: user.id, action: 'CREATE', entityType: 'profile_picture', entityId: user.id, metadata: { file_name: file.name, content_type: file.type } });
 
   return urlData.publicUrl;
 }
@@ -106,6 +109,13 @@ export async function createEmployeeAction(input: CreateEmployeeInput): Promise<
   }
 
   const rowId = await createEmployee(adminClient, { ...input, linkedUserId }, user.id);
+  await recordAuditLog({
+    actorId: user.id,
+    action: 'CREATE',
+    entityType: 'employee_profile',
+    entityId: rowId,
+    metadata: { employee_email: input.email, account_invited: accountInvited },
+  });
 
   if (linkedUserId) {
     await notifyUser(adminClient, linkedUserId, {
