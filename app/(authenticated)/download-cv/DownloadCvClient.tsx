@@ -11,6 +11,7 @@ import { buildSelectionFromDraft, type CvSuggestionDraft } from '../generate/CvS
 import type { Employee } from '@/types/domain';
 import { exportToPdf } from '@/lib/cvExport';
 import { FileDown, Briefcase, Lightbulb, Award, FileText, ChevronLeft, Download, ListChecks } from 'lucide-react';
+import { recordCvDownloadAction } from '../audit-actions';
 
 interface DownloadCvClientProps {
   employee: Employee;
@@ -119,6 +120,7 @@ export default function DownloadCvClient({ employee, isOwnProfile }: DownloadCvC
         anonymous ? 'anonymous-cv-preview-root' : 'cv-preview-root',
         anonymous ? 'ABC_Philip_Anonymous_CV' : `${employee.name.replace(/\s+/g, '_')}_CV`
       );
+      await recordCvDownloadAction(employee.rowId, { anonymous, customized: false });
     } catch (err) {
       alert(err instanceof Error ? `Could not export to PDF: ${err.message}` : 'Could not export to PDF.');
     }

@@ -6,6 +6,7 @@ import { getCurrentUser, isReviewerOrAbove, type CurrentUser } from '@/lib/auth'
 import { updateEmployee, getEmployeeById } from '@/services/employee-service';
 import { notifyUser } from '@/lib/notifications';
 import type { CreateEmployeeInput, Employee } from '@/types/domain';
+import { recordAuditLog } from '@/services/audit-service';
 
 export type PendingItemType = 'new_profile' | 'claim' | 'change';
 
@@ -183,7 +184,7 @@ export async function listPendingItemsAction(): Promise<PendingItem[]> {
 
 /** Publishes a self-service "created from scratch" profile (0018), making it searchable. */
 export async function approveNewProfileAction(profileId: string): Promise<void> {
-  await requireReviewer();
+  const user = await requireReviewer();
   const adminClient = createAdminClient();
 
   const { data: row, error: fetchError } = await adminClient
@@ -199,6 +200,7 @@ export async function approveNewProfileAction(profileId: string): Promise<void> 
     .eq('id', profileId)
     .eq('status', 'draft');
   if (error) throw error;
+  await recordAuditLog({ actorId: user.id, action: 'APPROVE', entityType: 'employee_profile', entityId: profileId, metadata: { operation: 'publish_new_profile' } });
 
   if (row.user_id) {
     await notifyUser(adminClient, row.user_id, {
@@ -213,7 +215,7 @@ export async function approveNewProfileAction(profileId: string): Promise<void> 
 
 /** Rejects a never-published self-service submission — nothing to revert to, so it's deleted. */
 export async function rejectNewProfileAction(profileId: string): Promise<void> {
-  await requireReviewer();
+  const user = await requireReviewer();
   const adminClient = createAdminClient();
 
   // Fetched before the delete — there's no row left to read from afterwards.
@@ -226,6 +228,7 @@ export async function rejectNewProfileAction(profileId: string): Promise<void> {
 
   const { error } = await adminClient.from('profiles').delete().eq('id', profileId).eq('status', 'draft');
   if (error) throw error;
+  await recordAuditLog({ actorId: user.id, action: 'REJECT', entityType: 'employee_profile', entityId: profileId, metadata: { operation: 'reject_and_delete_draft' } });
 
   if (row.user_id) {
     await notifyUser(adminClient, row.user_id, {
@@ -240,7 +243,7 @@ export async function rejectNewProfileAction(profileId: string): Promise<void> {
 
 /** Links the requesting employee's account to the profile (0020 profiles_self_claim_request). */
 export async function approveClaimAction(profileId: string): Promise<void> {
-  await requireReviewer();
+  const user = await requireReviewer();
   const adminClient = createAdminClient();
 
   const { data: row, error: fetchError } = await adminClient
@@ -261,6 +264,7 @@ export async function approveClaimAction(profileId: string): Promise<void> {
     .eq('id', profileId)
     .is('user_id', null);
   if (error) throw error;
+  await recordAuditLog({ actorId: user.id, action: 'APPROVE', entityType: 'employee_profile', entityId: profileId, metadata: { operation: 'account_claim', claimed_by: row.pending_claim_user_id } });
 
   await notifyUser(adminClient, row.pending_claim_user_id, {
     type: 'claim_approved',
@@ -272,7 +276,7 @@ export async function approveClaimAction(profileId: string): Promise<void> {
 }
 
 export async function rejectClaimAction(profileId: string): Promise<void> {
-  await requireReviewer();
+  const user = await requireReviewer();
   const adminClient = createAdminClient();
 
   const { data: row, error: fetchError } = await adminClient
@@ -287,6 +291,7 @@ export async function rejectClaimAction(profileId: string): Promise<void> {
     .update({ pending_claim_user_id: null })
     .eq('id', profileId);
   if (error) throw error;
+  await recordAuditLog({ actorId: user.id, action: 'REJECT', entityType: 'employee_profile', entityId: profileId, metadata: { operation: 'account_claim', requested_by: row.pending_claim_user_id } });
 
   if (row.pending_claim_user_id) {
     await notifyUser(adminClient, row.pending_claim_user_id, {
@@ -326,6 +331,7 @@ export async function approveChangeAction(profileId: string): Promise<void> {
     .update({ pending_change: null, pending_change_submitted_at: null })
     .eq('id', profileId);
   if (error) throw error;
+  await recordAuditLog({ actorId: user.id, action: 'APPROVE', entityType: 'employee_profile', entityId: profileId, metadata: { operation: 'profile_change', changed_fields: Object.keys(change) } });
 
   if (row.user_id) {
     await notifyUser(adminClient, row.user_id, {
@@ -362,6 +368,7 @@ export async function rejectChangeAction(profileId: string): Promise<void> {
     .update({ pending_change: null, pending_change_submitted_at: null })
     .eq('id', profileId);
   if (error) throw error;
+  await recordAuditLog({ actorId: user.id, action: 'REJECT', entityType: 'employee_profile', entityId: profileId, metadata: { operation: 'profile_change' } });
 
   if (row.user_id) {
     await notifyUser(adminClient, row.user_id, {

@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getCurrentUser, canAssignRole, isAdminOrAbove, type UserRole } from '@/lib/auth';
 import { getSignedAvatarUrl } from '@/lib/avatar';
+import { recordAuditLog } from '@/services/audit-service';
 
 export interface ManagedUser {
   id: string;
@@ -97,5 +98,6 @@ export async function updateUserRoleAction(targetUserId: string, newRole: UserRo
     .eq('user_id', targetUserId);
 
   if (error) throw error;
+  await recordAuditLog({ actorId: currentUser.id, action: 'UPDATE', entityType: 'user_role', entityId: targetUserId, metadata: { new_role: newRole } });
   revalidatePath('/settings');
 }

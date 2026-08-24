@@ -6,6 +6,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getEmployeeById, updateEmployee } from '@/services/employee-service';
 import { getCurrentUser, isAdminOrAbove } from '@/lib/auth';
 import type { CreateEmployeeInput, Employee } from '@/types/domain';
+import { changedFields, recordAuditLog } from '@/services/audit-service';
 
 /**
  * Loads the complete detailed profile of a selected employee by their profile id.
@@ -39,7 +40,15 @@ export async function updateEmployeeAction(
   }
 
   const adminClient = createAdminClient();
+  const current = await getEmployeeById(adminClient, profileId);
   await updateEmployee(adminClient, profileId, input, user.id);
+  await recordAuditLog({
+    actorId: user.id,
+    action: 'UPDATE',
+    entityType: 'employee_profile',
+    entityId: profileId,
+    metadata: { changed_fields: current ? changedFields(current as unknown as Record<string, unknown>, input as unknown as Record<string, unknown>) : Object.keys(input) },
+  });
 
   revalidatePath('/repository');
   revalidatePath('/dashboard');

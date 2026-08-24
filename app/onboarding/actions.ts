@@ -8,6 +8,7 @@ import { createEmployee } from '@/services/employee-service';
 import { getCurrentUser } from '@/lib/auth';
 import { notifyReviewers } from '@/lib/notifications';
 import type { CreateEmployeeInput } from '@/types/domain';
+import { recordAuditLog } from '@/services/audit-service';
 
 export interface OnboardingSubmission {
   name: string;
@@ -91,6 +92,7 @@ export async function claimProfileAction(profileId: string): Promise<void> {
     .is('user_id', null);
 
   if (error) throw error;
+  await recordAuditLog({ actorId: user.id, action: 'UPDATE', entityType: 'employee_profile', entityId: profileId, metadata: { operation: 'claim_requested' } });
 
   await notifyReviewers(createAdminClient(), {
     type: 'claim_requested',
@@ -143,7 +145,7 @@ export async function createOwnProfileAction(input: OnboardingSubmission): Promi
   }
 
   const supabase = await createClient();
-  await createEmployee(
+  const profileId = await createEmployee(
     supabase,
     {
       name: input.name,
@@ -162,6 +164,7 @@ export async function createOwnProfileAction(input: OnboardingSubmission): Promi
     },
     user.id
   );
+  await recordAuditLog({ actorId: user.id, action: 'CREATE', entityType: 'employee_profile', entityId: profileId, metadata: { self_service: true, status: 'draft' } });
 
   await notifyReviewers(createAdminClient(), {
     type: 'new_profile_submitted',

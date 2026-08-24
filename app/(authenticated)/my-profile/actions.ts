@@ -7,6 +7,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { notifyReviewers } from '@/lib/notifications';
 import type { CreateEmployeeInput } from '@/types/domain';
 import type { CvExperienceEntry, CvAcademicEntry, CvProjectEntry, CvCertificationEntry } from '@/lib/cvTypes';
+import { recordAuditLog } from '@/services/audit-service';
 
 /** Everything an employee may propose changing about their own profile — all fields except the
  *  mandatory, locked ones (name, work email), which the server fills in itself below. */
@@ -75,6 +76,13 @@ export async function proposeProfileChangeAction(change: ProfileChangeSubmission
     .eq('status', 'published');
 
   if (error) throw error;
+  await recordAuditLog({
+    actorId: user.id,
+    action: 'UPDATE',
+    entityType: 'employee_profile',
+    entityId: user.profileId,
+    metadata: { operation: 'change_requested', changed_fields: Object.keys(change) },
+  });
 
   await notifyReviewers(createAdminClient(), {
     type: 'change_requested',
