@@ -1,8 +1,15 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { CreateEmployeeInput, Employee } from '@/types/domain';
 
 export type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE' | 'DOWNLOAD' | 'APPROVE' | 'REJECT';
 export type AuditMetadata = Record<string, unknown>;
+
+export interface AuditChange {
+  field: string;
+  old_value: unknown;
+  new_value: unknown;
+}
 
 export interface AuditEvent {
   actorId: string;
@@ -87,4 +94,59 @@ export function changedFields(
   after: Record<string, unknown>
 ): string[] {
   return Object.keys(after).filter((key) => JSON.stringify(before[key]) !== JSON.stringify(after[key]));
+}
+
+/** Builds JSON-safe, display-ready changes for the editable employee profile fields. */
+export function profileChanges(current: Employee, proposed: CreateEmployeeInput): AuditChange[] {
+  const fields: Array<[string, unknown, unknown]> = [
+    ['Role', current.currentPosition || current.role || '', proposed.currentPosition || proposed.role || ''],
+    ['Department', current.department || '', proposed.department || ''],
+    ['Summary', current.summary ?? '', proposed.summary ?? ''],
+    ['Skills', current.skills ?? [], proposed.skills ?? []],
+    ['Work Experience', current.cvExperience ?? [], proposed.cvExperience ?? []],
+    ['Education', current.cvAcademic ?? [], proposed.cvAcademic ?? []],
+    ['Special Projects', current.specialProjects ?? [], proposed.specialProjects ?? []],
+    ['Certifications', current.cvCertifications ?? [], proposed.cvCertifications ?? []],
+  ];
+
+  // A submitted avatar URL means the photo was replaced. The old signed URL is intentionally
+  // represented as presence/absence because it is temporary and unsuitable for durable audit data.
+  if (proposed.avatarUrl) fields.push(['Photo', Boolean(current.avatar), true]);
+
+  const normalizeText = (value: unknown) => String(value ?? '').trim();
+  const normalizers: Record<string, (value: unknown) => unknown> = {
+    Skills: (value) => ((value as unknown[] | undefined) ?? []).map(normalizeText),
+    'Work Experience': (value) => ((value as Record<string, unknown>[] | undefined) ?? []).map((entry) => ({
+      position: normalizeText(entry.position),
+      company: normalizeText(entry.company),
+      period: normalizeText(entry.period),
+      tasks: ((entry.tasks as unknown[] | undefined) ?? []).map(normalizeText),
+    })),
+    Education: (value) => ((value as Record<string, unknown>[] | undefined) ?? []).map((entry) => ({
+      qualification: normalizeText(entry.qualification),
+      institution: normalizeText(entry.institution),
+      period: normalizeText(entry.period),
+    })),
+    'Special Projects': (value) => ((value as Record<string, unknown>[] | undefined) ?? []).map((entry) => ({
+      title: normalizeText(entry.title),
+      brief: normalizeText(entry.brief),
+      skills: ((entry.skills as unknown[] | undefined) ?? []).map(normalizeText),
+    })),
+    Certifications: (value) => ((value as Record<string, unknown>[] | undefined) ?? []).map((entry) => ({
+      name: normalizeText(entry.name),
+      issuer: normalizeText(entry.issuer),
+      year: normalizeText(entry.year),
+    })),
+  };
+
+  return fields
+    // Database reads and form submissions can represent the same data differently (for example,
+    // an omitted optional property versus an empty string). Compare canonical values, while
+    // retaining the original old/new values in metadata for an accurate audit record.
+    .filter(([field, before, after]) => {
+      const normalize = normalizers[field];
+      return JSON.stringify(normalize ? normalize(before) : before)
+        !== JSON.stringify(normalize ? normalize(after) : after);
+    })
+    .map(([field, old_value, new_value]) => ({ field, old_value, new_value }));
 }

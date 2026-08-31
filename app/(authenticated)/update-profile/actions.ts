@@ -9,7 +9,7 @@ import { notifyUser } from '@/lib/notifications';
 import { emailUser } from '@/lib/email/notify';
 import { renderEmailHtml } from '@/lib/email/templates';
 import type { CreateEmployeeInput, Employee } from '@/types/domain';
-import { changedFields, recordAuditLog } from '@/services/audit-service';
+import { profileChanges, recordAuditLog } from '@/services/audit-service';
 
 /**
  * Loads the complete detailed profile of a selected employee by their profile id.
@@ -44,13 +44,15 @@ export async function updateEmployeeAction(
 
   const adminClient = createAdminClient();
   const current = await getEmployeeById(adminClient, profileId);
+  if (!current) throw new Error('Employee profile not found.');
+  const changes = profileChanges(current, input);
   await updateEmployee(adminClient, profileId, input, user.id);
   await recordAuditLog({
     actorId: user.id,
     action: 'UPDATE',
     entityType: 'employee_profile',
     entityId: profileId,
-    metadata: { changed_fields: current ? changedFields(current as unknown as Record<string, unknown>, input as unknown as Record<string, unknown>) : Object.keys(input) },
+    metadata: { target_name: current.name, changes },
   });
 
   // Direct edit, no maker-checker step — the employee otherwise has no way to find out their CV

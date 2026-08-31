@@ -92,12 +92,37 @@ export async function updateUserRoleAction(targetUserId: string, newRole: UserRo
   }
 
   const supabase = await createClient();
+  const { data: existingRole, error: roleLookupError } = await supabase
+    .from('user_roles')
+    .select('role')
+    .eq('user_id', targetUserId)
+    .single();
+  if (roleLookupError) throw roleLookupError;
+
+  const adminClient = createAdminClient();
+  const { data: targetProfile } = await adminClient
+    .from('profiles')
+    .select('full_name')
+    .eq('user_id', targetUserId)
+    .maybeSingle();
+  const { data: targetAuth } = await adminClient.auth.admin.getUserById(targetUserId);
+  const targetName = targetProfile?.full_name || targetAuth.user?.email || 'Unknown User';
+
   const { error } = await supabase
     .from('user_roles')
     .update({ role: newRole, updated_at: new Date().toISOString() })
     .eq('user_id', targetUserId);
 
   if (error) throw error;
-  await recordAuditLog({ actorId: currentUser.id, action: 'UPDATE', entityType: 'user_role', entityId: targetUserId, metadata: { new_role: newRole } });
+  await recordAuditLog({
+    actorId: currentUser.id,
+    action: 'UPDATE',
+    entityType: 'user_role',
+    entityId: targetUserId,
+    metadata: {
+      target_name: targetName,
+      changes: [{ field: 'Role', old_value: existingRole.role, new_value: newRole }],
+    },
+  });
   revalidatePath('/settings');
 }

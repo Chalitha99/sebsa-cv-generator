@@ -9,7 +9,8 @@ import { emailReviewers } from '@/lib/email/notify';
 import { renderEmailHtml } from '@/lib/email/templates';
 import type { CreateEmployeeInput } from '@/types/domain';
 import type { CvExperienceEntry, CvAcademicEntry, CvProjectEntry, CvCertificationEntry } from '@/lib/cvTypes';
-import { recordAuditLog } from '@/services/audit-service';
+import { profileChanges, recordAuditLog } from '@/services/audit-service';
+import { getEmployeeById } from '@/services/employee-service';
 
 /** Everything an employee may propose changing about their own profile — all fields except the
  *  mandatory, locked ones (name, work email), which the server fills in itself below. */
@@ -68,6 +69,11 @@ export async function proposeProfileChangeAction(change: ProfileChangeSubmission
     avatarUrl: change.avatarUrl,
   };
 
+  const adminClient = createAdminClient();
+  const liveProfile = await getEmployeeById(adminClient, user.profileId);
+  if (!liveProfile) throw new Error('Your profile could not be loaded.');
+  const changes = profileChanges(liveProfile, fullChange);
+
   const { error } = await supabase
     .from('profiles')
     .update({
@@ -83,10 +89,9 @@ export async function proposeProfileChangeAction(change: ProfileChangeSubmission
     action: 'UPDATE',
     entityType: 'employee_profile',
     entityId: user.profileId,
-    metadata: { operation: 'change_requested', changed_fields: Object.keys(change) },
+    metadata: { operation: 'change_requested', target_name: current.full_name, changes },
   });
 
-  const adminClient = createAdminClient();
   await notifyReviewers(adminClient, {
     type: 'change_requested',
     title: 'Profile update requested',
