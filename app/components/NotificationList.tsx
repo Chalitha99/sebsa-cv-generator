@@ -17,6 +17,7 @@ const TYPE_META: Record<NotificationType, { icon: React.ElementType; color: stri
   profile_rejected: { icon: XCircle, color: 'text-rose-600 bg-rose-50 border-rose-100' },
   claim_rejected: { icon: XCircle, color: 'text-rose-600 bg-rose-50 border-rose-100' },
   change_rejected: { icon: XCircle, color: 'text-rose-600 bg-rose-50 border-rose-100' },
+  profile_updated: { icon: Bell, color: 'text-indigo-600 bg-indigo-50 border-indigo-100' },
 };
 const DEFAULT_META = { icon: Bell, color: 'text-indigo-600 bg-indigo-50 border-indigo-100' };
 

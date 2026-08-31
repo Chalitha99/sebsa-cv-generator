@@ -1,0 +1,49 @@
+import nodemailer, { type Transporter } from 'nodemailer';
+import { env, requireEnv } from '@/lib/env';
+
+export interface EmailContent {
+  subject: string;
+  html: string;
+}
+
+let transporter: Transporter | null = null;
+
+/** Brevo's SMTP relay, authenticated with the SMTP key (BREVO_SMTP_KEY — starts with
+ *  `xsmtpsib-`), not the REST API key. The login (BREVO_SMTP_LOGIN, looks like
+ *  <id>@smtp-brevo.com) is a separate account-level credential from the visible From address —
+ *  Brevo will reject auth if EMAIL_FROM_ADDRESS is used as the login instead. */
+function getTransporter(): Transporter {
+  if (!transporter) {
+    transporter = nodemailer.createTransport({
+      host: 'smtp-relay.brevo.com',
+      port: 587,
+      secure: false,
+      auth: {
+        user: requireEnv('BREVO_SMTP_LOGIN'),
+        pass: requireEnv('BREVO_SMTP_KEY'),
+      },
+    });
+  }
+  return transporter;
+}
+
+/**
+ * Sends one transactional email via Brevo's SMTP relay. Swallows and logs failures rather than
+ * throwing — a broken email provider (missing key, rate limit, unverified sender) must never
+ * block or roll back the real action it's attached to, same principle as
+ * notifyUser/notifyReviewers (lib/notifications.ts) and provisionEmployeeAccount
+ * (lib/auth/provisionAccount.ts).
+ */
+export async function sendEmail(to: string, content: EmailContent): Promise<void> {
+  try {
+    const fromAddress = requireEnv('EMAIL_FROM_ADDRESS');
+    await getTransporter().sendMail({
+      from: `"${env.EMAIL_FROM_NAME}" <${fromAddress}>`,
+      to,
+      subject: content.subject,
+      html: content.html,
+    });
+  } catch (err) {
+    console.error('Failed to send email:', err);
+  }
+}

@@ -7,6 +7,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { createEmployee } from '@/services/employee-service';
 import { getCurrentUser } from '@/lib/auth';
 import { notifyReviewers } from '@/lib/notifications';
+import { emailReviewers } from '@/lib/email/notify';
+import { renderEmailHtml } from '@/lib/email/templates';
 import type { CreateEmployeeInput } from '@/types/domain';
 import { recordAuditLog } from '@/services/audit-service';
 
@@ -166,11 +168,21 @@ export async function createOwnProfileAction(input: OnboardingSubmission): Promi
   );
   await recordAuditLog({ actorId: user.id, action: 'CREATE', entityType: 'employee_profile', entityId: profileId, metadata: { self_service: true, status: 'draft' } });
 
-  await notifyReviewers(createAdminClient(), {
+  const adminClient = createAdminClient();
+  await notifyReviewers(adminClient, {
     type: 'new_profile_submitted',
     title: 'New profile submitted',
     message: `${input.name} submitted a new profile for review.`,
     link: '/review',
+  });
+  await emailReviewers(adminClient, {
+    subject: `New profile submitted — ${input.name}`,
+    html: renderEmailHtml({
+      heading: 'New profile submitted',
+      body: `${input.name} submitted a new profile for review.`,
+      ctaLabel: 'Review submission',
+      ctaPath: '/review',
+    }),
   });
 
   revalidatePath('/dashboard');

@@ -5,6 +5,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getCurrentUser, isReviewerOrAbove, type CurrentUser } from '@/lib/auth';
 import { updateEmployee, getEmployeeById } from '@/services/employee-service';
 import { notifyUser } from '@/lib/notifications';
+import { emailUser } from '@/lib/email/notify';
+import { renderEmailHtml } from '@/lib/email/templates';
 import type { CreateEmployeeInput, Employee } from '@/types/domain';
 import { recordAuditLog } from '@/services/audit-service';
 
@@ -209,6 +211,15 @@ export async function approveNewProfileAction(profileId: string): Promise<void> 
       message: 'Your profile is now live in the company repository.',
       link: `/repository/${profileId}`,
     });
+    await emailUser(adminClient, row.user_id, {
+      subject: 'Your SEBSA CV profile has been approved',
+      html: renderEmailHtml({
+        heading: 'Profile approved',
+        body: 'Your profile is now live in the company repository.',
+        ctaLabel: 'View your profile',
+        ctaPath: `/repository/${profileId}`,
+      }),
+    });
   }
   revalidateAll();
 }
@@ -339,6 +350,15 @@ export async function approveChangeAction(profileId: string): Promise<void> {
       title: 'Profile changes approved',
       message: 'Your proposed changes are now live on your profile.',
       link: `/repository/${profileId}`,
+    });
+    await emailUser(adminClient, row.user_id, {
+      subject: 'Your SEBSA CV profile changes have been approved',
+      html: renderEmailHtml({
+        heading: 'Profile changes approved',
+        body: 'Your proposed changes are now live on your profile.',
+        ctaLabel: 'View your profile',
+        ctaPath: `/repository/${profileId}`,
+      }),
     });
   }
   // Log the action back to the reviewer's own feed too — previously only the submitting employee
