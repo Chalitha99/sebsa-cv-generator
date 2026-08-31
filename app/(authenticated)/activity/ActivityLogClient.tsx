@@ -6,6 +6,7 @@ import { PageWrapper } from '../../components/PageWrapper';
 import { markNotificationReadAction } from '../notifications/actions';
 import type { AppNotification } from '@/services/notification-service';
 import type { AuditLogRecord } from '@/services/audit-service';
+import type { AuditChange } from '@/services/audit-service';
 import { ArrowLeft, Bell, History } from 'lucide-react';
 
 type LogTab = 'activity' | 'notifications';
@@ -20,13 +21,57 @@ const cellCls = 'px-4 py-3 text-xs text-slate-600 align-top border-b border-slat
 
 const humanize = (value: string) => value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 
+const displayValue = (value: unknown): string => {
+  if (value == null || value === '') return '(none)';
+  if (typeof value === 'string') return humanize(value);
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return JSON.stringify(value);
+};
+
+const isAuditChange = (value: unknown): value is AuditChange => {
+  if (!value || typeof value !== 'object') return false;
+  const item = value as Record<string, unknown>;
+  return typeof item.field === 'string' && 'old_value' in item && 'new_value' in item;
+};
+
+function describeChanges(changes: AuditChange[]): string {
+  return changes.map((change) => {
+    const field = humanize(change.field);
+    const complex = field === 'Summary'
+      || typeof change.old_value === 'object'
+      || typeof change.new_value === 'object';
+    return complex
+      ? `${field} updated`
+      : `${field} changed from "${displayValue(change.old_value)}" to "${displayValue(change.new_value)}"`;
+  }).join('; ');
+}
+
 function describeActivity(row: AuditLogRecord): string {
   const metadata = row.metadata;
   const operation = typeof metadata.operation === 'string' ? humanize(metadata.operation) : null;
+  const rawChanges = metadata.changes;
+  const hasStructuredChanges = Array.isArray(rawChanges);
+  const changes = Array.isArray(rawChanges) ? rawChanges.filter(isAuditChange) : [];
+  const targetName = typeof metadata.target_name === 'string' ? metadata.target_name : null;
   const fields = Array.isArray(metadata.changed_fields)
     ? metadata.changed_fields.map((field) => humanize(String(field))).join(', ')
     : null;
 
+  if (changes.length > 0) {
+    const details = describeChanges(changes);
+    if (row.action === 'APPROVE' && metadata.operation === 'profile_change' && targetName) {
+      return `${row.actorName} approved ${targetName}'s profile change request: ${details}.`;
+    }
+    if (metadata.operation === 'change_requested' && targetName) {
+      return `Change requested by ${targetName}: ${details}.`;
+    }
+    if (row.entityType === 'user_role' && targetName) {
+      const roleChange = changes[0];
+      return `Changed ${targetName}'s role from "${displayValue(roleChange.old_value)}" to "${displayValue(roleChange.new_value)}".`;
+    }
+    return `${targetName ? `${targetName}: ` : ''}${details}.`;
+  }
+  if (row.action === 'UPDATE' && hasStructuredChanges) return 'No values changed.';
   if (operation && fields) return `${operation}. Changed: ${fields}.`;
   if (operation) return `${operation}.`;
   if (fields) return `Changed fields: ${fields}.`;

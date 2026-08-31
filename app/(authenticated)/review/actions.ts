@@ -8,7 +8,7 @@ import { notifyUser } from '@/lib/notifications';
 import { emailUser } from '@/lib/email/notify';
 import { renderEmailHtml } from '@/lib/email/templates';
 import type { CreateEmployeeInput, Employee } from '@/types/domain';
-import { recordAuditLog } from '@/services/audit-service';
+import { profileChanges, recordAuditLog } from '@/services/audit-service';
 
 export type PendingItemType = 'new_profile' | 'claim' | 'change';
 
@@ -335,6 +335,10 @@ export async function approveChangeAction(profileId: string): Promise<void> {
   const change = row.pending_change as CreateEmployeeInput | null;
   if (!change) throw new Error('No pending change on this profile.');
 
+  const current = await getEmployeeById(adminClient, profileId);
+  if (!current) throw new Error('Employee profile not found.');
+  const changes = profileChanges(current, change);
+
   await updateEmployee(adminClient, profileId, change, user.id);
 
   const { error } = await adminClient
@@ -342,7 +346,13 @@ export async function approveChangeAction(profileId: string): Promise<void> {
     .update({ pending_change: null, pending_change_submitted_at: null })
     .eq('id', profileId);
   if (error) throw error;
-  await recordAuditLog({ actorId: user.id, action: 'APPROVE', entityType: 'employee_profile', entityId: profileId, metadata: { operation: 'profile_change', changed_fields: Object.keys(change) } });
+  await recordAuditLog({
+    actorId: user.id,
+    action: 'APPROVE',
+    entityType: 'employee_profile',
+    entityId: profileId,
+    metadata: { operation: 'profile_change', target_name: row.full_name, changes },
+  });
 
   if (row.user_id) {
     await notifyUser(adminClient, row.user_id, {

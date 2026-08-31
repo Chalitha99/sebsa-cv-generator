@@ -273,6 +273,7 @@ export async function saveGeneratedCvAction(
   if (!user) throw new Error('Not authenticated.');
 
   const adminClient = createAdminClient();
+  const previousContent = await getSavedGeneratedCv(adminClient, profileId);
   const saved = await saveGeneratedCv(adminClient, {
     profileId,
     content,
@@ -283,6 +284,18 @@ export async function saveGeneratedCvAction(
     action: saved.created ? 'CREATE' : 'UPDATE',
     entityType: 'generated_cv',
     entityId: saved.row.id,
-    metadata: { profile_id: profileId, content_sections: Object.keys(content) },
+    metadata: {
+      profile_id: profileId,
+      content_sections: Object.keys(content),
+      ...(saved.created ? {} : {
+        changes: Object.keys(content)
+          .filter((field) => JSON.stringify(previousContent?.[field]) !== JSON.stringify(content[field]))
+          .map((field) => ({
+            field,
+            old_value: previousContent?.[field] ?? null,
+            new_value: content[field] ?? null,
+          })),
+      }),
+    },
   });
 }

@@ -94,7 +94,17 @@ export async function claimProfileAction(profileId: string): Promise<void> {
     .is('user_id', null);
 
   if (error) throw error;
-  await recordAuditLog({ actorId: user.id, action: 'UPDATE', entityType: 'employee_profile', entityId: profileId, metadata: { operation: 'claim_requested' } });
+  await recordAuditLog({
+    actorId: user.id,
+    action: 'UPDATE',
+    entityType: 'employee_profile',
+    entityId: profileId,
+    metadata: {
+      operation: 'claim_requested',
+      target_name: targetProfile?.full_name ?? 'Unknown Profile',
+      changes: [{ field: 'Account claim requester', old_value: null, new_value: user.fullName }],
+    },
+  });
 
   await notifyReviewers(createAdminClient(), {
     type: 'claim_requested',
