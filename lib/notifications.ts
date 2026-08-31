@@ -10,7 +10,8 @@ export type NotificationType =
   | 'claim_rejected'
   | 'change_approved'
   | 'change_rejected'
-  | 'account_provisioned';
+  | 'account_provisioned'
+  | 'profile_updated';
 
 interface NotifyPayload {
   type: NotificationType;

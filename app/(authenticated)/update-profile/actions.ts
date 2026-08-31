@@ -5,6 +5,9 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getEmployeeById, updateEmployee } from '@/services/employee-service';
 import { getCurrentUser, isAdminOrAbove } from '@/lib/auth';
+import { notifyUser } from '@/lib/notifications';
+import { emailUser } from '@/lib/email/notify';
+import { renderEmailHtml } from '@/lib/email/templates';
 import type { CreateEmployeeInput, Employee } from '@/types/domain';
 import { changedFields, recordAuditLog } from '@/services/audit-service';
 
@@ -49,6 +52,27 @@ export async function updateEmployeeAction(
     entityId: profileId,
     metadata: { changed_fields: current ? changedFields(current as unknown as Record<string, unknown>, input as unknown as Record<string, unknown>) : Object.keys(input) },
   });
+
+  // Direct edit, no maker-checker step — the employee otherwise has no way to find out their CV
+  // changed, unlike every other content-changing path (self-proposed edits go through /review).
+  const { data: profileRow } = await adminClient.from('profiles').select('user_id').eq('id', profileId).single();
+  if (profileRow?.user_id) {
+    await notifyUser(adminClient, profileRow.user_id, {
+      type: 'profile_updated',
+      title: 'Your profile was updated',
+      message: `${user.fullName} made changes to your profile.`,
+      link: `/repository/${profileId}`,
+    });
+    await emailUser(adminClient, profileRow.user_id, {
+      subject: 'Your SEBSA CV profile has been updated',
+      html: renderEmailHtml({
+        heading: 'Your profile was updated',
+        body: `${user.fullName} made changes to your CV profile. Review the updated details to make sure everything looks right.`,
+        ctaLabel: 'View your profile',
+        ctaPath: `/repository/${profileId}`,
+      }),
+    });
+  }
 
   revalidatePath('/repository');
   revalidatePath('/dashboard');
