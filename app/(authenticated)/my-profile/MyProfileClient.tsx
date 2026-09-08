@@ -1,5 +1,8 @@
 'use client';
 
+import EmployeeDetailTabs from '@/app/components/EmployeeDetailTabs';
+import { pickEmployeeDetails, type EmployeeDetails } from '@/lib/employeeDetails';
+
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageWrapper } from '../../components/PageWrapper';
@@ -17,10 +20,11 @@ interface MyProfileClientProps {
 export default function MyProfileClient({ employee, departments }: MyProfileClientProps) {
   const router = useRouter();
 
+  const [details, setDetails] = useState<EmployeeDetails>(() => pickEmployeeDetails(employee));
   const [value, setValue] = useState<ProfileFieldsValue>({
     name: employee.name,
     role: employee.role,
-    department: departments.some((d) => d.name === employee.department) ? employee.department : departments[0]?.name ?? '',
+    department: employee.department,
     summary: employee.summary ?? '',
     skills: employee.skills,
     experience: employee.cvExperience ?? [],
@@ -63,6 +67,8 @@ export default function MyProfileClient({ employee, departments }: MyProfileClie
 
     try {
       await proposeProfileChangeAction({
+        ...details,
+        name: value.name,
         role: value.role,
         department: value.department,
         summary: value.summary,
@@ -124,8 +130,7 @@ export default function MyProfileClient({ employee, departments }: MyProfileClie
             Update My Profile
           </h2>
           <p className="text-sm font-medium text-slate-500 mt-2">
-            Edit anything except your name and work email — changes are reviewed by a Super Admin
-            or CV Reviewer before they appear on your profile.
+            Your changes are reviewed by a Super Admin or CV Reviewer before they appear on your profile.
           </p>
         </div>
 
@@ -162,19 +167,10 @@ export default function MyProfileClient({ employee, departments }: MyProfileClie
             </button>
           </div>
 
-          {/* Name/email shown read-only for context, not part of the editable form */}
-          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Name (locked)</label>
-              <p className="text-xs font-bold text-slate-600">{employee.name}</p>
-            </div>
-            <div>
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Work Email (locked)</label>
-              <p className="text-xs font-bold text-slate-600">{employee.email}</p>
-            </div>
-          </div>
-
-          <ProfileFieldsEditor value={value} onChange={setValue} departments={departments} nameEditable={false} />
+          <EmployeeDetailTabs value={{ ...details, name: value.name, role: value.role, department: value.department, email: employee.email }} departments={departments} emailEditable={false}
+            onChange={next => { setDetails(pickEmployeeDetails(next)); setValue({ ...value, name: next.name, role: next.role, department: next.department }); }}>
+            <ProfileFieldsEditor value={value} onChange={setValue} departments={departments} profileOnly />
+          </EmployeeDetailTabs>
 
           {submitError && (
             <p className="text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200/60 rounded-lg px-3 py-2">

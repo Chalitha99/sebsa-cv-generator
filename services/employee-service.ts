@@ -1,3 +1,5 @@
+import { employeeDetailsFromRow } from '@/lib/employeeDetails';
+import type { UpdateEmployeeInput } from '@/types/domain';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   createEmployeeRow,
@@ -147,6 +149,7 @@ export async function getEmployeeById(
 
   const emp = {
     ...mapListRow(row),
+    ...employeeDetailsFromRow(row as unknown as Record<string, unknown>),
     experience: experience.length > 0 ? experience : undefined,
     projects: projects.length > 0 ? projects : undefined,
     certs: certs.length > 0 ? certs : undefined,
@@ -180,7 +183,7 @@ export async function deleteEmployee(supabase: SupabaseClient, rowId: string): P
 export async function updateEmployee(
   supabase: SupabaseClient,
   profileId: string,
-  input: CreateEmployeeInput,
+  input: UpdateEmployeeInput,
   updatedBy: string
 ): Promise<void> {
   await updateEmployeeRow(supabase, profileId, input, updatedBy);

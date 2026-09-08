@@ -1,5 +1,7 @@
 'use server';
 
+import { normalizeEmployeeDetails, type EmployeeDetails } from '@/lib/employeeDetails';
+
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -7,14 +9,14 @@ import { getCurrentUser } from '@/lib/auth';
 import { notifyReviewers } from '@/lib/notifications';
 import { emailReviewers } from '@/lib/email/notify';
 import { renderEmailHtml } from '@/lib/email/templates';
-import type { CreateEmployeeInput } from '@/types/domain';
+import type { UpdateEmployeeInput } from '@/types/domain';
 import type { CvExperienceEntry, CvAcademicEntry, CvProjectEntry, CvCertificationEntry } from '@/lib/cvTypes';
 import { profileChanges, recordAuditLog } from '@/services/audit-service';
 import { getEmployeeById } from '@/services/employee-service';
 
-/** Everything an employee may propose changing about their own profile — all fields except the
- *  mandatory, locked ones (name, work email), which the server fills in itself below. */
-export interface ProfileChangeSubmission {
+/** Employees may propose detailed profile changes; account work email stays locked. */
+export interface ProfileChangeSubmission extends EmployeeDetails {
+  name: string;
   role: string;
   department: string;
   summary: string;
@@ -34,10 +36,8 @@ export interface ProfileChangeSubmission {
  * RLS-bound client: profiles_self_propose_change (0020) is the real enforcement — it only allows
  * touching the caller's own row, and only while status='published'.
  *
- * name/email are deliberately NOT accepted from the client — they're read from the current row
- * server-side so `pending_change` is always a complete, valid CreateEmployeeInput ready for
- * updateEmployee() at approval time, and so an employee can never smuggle a name/email change
- * through this path (docs/04-rbac-security.md's "mandatory fields stay locked" requirement).
+ * Full name and optional details are reviewed with the CV changes.
+ * Account email is always read server-side from the existing profile.
  */
 export async function proposeProfileChangeAction(change: ProfileChangeSubmission): Promise<void> {
   const user = await getCurrentUser();
@@ -54,8 +54,9 @@ export async function proposeProfileChangeAction(change: ProfileChangeSubmission
     .single();
   if (currentError) throw currentError;
 
-  const fullChange: CreateEmployeeInput = {
-    name: current.full_name as string,
+  const fullChange: UpdateEmployeeInput = {
+    ...normalizeEmployeeDetails(change),
+    name: change.name?.trim() || current.full_name as string,
     email: current.email as string,
     role: change.role,
     department: change.department,

@@ -1,3 +1,5 @@
+import { employeeDetailFields, normalizeEmployeeDetails } from '@/lib/employeeDetails';
+import type { UpdateEmployeeInput } from '@/types/domain';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { CreateEmployeeInput } from '@/types/domain';
 import type { CvExperienceEntry, CvAcademicEntry, CvProjectEntry, CvCertificationEntry } from '@/lib/cvTypes';
@@ -19,6 +21,7 @@ const LIST_SELECT = `
 
 const DETAIL_SELECT = `
   ${LIST_SELECT},
+  ${employeeDetailFields.map(f => f.column).join(', ')},
   education, summary, status, pending_change, pending_change_submitted_at,
   experiences ( company, role_title, employment_type, start_date, end_date, is_current, description, display_order ),
   projects ( name, description, skills, display_order ),
@@ -209,7 +212,7 @@ export async function deleteEmployeeRow(supabase: SupabaseClient, rowId: string)
 export async function updateEmployeeRow(
   supabase: SupabaseClient,
   profileId: string,
-  input: CreateEmployeeInput,
+  input: UpdateEmployeeInput,
   updatedBy: string
 ): Promise<void> {
   const { data: dept } = await supabase
@@ -234,6 +237,10 @@ export async function updateEmployeeRow(
     updated_at: new Date().toISOString(),
   };
 
+  const details = normalizeEmployeeDetails(input);
+  for (const field of employeeDetailFields) {
+    if (details[field.key] !== undefined) updateFields[field.column] = details[field.key];
+  }
   // Only update avatar_url if a new one was uploaded
   if (input.avatarUrl !== undefined && input.avatarUrl !== null) {
     updateFields.avatar_url = input.avatarUrl;

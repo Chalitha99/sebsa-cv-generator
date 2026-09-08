@@ -47,15 +47,16 @@ interface ProfileFieldsEditorProps {
   departments: { id: string; name: string }[];
   /** Employee self-edit (docs/04-rbac-security.md §10) locks name — mandatory field, not editable. */
   nameEditable?: boolean;
+  profileOnly?: boolean;
 }
 
 /**
  * Shared structured profile form — used by app/onboarding (create-from-scratch, no CV to parse)
- * and app/(authenticated)/my-profile (full-field self-edit, everything except name/work email).
+ * and app/(authenticated)/my-profile (detailed self-edit with separate overview/contact tabs).
  * Reuses the same entry-array editors as the Generate flow's CvSectionEditor.tsx
  * (app/components/CvEntrySections.tsx) since the underlying shapes are identical.
  */
-export default function ProfileFieldsEditor({ value, onChange, departments, nameEditable = true }: ProfileFieldsEditorProps) {
+export default function ProfileFieldsEditor({ value, onChange, departments, nameEditable = true, profileOnly = false }: ProfileFieldsEditorProps) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
     basics: true,
     skills: true,
@@ -70,7 +71,7 @@ export default function ProfileFieldsEditor({ value, onChange, departments, name
 
   return (
     <div className="space-y-4">
-      <SectionCard label="Basics" icon={User} expanded={expanded.basics} onToggle={() => toggle('basics')}>
+      {!profileOnly && <SectionCard label="Basics" icon={User} expanded={expanded.basics} onToggle={() => toggle('basics')}>
         {nameEditable && (
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-slate-500 uppercase block">Full Name</label>
@@ -119,7 +120,8 @@ export default function ProfileFieldsEditor({ value, onChange, departments, name
             className={textareaCls}
           />
         </div>
-      </SectionCard>
+      </SectionCard>}
+      {profileOnly && <div className="space-y-1"><label className="block text-xs font-bold text-slate-500">Objective / Professional Summary</label><textarea rows={3} value={value.summary} onChange={e => patch({ summary: e.target.value })} className={textareaCls} /></div>}
 
 
       <ExperienceSection
