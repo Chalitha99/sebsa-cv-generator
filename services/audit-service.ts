@@ -1,6 +1,7 @@
+import { employeeDetailFields } from '@/lib/employeeDetails';
 import { createAdminClient } from '@/lib/supabase/admin';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { CreateEmployeeInput, Employee } from '@/types/domain';
+import type { UpdateEmployeeInput, Employee } from '@/types/domain';
 
 export type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE' | 'DOWNLOAD' | 'APPROVE' | 'REJECT';
 export type AuditMetadata = Record<string, unknown>;
@@ -97,8 +98,10 @@ export function changedFields(
 }
 
 /** Builds JSON-safe, display-ready changes for the editable employee profile fields. */
-export function profileChanges(current: Employee, proposed: CreateEmployeeInput): AuditChange[] {
+export function profileChanges(current: Employee, proposed: UpdateEmployeeInput): AuditChange[] {
   const fields: Array<[string, unknown, unknown]> = [
+    ['Full Name', current.name, proposed.name],
+    ...employeeDetailFields.filter(f => proposed[f.key] !== undefined).map(f => [f.label, current[f.key] ?? '', proposed[f.key] ?? ''] as [string, unknown, unknown]),
     ['Role', current.currentPosition || current.role || '', proposed.currentPosition || proposed.role || ''],
     ['Department', current.department || '', proposed.department || ''],
     ['Summary', current.summary ?? '', proposed.summary ?? ''],

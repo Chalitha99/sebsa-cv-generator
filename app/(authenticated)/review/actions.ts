@@ -1,5 +1,7 @@
 'use server';
 
+import { employeeDetailFields } from '@/lib/employeeDetails';
+
 import { revalidatePath } from 'next/cache';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getCurrentUser, isReviewerOrAbove, type CurrentUser } from '@/lib/auth';
@@ -7,7 +9,7 @@ import { updateEmployee, getEmployeeById } from '@/services/employee-service';
 import { notifyUser } from '@/lib/notifications';
 import { emailUser } from '@/lib/email/notify';
 import { renderEmailHtml } from '@/lib/email/templates';
-import type { CreateEmployeeInput, Employee } from '@/types/domain';
+import type { UpdateEmployeeInput, Employee } from '@/types/domain';
 import { profileChanges, recordAuditLog } from '@/services/audit-service';
 
 export type PendingItemType = 'new_profile' | 'claim' | 'change';
@@ -26,7 +28,7 @@ export interface PendingItem {
   email: string;
   type: PendingItemType;
   submittedAt: string;
-  proposedChange?: CreateEmployeeInput;
+  proposedChange?: UpdateEmployeeInput;
   /** Only populated for type 'change' — which fields actually differ from the live profile. */
   changedFields?: ProfileFieldDiff[];
 }
@@ -34,8 +36,13 @@ export interface PendingItem {
 /** Compares the live profile against a proposed change and returns only the fields that
  *  actually differ — list-shaped fields (experience/academic/etc.) are compared as whole
  *  arrays (deep equality) since a full per-entry diff isn't worth the complexity here. */
-function computeChangedFields(current: Employee, proposed: CreateEmployeeInput): ProfileFieldDiff[] {
+function computeChangedFields(current: Employee, proposed: UpdateEmployeeInput): ProfileFieldDiff[] {
   const diffs: ProfileFieldDiff[] = [];
+  for (const field of [{ key: 'name', label: 'Full Name' } as const, ...employeeDetailFields]) {
+    if (proposed[field.key] !== undefined && (current[field.key] ?? '') !== (proposed[field.key] ?? '')) {
+      diffs.push({ field: field.label, before: String(current[field.key] ?? '(none)'), after: String(proposed[field.key] ?? '(none)') });
+    }
+  }
 
   const currentRole = current.currentPosition || current.role || '';
   const proposedRole = proposed.currentPosition || proposed.role || '';
@@ -158,7 +165,7 @@ export async function listPendingItemsAction(): Promise<PendingItem[]> {
       });
     }
     if (row.pending_change) {
-      const proposedChange = row.pending_change as CreateEmployeeInput;
+      const proposedChange = row.pending_change as UpdateEmployeeInput;
       // Fetch the live profile to diff against — one extra query per pending change, which is
       // fine at review-queue scale (a handful of items at a time, not a paginated list).
       let changedFields: ProfileFieldDiff[] | undefined;
@@ -316,7 +323,7 @@ export async function rejectClaimAction(profileId: string): Promise<void> {
 }
 
 /**
- * Merges a proposed edit into the live profile. pending_change is a complete CreateEmployeeInput
+ * Merges a proposed edit into the live profile. pending_change is a complete UpdateEmployeeInput
  * (proposeProfileChangeAction fills in the immutable name/email server-side, see
  * app/(authenticated)/my-profile/actions.ts) — updateEmployee() does a full replace of
  * experiences/projects/certifications/skills, which is correct here because the self-edit form
@@ -332,7 +339,7 @@ export async function approveChangeAction(profileId: string): Promise<void> {
     .eq('id', profileId)
     .single();
   if (fetchError) throw fetchError;
-  const change = row.pending_change as CreateEmployeeInput | null;
+  const change = row.pending_change as UpdateEmployeeInput | null;
   if (!change) throw new Error('No pending change on this profile.');
 
   const current = await getEmployeeById(adminClient, profileId);

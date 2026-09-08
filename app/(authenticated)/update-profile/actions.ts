@@ -8,7 +8,7 @@ import { getCurrentUser, isAdminOrAbove } from '@/lib/auth';
 import { notifyUser } from '@/lib/notifications';
 import { emailUser } from '@/lib/email/notify';
 import { renderEmailHtml } from '@/lib/email/templates';
-import type { CreateEmployeeInput, Employee } from '@/types/domain';
+import type { UpdateEmployeeInput, Employee } from '@/types/domain';
 import { profileChanges, recordAuditLog } from '@/services/audit-service';
 
 /**
@@ -30,7 +30,7 @@ export async function getEmployeeDetailsAction(profileId: string): Promise<Emplo
  */
 export async function updateEmployeeAction(
   profileId: string,
-  input: CreateEmployeeInput
+  input: UpdateEmployeeInput
 ): Promise<void> {
   // This uses the service-role client below (bypasses RLS), so this role check is the actual
   // enforcement boundary, not just a friendlier error message. Previously this only checked for
@@ -76,6 +76,8 @@ export async function updateEmployeeAction(
     });
   }
 
+  revalidatePath(`/repository/${profileId}`);
+  revalidatePath('/my-profile');
   revalidatePath('/repository');
   revalidatePath('/dashboard');
 }

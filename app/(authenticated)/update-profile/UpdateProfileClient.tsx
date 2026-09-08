@@ -1,5 +1,8 @@
 'use client';
 
+import EmployeeDetailTabs from '@/app/components/EmployeeDetailTabs';
+import { pickEmployeeDetails, type EmployeeDetails } from '@/lib/employeeDetails';
+
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageWrapper } from '../../components/PageWrapper';
@@ -13,7 +16,7 @@ import {
   type CvAcademicEntry,
   type CvCertificationEntry,
 } from '@/lib/cvTypes';
-import type { Employee, CreateEmployeeInput } from '@/types/domain';
+import type { Employee, UpdateEmployeeInput } from '@/types/domain';
 import {
   CloudUpload,
   FileText,
@@ -149,6 +152,7 @@ export default function UpdateProfileClient({
 
   // Form editable states
   const [profile, setProfile] = useState<CvProfile>(emptyCvProfile());
+  const [details, setDetails] = useState<EmployeeDetails>({});
   const [email, setEmail] = useState('');
   const [department, setDepartment] = useState('');
 
@@ -179,7 +183,7 @@ export default function UpdateProfileClient({
   // until the Admin actually changes something rather than being enabled by default.
   const [initialSnapshot, setInitialSnapshot] = useState<string>('');
   const isDirty =
-    profileImageFile !== null || JSON.stringify({ profile, email, department }) !== initialSnapshot;
+    profileImageFile !== null || JSON.stringify({ profile, email, department, details }) !== initialSnapshot;
 
   // Load selected employee details
   useEffect(() => {
@@ -213,12 +217,13 @@ export default function UpdateProfileClient({
             certifications: detailedEmp.cvCertifications || [],
           };
           setProfile(loadedProfile);
+          setDetails(pickEmployeeDetails(detailedEmp));
           setEmail(detailedEmp.email);
           setDepartment(detailedEmp.department);
           setProfileImagePreview(detailedEmp.avatar);
           setProfileImageFile(null); // Keep null to flag no changes yet
           setInitialSnapshot(
-            JSON.stringify({ profile: loadedProfile, email: detailedEmp.email, department: detailedEmp.department })
+            JSON.stringify({ profile: loadedProfile, email: detailedEmp.email, department: detailedEmp.department, details: pickEmployeeDetails(detailedEmp) })
           );
         }
       } catch (err) {
@@ -421,7 +426,8 @@ export default function UpdateProfileClient({
         avatarUrl = await uploadProfilePictureAction(imgFormData);
       }
 
-      const input: CreateEmployeeInput = {
+      const input: UpdateEmployeeInput = {
+        ...details,
         name: profile.name,
         email,
         role: profile.currentPosition,
@@ -452,12 +458,13 @@ export default function UpdateProfileClient({
           certifications: detailedEmp.cvCertifications || [],
         };
         setProfile(loadedProfile);
+          setDetails(pickEmployeeDetails(detailedEmp));
         setEmail(detailedEmp.email);
         setDepartment(detailedEmp.department);
         setProfileImagePreview(detailedEmp.avatar);
         setProfileImageFile(null); // Keep null to flag no changes yet
         setInitialSnapshot(
-          JSON.stringify({ profile: loadedProfile, email: detailedEmp.email, department: detailedEmp.department })
+          JSON.stringify({ profile: loadedProfile, email: detailedEmp.email, department: detailedEmp.department, details: pickEmployeeDetails(detailedEmp) })
         );
       }
       setIsSaving(false);
@@ -505,12 +512,13 @@ export default function UpdateProfileClient({
           certifications: detailedEmp.cvCertifications || [],
         };
         setProfile(loadedProfile);
+          setDetails(pickEmployeeDetails(detailedEmp));
         setEmail(detailedEmp.email);
         setDepartment(detailedEmp.department);
         setProfileImagePreview(detailedEmp.avatar);
         setProfileImageFile(null);
         setInitialSnapshot(
-          JSON.stringify({ profile: loadedProfile, email: detailedEmp.email, department: detailedEmp.department })
+          JSON.stringify({ profile: loadedProfile, email: detailedEmp.email, department: detailedEmp.department, details: pickEmployeeDetails(detailedEmp) })
         );
       }
     } catch (err) {
@@ -826,65 +834,8 @@ export default function UpdateProfileClient({
                 </h4>
               </div>
 
-              {/* Basic Info */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <FieldLabel>Full Name</FieldLabel>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Sarah Chen"
-                    value={profile.name}
-                    onChange={(e) => updateField('name', e.target.value)}
-                    className={INPUT_CLS}
-                  />
-                </div>
-                <div>
-                  <FieldLabel>Current Position</FieldLabel>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Senior Frontend Engineer"
-                    value={profile.currentPosition}
-                    onChange={(e) => updateField('currentPosition', e.target.value)}
-                    className={INPUT_CLS}
-                  />
-                </div>
-                <div>
-                  <FieldLabel>Work Email</FieldLabel>
-                  <input
-                    type="email"
-                    required
-                    placeholder="e.g. s.chen@corp.com"
-                    value={email}
-                    onChange={(e) => {
-                      setSuccessMessage(null);
-                      setSaveError(null);
-                      setEmail(e.target.value);
-                    }}
-                    className={INPUT_CLS}
-                  />
-                </div>
-                <div>
-                  <FieldLabel>Department</FieldLabel>
-                  <select
-                    value={department}
-                    onChange={(e) => {
-                      setSuccessMessage(null);
-                      setSaveError(null);
-                      setDepartment(e.target.value);
-                    }}
-                    className={INPUT_CLS}
-                  >
-                    {departments.map((d) => (
-                      <option key={d.id} value={d.name}>
-                        {d.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
+              <EmployeeDetailTabs value={{ ...details, name: profile.name, role: profile.currentPosition, department, email }} departments={departments}
+                onChange={next => { setDetails(pickEmployeeDetails(next)); setProfile(p => ({ ...p, name: next.name, currentPosition: next.role })); setDepartment(next.department); setEmail(next.email); }}>
               {/* Objective */}
               <div>
                 <FieldLabel>Objective / Professional Summary</FieldLabel>
@@ -1170,6 +1121,7 @@ export default function UpdateProfileClient({
                 </div>
               </div>
 
+              </EmployeeDetailTabs>
             </form>
           </div>
           </div>

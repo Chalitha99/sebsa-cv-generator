@@ -1,5 +1,7 @@
 'use client';
 
+import EmployeeDetailTabs from '@/app/components/EmployeeDetailTabs';
+
 import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageWrapper } from '../../../components/PageWrapper';
@@ -32,7 +34,6 @@ interface EmployeeProfileClientProps {
 
 export default function EmployeeProfileClient({ employee, viewerRole }: EmployeeProfileClientProps) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'experience' | 'projects'>('experience');
   const canGenerateCv = isAdminOrAbove(viewerRole);
   // Admin/Super Admin can edit anyone's profile (docs/04-rbac-security.md §2) — surfaced here as
   // a pencil icon instead of a standalone "Update Profile" sidebar page/menu item, so editing
@@ -235,32 +236,11 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
 
           {/* Interactive tabs navigation */}
           <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm flex flex-col flex-1">
-            <div className="flex border-b border-slate-100">
-              <button
-                onClick={() => setActiveTab('experience')}
-                className={`flex-1 py-4 text-xs font-black uppercase tracking-wider border-b-2 font-sans transition-all cursor-pointer ${
-                  activeTab === 'experience'
-                    ? 'border-indigo-600 text-indigo-600 bg-indigo-50/10'
-                    : 'border-transparent text-slate-400 hover:text-slate-600 hover:bg-slate-50/50'
-                }`}
-              >
-                Work Experience
-              </button>
-              <button
-                onClick={() => setActiveTab('projects')}
-                className={`flex-1 py-4 text-xs font-black uppercase tracking-wider border-b-2 font-sans transition-all cursor-pointer ${
-                  activeTab === 'projects'
-                    ? 'border-indigo-600 text-indigo-600 bg-indigo-50/10'
-                    : 'border-transparent text-slate-400 hover:text-slate-600 hover:bg-slate-50/50'
-                }`}
-              >
-                Projects & Certifications
-              </button>
-            </div>
-
+            <EmployeeDetailTabs value={employee}>
             {/* Tab content panel */}
-            <div className="p-6 flex-1">
-              {activeTab === 'experience' && (
+            <div className="flex-1 space-y-6">
+              <div><h4 className="text-xs font-bold text-slate-500 mb-2">Professional Summary</h4><p className="text-sm whitespace-pre-wrap">{employee.summary || 'No summary provided.'}</p></div>
+              {(
                 <div className="relative border-l border-slate-200 pl-6 ml-3 space-y-8">
                   {/* Prefer structured Gemini-parsed experience with point-wise tasks */}
                   {cvExperience.length > 0
@@ -308,7 +288,7 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
                 </div>
               )}
 
-              {activeTab === 'projects' && (
+              {(
                 <div className="space-y-6">
                   {/* Special Projects — prefer structured, fall back to legacy */}
                   <div>
@@ -399,6 +379,7 @@ export default function EmployeeProfileClient({ employee, viewerRole }: Employee
                 </div>
               )}
             </div>
+            </EmployeeDetailTabs>
           </div>
         </div>
 

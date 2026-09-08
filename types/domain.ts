@@ -1,3 +1,4 @@
+import type { EmployeeDetails } from '@/lib/employeeDetails';
 import type {
   CvExperienceEntry,
   CvAcademicEntry,
@@ -35,7 +36,7 @@ export interface EmployeeProject {
 // Re-export CV types for convenience in service / repository layers
 export type { CvExperienceEntry, CvAcademicEntry, CvProjectEntry, CvCertificationEntry };
 
-export interface Employee {
+export interface Employee extends EmployeeDetails {
   rowId: string;
   name: string;
   email: string;
@@ -97,3 +98,5 @@ export interface CreateEmployeeInput {
   // force status='draft' — an Admin adding someone doesn't need to self-approve their own action.
   linkedUserId?: string;
 }
+
+export type UpdateEmployeeInput = CreateEmployeeInput & EmployeeDetails;
