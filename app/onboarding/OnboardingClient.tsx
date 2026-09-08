@@ -1,5 +1,9 @@
 'use client';
 
+import { pickEmployeeDetails, type EmployeeDetails } from '@/lib/employeeDetails';
+import EmployeeDetailTabs from '@/app/components/EmployeeDetailTabs';
+
+
 import React, { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageWrapper } from '../components/PageWrapper';
@@ -97,6 +101,7 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   // ── The profile being built — shared shape for both upload-parsed and manual entry ──
+  const [details, setDetails] = useState<EmployeeDetails>({});
   const [profileValue, setProfileValue] = useState<ProfileFieldsValue>(
     emptyProfileFieldsValue({ department: departments[0]?.name ?? '' })
   );
@@ -192,6 +197,7 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
 
     try {
       await createOwnProfileAction({
+        ...details,
         name: profileValue.name,
         role: profileValue.role,
         department: profileValue.department,
@@ -398,7 +404,10 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
           </div>
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             {AvatarPicker}
-            <ProfileFieldsEditor value={profileValue} onChange={setProfileValue} departments={departments} nameEditable />
+            <EmployeeDetailTabs value={{ ...details, name: profileValue.name, role: profileValue.role, department: profileValue.department, email: userEmail }} departments={departments} emailEditable={false}
+              onChange={next => { setDetails(pickEmployeeDetails(next)); setProfileValue({ ...profileValue, name: next.name, role: next.role, department: next.department }); }}>
+              <ProfileFieldsEditor value={profileValue} onChange={setProfileValue} departments={departments} profileOnly />
+            </EmployeeDetailTabs>
             {submitError && (
               <p className="text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200/60 rounded-lg px-3 py-2">
                 {submitError}
@@ -506,12 +515,11 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
 
               {AvatarPicker}
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Work Email</label>
-                <input type="email" disabled value={userEmail} className="w-full bg-slate-100 border border-slate-200/80 rounded-xl px-4 py-2.5 text-xs font-semibold text-slate-400" />
-              </div>
 
-              <ProfileFieldsEditor value={profileValue} onChange={setProfileValue} departments={departments} nameEditable />
+              <EmployeeDetailTabs value={{ ...details, name: profileValue.name, role: profileValue.role, department: profileValue.department, email: userEmail }} departments={departments} emailEditable={false}
+              onChange={next => { setDetails(pickEmployeeDetails(next)); setProfileValue({ ...profileValue, name: next.name, role: next.role, department: next.department }); }}>
+              <ProfileFieldsEditor value={profileValue} onChange={setProfileValue} departments={departments} profileOnly />
+            </EmployeeDetailTabs>
 
               {submitError && (
                 <p className="text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200/60 rounded-lg px-3 py-2">

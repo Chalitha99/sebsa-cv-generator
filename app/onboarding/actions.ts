@@ -1,5 +1,7 @@
 'use server';
 
+import { normalizeEmployeeDetails, type EmployeeDetails } from '@/lib/employeeDetails';
+
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
@@ -12,7 +14,7 @@ import { renderEmailHtml } from '@/lib/email/templates';
 import type { CreateEmployeeInput } from '@/types/domain';
 import { recordAuditLog } from '@/services/audit-service';
 
-export interface OnboardingSubmission {
+export interface OnboardingSubmission extends EmployeeDetails {
   name: string;
   role: string;
   department: string;
@@ -160,6 +162,7 @@ export async function createOwnProfileAction(input: OnboardingSubmission): Promi
   const profileId = await createEmployee(
     supabase,
     {
+      ...normalizeEmployeeDetails(input),
       name: input.name,
       email: user.email,
       role: input.role,

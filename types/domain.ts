@@ -68,7 +68,7 @@ export interface Employee extends EmployeeDetails {
   summary?: string;
 }
 
-export interface CreateEmployeeInput {
+export interface CreateEmployeeInput extends EmployeeDetails {
   name: string;
   email: string;
   role: string;
