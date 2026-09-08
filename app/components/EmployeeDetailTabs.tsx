@@ -39,6 +39,14 @@ export default function EmployeeDetailTabs({ value, onChange, departments = [], 
               <select id={fieldId} value={value.department} onChange={e => onChange({ ...value, department: e.target.value })} className={inputCls}>
                 {!departments.some(d => d.name === value.department) && <option value={value.department}>{value.department || 'Select department'}</option>}
                 {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+              </select> : field.key === 'gender' ?
+              <select id={fieldId} value={value.gender ?? ''} onChange={e => onChange({ ...value, gender: e.target.value || null })} className={inputCls}>
+                <option value="">Select gender (optional)</option>
+                {value.gender && !['Male', 'Female'].includes(value.gender) && (
+                  <option value={value.gender} disabled>{value.gender} (current value)</option>
+                )}
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
               </select> : <input id={fieldId} aria-describedby={relationship ? fieldId + '-hint' : undefined} type={field.type} value={value[field.key] ?? ''} min={field.type === 'number' ? 0 : undefined} step={field.type === 'number' ? 1 : undefined}
                 onInvalid={() => flushSync(() => setActive(tab))} required={field.key === 'name' || field.key === 'role' || field.key === 'email'}
                 onChange={e => onChange({ ...value, [field.key]: field.type === 'number' ? (e.target.value === '' ? null : Number(e.target.value)) : e.target.value })} className={inputCls} />}
