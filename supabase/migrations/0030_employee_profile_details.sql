@@ -1,4 +1,4 @@
--- Optional details for profile viewing and updating. Creation remains unchanged.
+-- Optional employee details for profile creation, viewing, and updating.
 alter table profiles
   add column if not exists first_name text,
   add column if not exists last_name text,

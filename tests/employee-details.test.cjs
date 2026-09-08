@@ -44,13 +44,35 @@ test('explicit blanks clear details and invalid values are rejected', () => {
   assert.throws(() => details.normalizeEmployeeDetails({ personalEmail: 'invalid' }));
   assert.deepEqual(details.normalizeEmployeeDetails({ user_id: 'forged' }), {});
 });
-test('creation still accepts only its existing fields', async () => {
+test('creation allows omitted details and retains employee/admin publication behavior', async () => {
+  for (const selfServiceUserId of [undefined, 'employee']) {
+    const { client, calls } = database();
+    await repo.createEmployeeRow(client, { ...base, selfServiceUserId }, 'actor');
+    const inserted = calls.find(c => c.table === 'profiles' && c.insert).insert;
+    for (const field of details.employeeDetailFields) assert.equal(Object.hasOwn(inserted, field.column), false);
+    assert.equal(inserted.status, selfServiceUserId ? 'draft' : 'published');
+    assert.equal(inserted.user_id, selfServiceUserId ?? null);
+  }
+});
+test('all optional details are saved during employee and admin creation', async () => {
+  const values = Object.fromEntries(details.employeeDetailFields.map(f => [f.key, f.type === 'number' ? 0 : f.type === 'date' ? '2024-02-29' : f.type === 'email' ? 'person@example.com' : 'Sample']));
+  for (const selfServiceUserId of [undefined, 'employee']) {
+    const { client, calls } = database();
+    await repo.createEmployeeRow(client, { ...base, ...values, selfServiceUserId }, 'actor');
+    const inserted = calls.find(c => c.table === 'profiles' && c.insert).insert;
+    assert.deepEqual(details.employeeDetailsFromRow(inserted), values);
+    assert.equal(inserted.full_name, base.name);
+    assert.equal(inserted.role_title, base.role);
+  }
+});
+test('creation normalizes empty optional values and rejects invalid values before writing', async () => {
   const { client, calls } = database();
-  await repo.createEmployeeRow(client, { ...base, firstName: 'Ignored' }, 'admin');
-  const inserted = calls.find(c => c.table === 'profiles' && c.insert).insert;
-  for (const field of details.employeeDetailFields) assert.equal(Object.hasOwn(inserted, field.column), false);
-  assert.equal(inserted.status, 'published');
-  const self = database();
-  await repo.createEmployeeRow(self.client, { ...base, selfServiceUserId: 'employee' }, 'employee');
-  assert.equal(self.calls.find(c => c.insert).insert.status, 'draft');
+  await repo.createEmployeeRow(client, { ...base, mobile: ' ', dateOfBirth: '', noticeDays: null }, 'actor');
+  const inserted = calls.find(c => c.insert).insert;
+  assert.equal(inserted.mobile, null);
+  assert.equal(inserted.date_of_birth, null);
+  assert.equal(inserted.notice_days, null);
+  const invalid = database();
+  await assert.rejects(repo.createEmployeeRow(invalid.client, { ...base, noticeDays: -1 }, 'actor'));
+  assert.equal(invalid.calls.length, 0);
 });

@@ -1,5 +1,7 @@
 'use server';
 
+import { normalizeEmployeeDetails } from '@/lib/employeeDetails';
+
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -94,6 +96,8 @@ export async function createEmployeeAction(input: CreateEmployeeInput): Promise<
     );
   }
 
+  const details = normalizeEmployeeDetails(input);
+
   // 3. Provision (or link to an existing) Auth account and email an invite link — see
   //    docs/04-rbac-security.md §14. Never blocks profile creation: if provisioning fails (e.g.
   //    email sending misconfigured), the profile is still created unlinked and the employee can
@@ -108,7 +112,7 @@ export async function createEmployeeAction(input: CreateEmployeeInput): Promise<
     console.error(`Failed to provision an account for ${input.email}, creating an unlinked profile instead:`, err);
   }
 
-  const rowId = await createEmployee(adminClient, { ...input, linkedUserId }, user.id);
+  const rowId = await createEmployee(adminClient, { ...input, ...details, linkedUserId }, user.id);
   await recordAuditLog({
     actorId: user.id,
     action: 'CREATE',

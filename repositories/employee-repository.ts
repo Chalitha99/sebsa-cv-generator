@@ -88,6 +88,10 @@ export async function createEmployeeRow(
   input: CreateEmployeeInput,
   createdBy: string
 ): Promise<string> {
+  const details = normalizeEmployeeDetails(input);
+  const detailColumns = Object.fromEntries(employeeDetailFields
+    .filter(field => details[field.key] !== undefined)
+    .map(field => [field.column, details[field.key]]));
   const { data: dept } = await supabase
     .from('departments')
     .select('id')
@@ -102,6 +106,7 @@ export async function createEmployeeRow(
   const { data, error } = await supabase
     .from('profiles')
     .insert({
+      ...detailColumns,
       full_name: input.name,
       email: input.email,
       role_title: input.currentPosition ?? input.role,

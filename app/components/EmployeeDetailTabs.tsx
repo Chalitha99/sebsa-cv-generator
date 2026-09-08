@@ -12,7 +12,7 @@ interface Props {
   emailEditable?: boolean;
   children: React.ReactNode;
 }
-/** Shared only by detailed view/update screens, never profile creation. */
+/** Shared by profile creation, detailed viewing, and updating. */
 export default function EmployeeDetailTabs({ value, onChange, departments = [], emailEditable = true, children }: Props) {
   const [active, setActive] = useState<ProfileTab>('Overview');
   const id = useId();

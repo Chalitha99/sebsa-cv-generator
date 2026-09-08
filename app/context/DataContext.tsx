@@ -1,5 +1,7 @@
 'use client';
 
+import { pickEmployeeDetails, type EmployeeDetails } from '@/lib/employeeDetails';
+
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import type { CvProfile } from '@/lib/cvTypes';
 
@@ -21,7 +23,7 @@ export interface CompanySettings {
 }
 
 /** The data passed to addEmployee from the upload form */
-export interface NewEmployeePayload {
+export interface NewEmployeePayload extends EmployeeDetails {
   /** Flat fields required for the Supabase profiles row */
   name: string;
   email: string;
@@ -71,6 +73,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .slice(0, 0); // tasks are not skills; keep skills list from form
 
     const { rowId, accountInvited } = await createEmployeeAction({
+      ...pickEmployeeDetails(payload),
       name: payload.name,
       email: payload.email,
       role: payload.role,
