@@ -136,7 +136,6 @@ interface RawSuggestionResponse {
  */
 export async function suggestCvContentAction(
   employee: Employee,
-  customerName: string,
   requiredSkills: string,
   preferredExp: string
 ): Promise<CvSuggestion> {
@@ -189,7 +188,6 @@ ${JSON.stringify(indexedProjects, null, 2)}
 Candidate's Existing Certifications (select which are relevant):
 ${JSON.stringify(indexedCertifications, null, 2)}
 
-Target Customer/Opportunity: ${customerName}
 Mandatory Skills Required: ${requiredSkills}
 Preferred Requirements / Job Specs: ${preferredExp}
 `;

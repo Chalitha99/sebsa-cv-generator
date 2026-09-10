@@ -12,6 +12,7 @@ import CvSuggestionSelector, {
 import { useSearchParams } from 'next/navigation';
 import { PageWrapper } from '../../components/PageWrapper';
 import OnePagePreview from '@/app/components/OnePagePreview';
+import TalentSearchSelect from './TalentSearchSelect';
 import type { Employee } from '@/types/domain';
 import type { TailoredCv, CvSuggestion } from './types';
 import {
@@ -61,7 +62,6 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1);
 
   // ── Step 1 form state ───────────────────────────────────────────────────────
-  const [customerName, setCustomerName] = useState('');
   const [selectedCandidateId, setSelectedCandidateId] = useState('');
   const [requiredSkills, setRequiredSkills] = useState('');
   const [preferredExp, setPreferredExp] = useState('');
@@ -104,11 +104,11 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
       selectedEmployee && suggestion && suggestionDraft
         ? buildTailoredCvFromSelection(
             selectedEmployee,
-            customerName,
+            '',
             buildSelectionFromDraft(suggestionDraft, suggestion.academic)
           )
         : null,
-    [selectedEmployee, suggestion, suggestionDraft, customerName]
+    [selectedEmployee, suggestion, suggestionDraft]
   );
   const livePreviewCv = tailoredCv ?? draftPreviewCv;
 
@@ -187,7 +187,6 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
     try {
       const result = await suggestCvContentAction(
         selectedEmployee,
-        customerName,
         requiredSkills,
         preferredExp
       );
@@ -214,7 +213,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
    */
   const handleSelectionApply = async (selection: CvSuggestionSelection) => {
     if (!selectedEmployee) return;
-    const cv = buildTailoredCvFromSelection(selectedEmployee, customerName, selection);
+    const cv = buildTailoredCvFromSelection(selectedEmployee, '', selection);
 
     setSaving(true);
     try {
@@ -351,37 +350,16 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                 </h4>
               </div>
 
-              {/* Target Opportunity */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">
-                  Target Opportunity / Customer
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  placeholder="e.g. Acme Corp — Lead Frontend Initiative"
-                  className="w-full bg-slate-50 border border-slate-200/80 rounded-xl px-4 py-3 text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-500/10 focus:border-slate-400 transition-all text-slate-700 placeholder:text-slate-300"
-                />
-              </div>
-
               {/* Select Talent Profile */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">
                   Select Talent Profile
                 </label>
-                <select
-                  value={selectedCandidateId}
-                  onChange={(e) => setSelectedCandidateId(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200/80 rounded-xl px-4 py-3 text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-500/10 focus:border-slate-400 transition-all text-slate-700"
-                >
-                  {employees.map((emp) => (
-                    <option key={emp.rowId} value={emp.rowId}>
-                      {emp.name} ({emp.role})
-                    </option>
-                  ))}
-                </select>
+                <TalentSearchSelect
+                  employees={employees}
+                  selectedId={selectedCandidateId}
+                  onSelect={setSelectedCandidateId}
+                />
 
                 {selectedEmployee && (
                   <div className="flex items-center gap-2.5 mt-2">
@@ -414,7 +392,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                   required
                   value={requiredSkills}
                   onChange={(e) => setRequiredSkills(e.target.value)}
-                  placeholder="e.g. React.js, Next.js, Redux, TailwindCSS"
+                  placeholder="e.g. PL/SQL, Aurena, Reports, Configuration"
                   className="w-full bg-slate-50 border border-slate-200/80 rounded-xl px-4 py-3 text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-500/10 focus:border-slate-400 transition-all text-slate-700 placeholder:text-slate-300"
                 />
               </div>
@@ -508,17 +486,6 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                     </div>
                   </div>
                 )}
-
-                <div className="space-y-2">
-                  <div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                      Target Customer
-                    </p>
-                    <p className="text-xs font-semibold text-slate-700 mt-0.5 leading-snug">
-                      {customerName}
-                    </p>
-                  </div>
-                </div>
 
                 {/* Live one-page CV preview — reflects the current selection (or, once past that
                     step, the edited content) in real time, so the one-page limit is visible while
@@ -621,8 +588,7 @@ function GeneratePageContent({ employees }: GenerateClientProps) {
                   <p className="text-xs text-slate-500 max-w-xs leading-relaxed">
                     Reviewing{' '}
                     <span className="font-bold text-slate-700">{selectedEmployee?.name}</span>'s
-                    existing profile against{' '}
-                    <span className="font-bold text-slate-700">{customerName}</span>
+                    existing profile against the requirements provided
                   </p>
                 </div>
               </div>
