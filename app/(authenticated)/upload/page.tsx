@@ -1,5 +1,9 @@
 'use client';
 
+import { pickEmployeeDetails, type EmployeeDetails } from '@/lib/employeeDetails';
+import EmployeeDetailTabs from '@/app/components/EmployeeDetailTabs';
+
+
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageWrapper } from '../../components/PageWrapper';
@@ -8,12 +12,12 @@ import { getDepartmentsAction, uploadProfilePictureAction } from './actions';
 import { extractText } from '@/lib/parsing/extractClientText';
 import { useRoleGate } from '@/lib/useRoleGate';
 import { isReviewerOrAbove } from '@/lib/roles';
+import { ProjectSkillsInput } from '@/app/components/CvEntrySections';
 import {
   emptyCvProfile,
   type CvProfile,
   type CvExperienceEntry,
   type CvAcademicEntry,
-  type CvProjectEntry,
   type CvCertificationEntry,
 } from '@/lib/cvTypes';
 import {
@@ -26,8 +30,6 @@ import {
   ArrowRight,
   Plus,
   Minus,
-  ChevronDown,
-  ChevronUp,
   AlertCircle,
   GraduationCap,
   Briefcase,
@@ -99,8 +101,8 @@ export default function UploadPage() {
 
   // ── Extra flat fields required by Supabase that are not in CvProfile ──────
   const [email, setEmail] = useState('');
+  const [details, setDetails] = useState<EmployeeDetails>({});
   const [department, setDepartment] = useState('');
-  const [skillsRaw, setSkillsRaw] = useState('');
 
   // ── Departments loaded from DB ────────────────────────────────────────────
   const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
@@ -121,7 +123,6 @@ export default function UploadPage() {
   // ── UI state ──────────────────────────────────────────────────────────────
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [jsonPreviewOpen, setJsonPreviewOpen] = useState(false);
 
   // ─── File handling ─────────────────────────────────────────────────────────
 
@@ -222,13 +223,18 @@ export default function UploadPage() {
 
   // Special Projects
   const addProject = () =>
-    updateField('specialProjects', [...profile.specialProjects, { title: '', brief: '' }]);
+    updateField('specialProjects', [...profile.specialProjects, { title: '', brief: '', skills: [] }]);
   const removeProject = (i: number) =>
     updateField('specialProjects', profile.specialProjects.filter((_, idx) => idx !== i));
-  const updateProject = (i: number, field: keyof CvProjectEntry, value: string) =>
+  const updateProject = (i: number, field: 'title' | 'brief', value: string) =>
     updateField(
       'specialProjects',
       profile.specialProjects.map((p, idx) => (idx === i ? { ...p, [field]: value } : p))
+    );
+  const updateProjectSkills = (i: number, skills: string[]) =>
+    updateField(
+      'specialProjects',
+      profile.specialProjects.map((p, idx) => (idx === i ? { ...p, skills } : p))
     );
 
   // Certifications
@@ -284,11 +290,6 @@ export default function UploadPage() {
     setSubmitError(null);
     setIsSubmitting(true);
 
-    const skills = skillsRaw
-      .split(',')
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-
     try {
       // Upload profile image first if provided
       let avatarUrl: string | undefined;
@@ -299,11 +300,12 @@ export default function UploadPage() {
       }
 
       await addEmployee({
+        ...details,
         name: profile.name,
         email,
         role: profile.currentPosition,
         department,
-        skills,
+        skills: [],
         cvProfile: profile,
         avatarUrl,
       });
@@ -321,8 +323,8 @@ export default function UploadPage() {
     setStatus('idle');
     setErrorMsg(null);
     setProfile(emptyCvProfile());
+    setDetails({});
     setEmail('');
-    setSkillsRaw('');
     setSubmitError(null);
     setProfileImageFile(null);
     setProfileImagePreview(null);
@@ -353,7 +355,7 @@ export default function UploadPage() {
           Create Profile
         </h2>
         <p className="text-sm font-medium text-slate-500 mt-2">
-          Create a new employee profile by uploading their CV and profile photo. Gemini AI automatically extracts and structures experiences, academic history, projects, certifications, and skills.
+          Create a new employee profile by uploading their CV and profile photo. AI automatically extracts and structures experiences, academic history, projects, certifications, and skills.
         </p>
       </div>
 
@@ -521,31 +523,7 @@ export default function UploadPage() {
             )}
           </div>
 
-          {/* JSON preview panel */}
-          {status === 'done' && (
-            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setJsonPreviewOpen((o) => !o)}
-                className="w-full flex items-center justify-between px-5 py-4 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
-              >
-                <span className="flex items-center gap-2">
-                  <Layers className="w-4 h-4" />
-                  Profile Preview (JSON)
-                </span>
-                {jsonPreviewOpen ? (
-                  <ChevronUp className="w-4 h-4" />
-                ) : (
-                  <ChevronDown className="w-4 h-4" />
-                )}
-              </button>
-              {jsonPreviewOpen && (
-                <pre className="bg-slate-950 text-emerald-400 text-[10px] font-mono leading-relaxed px-5 py-4 overflow-auto max-h-[400px] whitespace-pre-wrap break-words">
-                  {JSON.stringify(profile, null, 2)}
-                </pre>
-              )}
-            </div>
-          )}
+
         </div>
 
         {/* ── Right Column — Editable form ── */}
@@ -567,76 +545,21 @@ export default function UploadPage() {
               )}
             </div>
 
-            {/* ── Basic Info ── */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <FieldLabel>Full Name</FieldLabel>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Sarah Chen"
-                  value={profile.name}
-                  onChange={(e) => updateField('name', e.target.value)}
-                  disabled={status !== 'done'}
-                  className={INPUT_CLS}
-                />
-              </div>
-              <div>
-                <FieldLabel>Current Position</FieldLabel>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Senior Frontend Engineer"
-                  value={profile.currentPosition}
-                  onChange={(e) => updateField('currentPosition', e.target.value)}
-                  disabled={status !== 'done'}
-                  className={INPUT_CLS}
-                />
-              </div>
-              <div>
-                <FieldLabel>Work Email</FieldLabel>
-                <input
-                  type="email"
-                  required
-                  placeholder="e.g. s.chen@corp.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={status !== 'done'}
-                  className={INPUT_CLS}
-                />
-              </div>
-              <div>
-                <FieldLabel>Department</FieldLabel>
-                <select
-                  value={department}
-                  onChange={(e) => setDepartment(e.target.value)}
-                  disabled={status !== 'done' || departmentsLoading}
-                  className={INPUT_CLS}
-                >
-                  {departmentsLoading ? (
-                    <option value="">Loading departments…</option>
-                  ) : departments.length === 0 ? (
-                    <option value="">No departments found</option>
-                  ) : (
-                    departments.map((d) => (
-                      <option key={d.id} value={d.name}>
-                        {d.name}
-                      </option>
-                    ))
-                  )}
-                </select>
-              </div>
-              <div className="sm:col-span-2">
-                <FieldLabel hint="Comma separated">Skills</FieldLabel>
-                <input
-                  type="text"
-                  placeholder="e.g. React, TypeScript, Node.js"
-                  value={skillsRaw}
-                  onChange={(e) => setSkillsRaw(e.target.value)}
-                  disabled={status !== 'done'}
-                  className={INPUT_CLS}
-                />
-              </div>
+            <fieldset disabled={status !== 'done' || departmentsLoading} className="min-w-0">
+            <EmployeeDetailTabs value={{ ...details, name: profile.name, role: profile.currentPosition, department, email }} departments={departments}
+              onChange={next => { setDetails(pickEmployeeDetails(next)); setProfile(p => ({ ...p, name: next.name, currentPosition: next.role })); setDepartment(next.department); setEmail(next.email); }}>
+            <div className="space-y-8">
+            {/* ── Objective ── */}
+            <div>
+              <FieldLabel>Objective / Professional Summary</FieldLabel>
+              <textarea
+                rows={3}
+                placeholder="A brief statement of career goals and what they bring to the role..."
+                value={profile.summary}
+                onChange={(e) => updateField('summary', e.target.value)}
+                disabled={status !== 'done'}
+                className={TEXTAREA_CLS}
+              />
             </div>
 
             {/* ── Experience ── */}
@@ -834,6 +757,10 @@ export default function UploadPage() {
                         className={TEXTAREA_CLS}
                       />
                     </div>
+                    <ProjectSkillsInput
+                      skills={proj.skills ?? []}
+                      onChange={(skills) => updateProjectSkills(i, skills)}
+                    />
                   </div>
                 ))}
                 <button
@@ -907,6 +834,10 @@ export default function UploadPage() {
                 </button>
               </div>
             </div>
+
+            </div>
+            </EmployeeDetailTabs>
+            </fieldset>
 
             {/* ── Actions ── */}
             <div className="pt-4 border-t border-slate-100">

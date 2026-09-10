@@ -14,6 +14,18 @@ const envSchema = z.object({
   // also be added to Supabase Dashboard -> Authentication -> URL Configuration -> Redirect URLs
   // as `${NEXT_PUBLIC_APP_URL}/auth/callback`, or Supabase will reject the invite redirect.
   NEXT_PUBLIC_APP_URL: z.preprocess(emptyToUndefined, z.string().url().default('http://localhost:3000')),
+  // Transactional notification emails (lib/email/*) — sent via Brevo's SMTP relay (not its REST
+  // API — BREVO_SMTP_KEY is the SMTP key from Brevo dashboard -> SMTP & API -> SMTP tab, which
+  // starts with `xsmtpsib-`; that's a different credential from the REST `xkeysib-` API key).
+  // BREVO_SMTP_LOGIN is the "Login" value shown on that same SMTP tab (looks like
+  // <id>@smtp-brevo.com) — it authenticates the connection but is NOT the visible From address,
+  // which is EMAIL_FROM_ADDRESS below and must separately be a verified sender in the Brevo
+  // dashboard (Senders, Domains & Dedicated IPs -> Senders) — Brevo supports verifying just a
+  // single sender email address, no DNS/domain ownership required.
+  BREVO_SMTP_KEY: z.preprocess(emptyToUndefined, z.string().optional()),
+  BREVO_SMTP_LOGIN: z.preprocess(emptyToUndefined, z.string().optional()),
+  EMAIL_FROM_ADDRESS: z.preprocess(emptyToUndefined, z.string().optional()),
+  EMAIL_FROM_NAME: z.preprocess(emptyToUndefined, z.string().default('SEBSA CV Generator')),
 });
 
 /**
@@ -29,6 +41,10 @@ export const env = envSchema.parse({
   GEMINI_API_KEY: process.env.GEMINI_API_KEY,
   CLAUDE_API_KEY: process.env.CLAUDE_API_KEY,
   NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+  BREVO_SMTP_KEY: process.env.BREVO_SMTP_KEY,
+  BREVO_SMTP_LOGIN: process.env.BREVO_SMTP_LOGIN,
+  EMAIL_FROM_ADDRESS: process.env.EMAIL_FROM_ADDRESS,
+  EMAIL_FROM_NAME: process.env.EMAIL_FROM_NAME,
 });
 
 export function requireEnv<K extends keyof typeof env>(key: K): NonNullable<(typeof env)[K]> {

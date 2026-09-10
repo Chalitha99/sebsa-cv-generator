@@ -1,8 +1,10 @@
+import { employeeDetailsFromRow } from '@/lib/employeeDetails';
+import type { UpdateEmployeeInput } from '@/types/domain';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   createEmployeeRow,
   deleteEmployeeRow,
-  getEmployeeRowByCode,
+  getEmployeeRowById,
   listEmployeeRows,
   updateEmployeeRow,
 } from '@/repositories/employee-repository';
@@ -21,27 +23,16 @@ function formatDate(value: string | null | undefined): string {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapSkills(row: any): string[] {
-  return ((row.profile_skills ?? []) as Array<{ skills: { name: string } | null }>)
-    .map((ps) => ps.skills?.name)
-    .filter((name): name is string => Boolean(name));
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapListRow(row: any): Employee {
   return {
     rowId: row.id,
-    id: `#${row.employee_code}`,
-    employeeCode: row.employee_code,
     name: row.full_name,
     email: row.email,
     role: row.role_title ?? '',
-    specialty: row.specialty ?? undefined,
-    location: row.location ?? undefined,
     experienceYears:
       row.years_experience != null ? `${row.years_experience}+ Years Experience` : undefined,
     department: row.departments?.name ?? 'Unassigned',
-    skills: mapSkills(row),
+    skills: [],
     lastUpdated: formatDate(row.updated_at),
     avatar: row.avatar_url ?? DEFAULT_AVATAR,
     isAccountLinked: row.user_id != null,
@@ -73,11 +64,11 @@ export async function listEmployees(supabase: SupabaseClient): Promise<Employee[
   return mapped;
 }
 
-export async function getEmployeeByCode(
+export async function getEmployeeById(
   supabase: SupabaseClient,
-  employeeCode: string
+  profileId: string
 ): Promise<Employee | null> {
-  const row = await getEmployeeRowByCode(supabase, employeeCode);
+  const row = await getEmployeeRowById(supabase, profileId);
   if (!row) return null;
 
   // ── Legacy experience mapping (with JSON tasks fallback) ──────────────────
@@ -124,7 +115,7 @@ export async function getEmployeeByCode(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .sort((a: any, b: any) => a.display_order - b.display_order)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .map((p: any) => ({ name: p.name, desc: p.description ?? '', tags: p.tags ?? [] }));
+    .map((p: any) => ({ name: p.name, desc: p.description ?? '' }));
 
   // ── Structured special projects mapping ───────────────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -132,7 +123,7 @@ export async function getEmployeeByCode(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .sort((a: any, b: any) => a.display_order - b.display_order)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .map((p: any) => ({ title: p.name, brief: p.description ?? '' }));
+    .map((p: any) => ({ title: p.name, brief: p.description ?? '', skills: p.skills ?? [] }));
 
   // ── Certifications mapping ────────────────────────────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -158,6 +149,7 @@ export async function getEmployeeByCode(
 
   const emp = {
     ...mapListRow(row),
+    ...employeeDetailsFromRow(row as unknown as Record<string, unknown>),
     experience: experience.length > 0 ? experience : undefined,
     projects: projects.length > 0 ? projects : undefined,
     certs: certs.length > 0 ? certs : undefined,
@@ -168,6 +160,7 @@ export async function getEmployeeByCode(
     cvCertifications: cvCertifications.length > 0 ? cvCertifications : undefined,
     cvAcademic: cvAcademic.length > 0 ? cvAcademic : undefined,
     currentPosition: (row as any).role_title ?? undefined,
+    summary: (row as any).summary ?? undefined,
     status: (row as any).status ?? undefined,
     hasPendingChange: (row as any).pending_change != null,
   };
@@ -190,7 +183,7 @@ export async function deleteEmployee(supabase: SupabaseClient, rowId: string): P
 export async function updateEmployee(
   supabase: SupabaseClient,
   profileId: string,
-  input: CreateEmployeeInput,
+  input: UpdateEmployeeInput,
   updatedBy: string
 ): Promise<void> {
   await updateEmployeeRow(supabase, profileId, input, updatedBy);

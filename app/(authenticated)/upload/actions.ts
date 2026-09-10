@@ -1,12 +1,16 @@
 'use server';
 
+import { normalizeEmployeeDetails } from '@/lib/employeeDetails';
+
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createEmployee } from '@/services/employee-service';
 import { getCurrentUser, isReviewerOrAbove } from '@/lib/auth';
 import { provisionEmployeeAccount } from '@/lib/auth/provisionAccount';
+import { notifyUser } from '@/lib/notifications';
 import type { CreateEmployeeInput } from '@/types/domain';
+import { recordAuditLog } from '@/services/audit-service';
 
 export interface CreateEmployeeResult {
   rowId: string;
@@ -48,6 +52,8 @@ export async function uploadProfilePictureAction(formData: FormData): Promise<st
     .from('profile-pictures')
     .getPublicUrl(uniqueName);
 
+  await recordAuditLog({ actorId: user.id, action: 'CREATE', entityType: 'profile_picture', entityId: user.id, metadata: { file_name: file.name, content_type: file.type } });
+
   return urlData.publicUrl;
 }
 
@@ -68,6 +74,9 @@ export async function createEmployeeAction(input: CreateEmployeeInput): Promise<
   if (!isReviewerOrAbove(user.role)) {
     throw new Error('Unauthorized: Admin, Super Admin, or CV Reviewer role required. Employees self-register their own profile at /onboarding.');
   }
+  if (!input.avatarUrl) {
+    throw new Error('A profile photo is required.');
+  }
 
   // 2. Perform all DB writes using the service-role client that bypasses RLS.
   //    The service-role key is server-only and never sent to the browser.
@@ -78,14 +87,16 @@ export async function createEmployeeAction(input: CreateEmployeeInput): Promise<
   // second profile for someone who's already in the repository (bulk-added or self-service).
   const { data: existing } = await adminClient
     .from('profiles')
-    .select('employee_code')
+    .select('id')
     .eq('email', input.email)
     .maybeSingle();
   if (existing) {
     throw new Error(
-      `A profile already exists for ${input.email} (${existing.employee_code}). Use "Update Profile" instead of creating a new one.`
+      `A profile already exists for ${input.email}. Use "Update Profile" instead of creating a new one.`
     );
   }
+
+  const details = normalizeEmployeeDetails(input);
 
   // 3. Provision (or link to an existing) Auth account and email an invite link — see
   //    docs/04-rbac-security.md §14. Never blocks profile creation: if provisioning fails (e.g.
@@ -101,7 +112,25 @@ export async function createEmployeeAction(input: CreateEmployeeInput): Promise<
     console.error(`Failed to provision an account for ${input.email}, creating an unlinked profile instead:`, err);
   }
 
-  const rowId = await createEmployee(adminClient, { ...input, linkedUserId }, user.id);
+  const rowId = await createEmployee(adminClient, { ...input, ...details, linkedUserId }, user.id);
+  await recordAuditLog({
+    actorId: user.id,
+    action: 'CREATE',
+    entityType: 'employee_profile',
+    entityId: rowId,
+    metadata: { employee_email: input.email, account_invited: accountInvited },
+  });
+
+  if (linkedUserId) {
+    await notifyUser(adminClient, linkedUserId, {
+      type: 'account_provisioned',
+      title: accountInvited ? 'Welcome to SEBSA-CV' : 'Profile linked to your account',
+      message: accountInvited
+        ? 'Your profile has been created — check your email to set up your account.'
+        : 'Your existing account has been linked to a new profile created by an Admin.',
+      link: `/repository/${rowId}`,
+    });
+  }
 
   revalidatePath('/repository');
   revalidatePath('/dashboard');

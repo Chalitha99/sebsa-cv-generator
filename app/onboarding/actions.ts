@@ -1,18 +1,26 @@
 'use server';
 
+import { normalizeEmployeeDetails, type EmployeeDetails } from '@/lib/employeeDetails';
+
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { createEmployee } from '@/services/employee-service';
 import { getCurrentUser } from '@/lib/auth';
+import { notifyReviewers } from '@/lib/notifications';
+import { emailReviewers } from '@/lib/email/notify';
+import { renderEmailHtml } from '@/lib/email/templates';
 import type { CreateEmployeeInput } from '@/types/domain';
+import { recordAuditLog } from '@/services/audit-service';
 
-export interface OnboardingSubmission {
+export interface OnboardingSubmission extends EmployeeDetails {
   name: string;
   role: string;
   department: string;
   skills: string[];
   currentPosition?: string;
+  summary?: string;
   cvExperience?: CreateEmployeeInput['cvExperience'];
   cvAcademic?: CreateEmployeeInput['cvAcademic'];
   specialProjects?: CreateEmployeeInput['specialProjects'];
@@ -22,7 +30,6 @@ export interface OnboardingSubmission {
 
 export interface ClaimableProfile {
   id: string;
-  employeeCode: string;
   name: string;
   role: string;
   department: string;
@@ -41,7 +48,7 @@ export async function findClaimableProfileAction(): Promise<ClaimableProfile | n
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, employee_code, full_name, role_title, departments ( name )')
+    .select('id, full_name, role_title, departments ( name )')
     .is('user_id', null)
     .eq('email', user.email)
     .maybeSingle();
@@ -51,7 +58,6 @@ export async function findClaimableProfileAction(): Promise<ClaimableProfile | n
 
   return {
     id: data.id as string,
-    employeeCode: data.employee_code as string,
     name: data.full_name as string,
     role: (data.role_title as string | null) ?? '',
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -74,6 +80,15 @@ export async function claimProfileAction(profileId: string): Promise<void> {
   if (user.hasLinkedProfile) throw new Error('You already have a profile on file.');
 
   const supabase = await createClient();
+
+  // Fetched before the update purely for a readable notification message below — not part of the
+  // enforcement (profiles_self_claim_request RLS already covers that).
+  const { data: targetProfile } = await supabase
+    .from('profiles')
+    .select('full_name')
+    .eq('id', profileId)
+    .maybeSingle();
+
   const { error } = await supabase
     .from('profiles')
     .update({ pending_claim_user_id: user.id, updated_at: new Date().toISOString() })
@@ -81,6 +96,24 @@ export async function claimProfileAction(profileId: string): Promise<void> {
     .is('user_id', null);
 
   if (error) throw error;
+  await recordAuditLog({
+    actorId: user.id,
+    action: 'UPDATE',
+    entityType: 'employee_profile',
+    entityId: profileId,
+    metadata: {
+      operation: 'claim_requested',
+      target_name: targetProfile?.full_name ?? 'Unknown Profile',
+      changes: [{ field: 'Account claim requester', old_value: null, new_value: user.fullName }],
+    },
+  });
+
+  await notifyReviewers(createAdminClient(), {
+    type: 'claim_requested',
+    title: 'Account claim requested',
+    message: `${user.email} requested to link their account to ${targetProfile?.full_name ?? 'an existing profile'}.`,
+    link: '/review',
+  });
 
   revalidatePath('/onboarding');
 }
@@ -90,20 +123,20 @@ export async function claimProfileAction(profileId: string): Promise<void> {
  * /onboarding can show a "waiting for approval" screen instead of re-showing the claim card or
  * looping them back into the create-from-scratch flow.
  */
-export async function findPendingClaimAction(): Promise<{ employeeCode: string } | null> {
+export async function findPendingClaimAction(): Promise<boolean> {
   const user = await getCurrentUser();
   if (!user) throw new Error('Not authenticated.');
-  if (user.role !== 'employee' || user.hasLinkedProfile) return null;
+  if (user.role !== 'employee' || user.hasLinkedProfile) return false;
 
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('profiles')
-    .select('employee_code')
+    .select('id')
     .eq('pending_claim_user_id', user.id)
     .maybeSingle();
 
   if (error) throw error;
-  return data ? { employeeCode: data.employee_code as string } : null;
+  return data != null;
 }
 
 /**
@@ -121,17 +154,22 @@ export async function createOwnProfileAction(input: OnboardingSubmission): Promi
   if (user.hasLinkedProfile) {
     throw new Error('You already have a profile on file.');
   }
+  if (!input.avatarUrl) {
+    throw new Error('A profile photo is required.');
+  }
 
   const supabase = await createClient();
-  await createEmployee(
+  const profileId = await createEmployee(
     supabase,
     {
+      ...normalizeEmployeeDetails(input),
       name: input.name,
       email: user.email,
       role: input.role,
       department: input.department,
       skills: input.skills,
       currentPosition: input.currentPosition,
+      summary: input.summary,
       cvExperience: input.cvExperience,
       cvAcademic: input.cvAcademic,
       specialProjects: input.specialProjects,
@@ -141,6 +179,24 @@ export async function createOwnProfileAction(input: OnboardingSubmission): Promi
     },
     user.id
   );
+  await recordAuditLog({ actorId: user.id, action: 'CREATE', entityType: 'employee_profile', entityId: profileId, metadata: { self_service: true, status: 'draft' } });
+
+  const adminClient = createAdminClient();
+  await notifyReviewers(adminClient, {
+    type: 'new_profile_submitted',
+    title: 'New profile submitted',
+    message: `${input.name} submitted a new profile for review.`,
+    link: '/review',
+  });
+  await emailReviewers(adminClient, {
+    subject: `New profile submitted — ${input.name}`,
+    html: renderEmailHtml({
+      heading: 'New profile submitted',
+      body: `${input.name} submitted a new profile for review.`,
+      ctaLabel: 'Review submission',
+      ctaPath: '/review',
+    }),
+  });
 
   revalidatePath('/dashboard');
 
@@ -150,9 +206,9 @@ export async function createOwnProfileAction(input: OnboardingSubmission): Promi
   // regardless of status.
   const { data: ownProfile } = await supabase
     .from('profiles')
-    .select('employee_code')
+    .select('id')
     .eq('user_id', user.id)
     .single();
 
-  redirect(`/repository/${ownProfile.employee_code}`);
+  redirect(`/repository/${ownProfile.id}`);
 }

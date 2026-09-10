@@ -1,19 +1,22 @@
 'use client';
 
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import EmployeeDetailTabs from '@/app/components/EmployeeDetailTabs';
+import { pickEmployeeDetails, type EmployeeDetails } from '@/lib/employeeDetails';
+
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageWrapper } from '../../components/PageWrapper';
 import { uploadProfilePictureAction } from '../upload/actions';
 import { getEmployeeDetailsAction, updateEmployeeAction } from './actions';
+import { ProjectSkillsInput } from '@/app/components/CvEntrySections';
 import {
   emptyCvProfile,
   type CvProfile,
   type CvExperienceEntry,
   type CvAcademicEntry,
-  type CvProjectEntry,
   type CvCertificationEntry,
 } from '@/lib/cvTypes';
-import type { Employee, CreateEmployeeInput } from '@/types/domain';
+import type { Employee, UpdateEmployeeInput } from '@/types/domain';
 import {
   CloudUpload,
   FileText,
@@ -23,8 +26,6 @@ import {
   Save,
   Plus,
   Minus,
-  ChevronDown,
-  ChevronUp,
   AlertCircle,
   GraduationCap,
   Briefcase,
@@ -32,6 +33,11 @@ import {
   Layers,
   ImageIcon,
   UserCircle2,
+  Search,
+  ArrowLeft,
+  ChevronRight,
+  UserCircle,
+  X,
 } from 'lucide-react';
 
 // ─── Sub-components (consistent with upload/page.tsx) ───────────────────────────
@@ -111,6 +117,9 @@ async function extractText(file: File): Promise<string> {
 interface UpdateProfileClientProps {
   initialEmployees: Employee[];
   departments: { id: string; name: string }[];
+  /** Pre-selects an employee when arriving from their profile page's edit-pencil icon, instead
+   *  of requiring the Admin to re-pick them from the dropdown below. */
+  initialId?: string;
 }
 
 type CvUploadStatus = 'idle' | 'extracting' | 'analyzing' | 'done' | 'error';
@@ -118,19 +127,34 @@ type CvUploadStatus = 'idle' | 'extracting' | 'analyzing' | 'done' | 'error';
 export default function UpdateProfileClient({
   initialEmployees,
   departments,
+  initialId,
 }: UpdateProfileClientProps) {
   const router = useRouter();
 
   // Selected employee selection
-  const [selectedCode, setSelectedCode] = useState<string>('');
+  const [selectedId, setSelectedId] = useState<string>(initialId ?? '');
   const [loadingProfile, setLoadingProfile] = useState<boolean>(false);
   const [activeProfile, setActiveProfile] = useState<Employee | null>(null);
 
+  // Search filter for the employee picker list (shown before an employee is selected)
+  const [searchTerm, setSearchTerm] = useState('');
+  const filteredEmployees = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return initialEmployees;
+    return initialEmployees.filter(
+      (emp) =>
+        emp.name.toLowerCase().includes(term) ||
+        emp.email.toLowerCase().includes(term) ||
+        emp.role.toLowerCase().includes(term) ||
+        emp.department.toLowerCase().includes(term)
+    );
+  }, [initialEmployees, searchTerm]);
+
   // Form editable states
   const [profile, setProfile] = useState<CvProfile>(emptyCvProfile());
+  const [details, setDetails] = useState<EmployeeDetails>({});
   const [email, setEmail] = useState('');
   const [department, setDepartment] = useState('');
-  const [skillsRaw, setSkillsRaw] = useState('');
 
   // Profile photo states
   const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
@@ -149,39 +173,58 @@ export default function UpdateProfileClient({
   // Save states
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [jsonPreviewOpen, setJsonPreviewOpen] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Parsed CV state for verification
+  const [parsedCv, setParsedCv] = useState<CvProfile | null>(null);
+  const [isHumanVerified, setIsHumanVerified] = useState<boolean>(false);
+
+  // Snapshot of {profile, email, department} as-loaded, so the Save button can stay disabled
+  // until the Admin actually changes something rather than being enabled by default.
+  const [initialSnapshot, setInitialSnapshot] = useState<string>('');
+  const isDirty =
+    profileImageFile !== null || JSON.stringify({ profile, email, department, details }) !== initialSnapshot;
 
   // Load selected employee details
   useEffect(() => {
-    if (!selectedCode) {
+    setSuccessMessage(null);
+    setParsedCv(null);
+    setIsHumanVerified(false);
+
+    if (!selectedId) {
       setActiveProfile(null);
       setProfile(emptyCvProfile());
       setEmail('');
-      setSkillsRaw('');
       setProfileImagePreview(null);
       setProfileImageFile(null);
+      setInitialSnapshot('');
       return;
     }
 
     const loadDetails = async () => {
       try {
         setLoadingProfile(true);
-        const detailedEmp = await getEmployeeDetailsAction(selectedCode);
+        const detailedEmp = await getEmployeeDetailsAction(selectedId);
         if (detailedEmp) {
           setActiveProfile(detailedEmp);
-          setProfile({
+          const loadedProfile: CvProfile = {
             name: detailedEmp.name,
             currentPosition: detailedEmp.role,
+            summary: detailedEmp.summary ?? '',
             experience: detailedEmp.cvExperience || [],
             academic: detailedEmp.cvAcademic || [],
             specialProjects: detailedEmp.specialProjects || [],
             certifications: detailedEmp.cvCertifications || [],
-          });
+          };
+          setProfile(loadedProfile);
+          setDetails(pickEmployeeDetails(detailedEmp));
           setEmail(detailedEmp.email);
           setDepartment(detailedEmp.department);
-          setSkillsRaw(detailedEmp.skills.join(', '));
           setProfileImagePreview(detailedEmp.avatar);
           setProfileImageFile(null); // Keep null to flag no changes yet
+          setInitialSnapshot(
+            JSON.stringify({ profile: loadedProfile, email: detailedEmp.email, department: detailedEmp.department, details: pickEmployeeDetails(detailedEmp) })
+          );
         }
       } catch (err) {
         console.error('Failed to load profile details:', err);
@@ -191,7 +234,7 @@ export default function UpdateProfileClient({
     };
 
     loadDetails();
-  }, [selectedCode]);
+  }, [selectedId]);
 
   // ─── CV File upload processing ──────────────────────────────────────────────
 
@@ -206,6 +249,9 @@ export default function UpdateProfileClient({
     setCvDroppedFile({ name: file.name, size: sizeStr });
     setCvStatus('extracting');
     setCvErrorMsg(null);
+    setSuccessMessage(null);
+    setParsedCv(null);
+    setIsHumanVerified(false);
 
     let rawText: string;
     try {
@@ -232,15 +278,24 @@ export default function UpdateProfileClient({
       }
 
       const parsed = (await res.json()) as CvProfile;
-      setProfile(parsed);
-      setSkillsRaw(skillsRaw ? `${skillsRaw}, ${parsed.name} skills` : ''); // fallback or append if parsed includes them
+      setParsedCv(parsed);
+      setIsHumanVerified(false);
       setCvStatus('done');
     } catch (err) {
       console.error('CV parsing failed:', err);
       setCvStatus('error');
       setCvErrorMsg(err instanceof Error ? err.message : 'AI parsing failed. Please try again.');
     }
-  }, [skillsRaw]);
+  }, []);
+
+  const handleApplyCv = useCallback(() => {
+    if (!parsedCv) return;
+    setProfile(parsedCv);
+    setSuccessMessage(null);
+    setSaveError(null);
+    setParsedCv(null);
+    setIsHumanVerified(false);
+  }, [parsedCv]);
 
   const handleCvDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -327,13 +382,18 @@ export default function UpdateProfileClient({
 
   // Special Projects
   const addProject = () =>
-    updateField('specialProjects', [...profile.specialProjects, { title: '', brief: '' }]);
+    updateField('specialProjects', [...profile.specialProjects, { title: '', brief: '', skills: [] }]);
   const removeProject = (i: number) =>
     updateField('specialProjects', profile.specialProjects.filter((_, idx) => idx !== i));
-  const updateProject = (i: number, field: keyof CvProjectEntry, value: string) =>
+  const updateProject = (i: number, field: 'title' | 'brief', value: string) =>
     updateField(
       'specialProjects',
       profile.specialProjects.map((p, idx) => (idx === i ? { ...p, [field]: value } : p))
+    );
+  const updateProjectSkills = (i: number, skills: string[]) =>
+    updateField(
+      'specialProjects',
+      profile.specialProjects.map((p, idx) => (idx === i ? { ...p, skills } : p))
     );
 
   // Certifications
@@ -354,12 +414,8 @@ export default function UpdateProfileClient({
     if (!activeProfile) return;
 
     setSaveError(null);
+    setSuccessMessage(null);
     setIsSaving(true);
-
-    const skills = skillsRaw
-      .split(',')
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
 
     try {
       let avatarUrl: string | undefined;
@@ -370,12 +426,14 @@ export default function UpdateProfileClient({
         avatarUrl = await uploadProfilePictureAction(imgFormData);
       }
 
-      const input: CreateEmployeeInput = {
+      const input: UpdateEmployeeInput = {
+        ...details,
         name: profile.name,
         email,
         role: profile.currentPosition,
         department,
-        skills,
+        summary: profile.summary,
+        skills: [],
         cvExperience: profile.experience,
         cvAcademic: profile.academic,
         specialProjects: profile.specialProjects,
@@ -384,11 +442,89 @@ export default function UpdateProfileClient({
       };
 
       await updateEmployeeAction(activeProfile.rowId, input);
-      router.push('/repository');
+      setSuccessMessage('Profile successfully updated.');
+
+      // Refresh form with the newly saved details silently
+      const detailedEmp = await getEmployeeDetailsAction(selectedId);
+      if (detailedEmp) {
+        setActiveProfile(detailedEmp);
+        const loadedProfile: CvProfile = {
+          name: detailedEmp.name,
+          currentPosition: detailedEmp.role,
+          summary: detailedEmp.summary ?? '',
+          experience: detailedEmp.cvExperience || [],
+          academic: detailedEmp.cvAcademic || [],
+          specialProjects: detailedEmp.specialProjects || [],
+          certifications: detailedEmp.cvCertifications || [],
+        };
+        setProfile(loadedProfile);
+          setDetails(pickEmployeeDetails(detailedEmp));
+        setEmail(detailedEmp.email);
+        setDepartment(detailedEmp.department);
+        setProfileImagePreview(detailedEmp.avatar);
+        setProfileImageFile(null); // Keep null to flag no changes yet
+        setInitialSnapshot(
+          JSON.stringify({ profile: loadedProfile, email: detailedEmp.email, department: detailedEmp.department, details: pickEmployeeDetails(detailedEmp) })
+        );
+      }
+      setIsSaving(false);
       router.refresh();
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to update employee profile.');
       setIsSaving(false);
+    }
+  };
+
+  const handleBackToList = () => {
+    if (isDirty) {
+      if (!confirm('You have unsaved changes. Are you sure you want to discard them?')) {
+        return;
+      }
+    }
+    setSelectedId('');
+    setSaveError(null);
+    setSuccessMessage(null);
+  };
+
+  const handleCancel = async () => {
+    if (isDirty) {
+      if (!confirm('You have unsaved changes. Are you sure you want to discard them?')) {
+        return;
+      }
+    }
+    setSaveError(null);
+    setSuccessMessage(null);
+    setParsedCv(null);
+    setIsHumanVerified(false);
+
+    try {
+      setLoadingProfile(true);
+      const detailedEmp = await getEmployeeDetailsAction(selectedId);
+      if (detailedEmp) {
+        setActiveProfile(detailedEmp);
+        const loadedProfile: CvProfile = {
+          name: detailedEmp.name,
+          currentPosition: detailedEmp.role,
+          summary: detailedEmp.summary ?? '',
+          experience: detailedEmp.cvExperience || [],
+          academic: detailedEmp.cvAcademic || [],
+          specialProjects: detailedEmp.specialProjects || [],
+          certifications: detailedEmp.cvCertifications || [],
+        };
+        setProfile(loadedProfile);
+          setDetails(pickEmployeeDetails(detailedEmp));
+        setEmail(detailedEmp.email);
+        setDepartment(detailedEmp.department);
+        setProfileImagePreview(detailedEmp.avatar);
+        setProfileImageFile(null);
+        setInitialSnapshot(
+          JSON.stringify({ profile: loadedProfile, email: detailedEmp.email, department: detailedEmp.department, details: pickEmployeeDetails(detailedEmp) })
+        );
+      }
+    } catch (err) {
+      console.error('Failed to revert profile changes:', err);
+    } finally {
+      setLoadingProfile(false);
     }
   };
 
@@ -400,26 +536,70 @@ export default function UpdateProfileClient({
           Update Profile
         </h2>
         <p className="text-sm font-medium text-slate-500 mt-2">
-          Select an employee profile to update their information, replace profile photo, or import a new CV.
+          {selectedId
+            ? 'Update their information, replace their profile photo, or import a new CV.'
+            : 'Search for an employee to update their information, replace their profile photo, or import a new CV.'}
         </p>
       </div>
 
-      {/* Select Employee Selector */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm mb-8 max-w-xl">
-        <FieldLabel>Select Employee Profile</FieldLabel>
-        <select
-          value={selectedCode}
-          onChange={(e) => setSelectedCode(e.target.value)}
-          className="w-full bg-slate-50 border border-slate-200/80 rounded-xl px-4 py-3.5 text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all text-slate-700"
-        >
-          <option value="">Choose an employee to update...</option>
-          {initialEmployees.map((emp) => (
-            <option key={emp.employeeCode} value={emp.employeeCode}>
-              {emp.name} ({emp.role}) - {emp.employeeCode}
-            </option>
-          ))}
-        </select>
-      </div>
+      {/* Employee picker — search + list, replaces the selected employee's edit form below once clicked */}
+      {!selectedId && (
+        <>
+          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm mb-4 relative">
+            <Search className="w-4 h-4 text-slate-400 absolute left-8 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search by name, email, role, or department..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200/80 rounded-xl py-3 pl-10 pr-4 text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all text-slate-700 placeholder:text-slate-400"
+            />
+          </div>
+
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden mb-8">
+            {filteredEmployees.length > 0 ? (
+              <div className="divide-y divide-slate-100">
+                {filteredEmployees.map((emp) => (
+                  <button
+                    key={emp.rowId}
+                    type="button"
+                    onClick={() => setSelectedId(emp.rowId)}
+                    className="w-full flex items-center gap-4 p-4 hover:bg-slate-50 transition-colors text-left cursor-pointer"
+                  >
+                    {emp.avatar && !emp.avatar.includes('unsplash.com') ? (
+                      <img
+                        src={emp.avatar}
+                        alt={emp.name}
+                        className="w-11 h-11 rounded-full border border-slate-200 object-cover shrink-0"
+                      />
+                    ) : (
+                      <div className="w-11 h-11 rounded-full border border-slate-200 bg-slate-100 flex items-center justify-center shrink-0">
+                        <UserCircle className="w-6 h-6 text-slate-400" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-black text-slate-800 truncate">{emp.name}</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5 truncate">
+                        {emp.role} · {emp.email}
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border bg-slate-50 border-slate-200 text-slate-500 shrink-0 hidden sm:inline-block">
+                      {emp.department}
+                    </span>
+                    <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="py-12 text-center">
+                <p className="text-sm font-medium text-slate-400">
+                  No employee profiles match your search.
+                </p>
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       {loadingProfile && (
         <div className="flex justify-center py-16">
@@ -428,7 +608,66 @@ export default function UpdateProfileClient({
       )}
 
       {!loadingProfile && activeProfile && (
-        <div className="grid grid-cols-12 gap-8">
+        <>
+          {/* Sticky action bar — Save Changes lives here instead of only at the bottom of a long
+              form, plus a way back to the search list without losing your place. */}
+          <div className="sticky top-16 z-20 -mx-8 px-8 py-3.5 mb-6 bg-white/95 backdrop-blur border-b border-slate-200/80 shadow-sm flex items-center justify-between gap-4">
+            <button
+              type="button"
+              onClick={handleBackToList}
+              className="flex items-center gap-1.5 text-xs font-black text-slate-500 hover:text-slate-900 uppercase tracking-wider transition-colors cursor-pointer shrink-0"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back to List</span>
+            </button>
+
+            <div className="flex-1 min-w-0 text-center hidden sm:block">
+              <p className="text-xs font-black text-slate-800 truncate">Editing {activeProfile.name}</p>
+            </div>
+
+            <div className="flex items-center gap-3 shrink-0">
+              {saveError && (
+                <p className="text-[11px] font-semibold text-rose-600 max-w-[240px] truncate" title={saveError}>
+                  {saveError}
+                </p>
+              )}
+              {successMessage && (
+                <p className="text-[11px] font-semibold text-emerald-600 max-w-[240px] truncate flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  {successMessage}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={handleCancel}
+                className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-sans text-xs font-black uppercase tracking-wider px-5 py-2.5 rounded-xl border border-slate-200/80 active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+                <span>Cancel</span>
+              </button>
+              <button
+                type="submit"
+                form="update-profile-form"
+                disabled={isSaving || !isDirty}
+                title={!isDirty && !isSaving ? 'No changes to save yet' : undefined}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-sans text-xs font-black uppercase tracking-wider px-5 py-2.5 rounded-xl shadow-md shadow-indigo-600/10 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    <span>Save Changes</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-12 gap-8">
           {/* Left Column - Image Upload & CV Upload */}
           <div className="col-span-12 lg:col-span-5 flex flex-col gap-6">
             {/* Photo upload */}
@@ -555,29 +794,29 @@ export default function UpdateProfileClient({
                   </span>
                 </div>
               )}
-            </div>
 
-            {/* JSON preview */}
-            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setJsonPreviewOpen((o) => !o)}
-                className="w-full flex items-center justify-between px-5 py-4 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
-              >
-                <span className="flex items-center gap-2">
-                  <Layers className="w-4 h-4" />
-                  Profile Preview (JSON)
-                </span>
-                {jsonPreviewOpen ? (
-                  <ChevronUp className="w-4 h-4" />
-                ) : (
-                  <ChevronDown className="w-4 h-4" />
-                )}
-              </button>
-              {jsonPreviewOpen && (
-                <pre className="bg-slate-950 text-emerald-400 text-[10px] font-mono leading-relaxed px-5 py-4 overflow-auto max-h-[300px] whitespace-pre-wrap break-words">
-                  {JSON.stringify(profile, null, 2)}
-                </pre>
+              {cvStatus === 'done' && parsedCv && (
+                <div className="mt-4 p-3 border border-slate-200 rounded-xl bg-indigo-50/20 flex flex-col gap-3">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      id="human-verified-checkbox"
+                      type="checkbox"
+                      checked={isHumanVerified}
+                      onChange={(e) => setIsHumanVerified(e.target.checked)}
+                      className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20 cursor-pointer"
+                    />
+                    <span className="text-xs font-bold text-slate-700">Human Verified</span>
+                  </label>
+                  <button
+                    type="button"
+                    disabled={!isHumanVerified}
+                    onClick={handleApplyCv}
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-sans text-xs font-black uppercase tracking-wider py-2 px-4 rounded-lg shadow-md shadow-indigo-600/10 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-sky-200" />
+                    <span>Apply to CV</span>
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -585,6 +824,7 @@ export default function UpdateProfileClient({
           {/* Right Column - Form */}
           <div className="col-span-12 lg:col-span-7">
             <form
+              id="update-profile-form"
               onSubmit={handleSubmit}
               className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col gap-8"
             >
@@ -594,65 +834,18 @@ export default function UpdateProfileClient({
                 </h4>
               </div>
 
-              {/* Basic Info */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <FieldLabel>Full Name</FieldLabel>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Sarah Chen"
-                    value={profile.name}
-                    onChange={(e) => updateField('name', e.target.value)}
-                    className={INPUT_CLS}
-                  />
-                </div>
-                <div>
-                  <FieldLabel>Current Position</FieldLabel>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Senior Frontend Engineer"
-                    value={profile.currentPosition}
-                    onChange={(e) => updateField('currentPosition', e.target.value)}
-                    className={INPUT_CLS}
-                  />
-                </div>
-                <div>
-                  <FieldLabel>Work Email</FieldLabel>
-                  <input
-                    type="email"
-                    required
-                    placeholder="e.g. s.chen@corp.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className={INPUT_CLS}
-                  />
-                </div>
-                <div>
-                  <FieldLabel>Department</FieldLabel>
-                  <select
-                    value={department}
-                    onChange={(e) => setDepartment(e.target.value)}
-                    className={INPUT_CLS}
-                  >
-                    {departments.map((d) => (
-                      <option key={d.id} value={d.name}>
-                        {d.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="sm:col-span-2">
-                  <FieldLabel hint="Comma separated">Skills</FieldLabel>
-                  <input
-                    type="text"
-                    placeholder="e.g. React, TypeScript, Node.js"
-                    value={skillsRaw}
-                    onChange={(e) => setSkillsRaw(e.target.value)}
-                    className={INPUT_CLS}
-                  />
-                </div>
+              <EmployeeDetailTabs value={{ ...details, name: profile.name, role: profile.currentPosition, department, email }} departments={departments}
+                onChange={next => { setDetails(pickEmployeeDetails(next)); setProfile(p => ({ ...p, name: next.name, currentPosition: next.role })); setDepartment(next.department); setEmail(next.email); }}>
+              {/* Objective */}
+              <div>
+                <FieldLabel>Objective / Professional Summary</FieldLabel>
+                <textarea
+                  rows={3}
+                  placeholder="A brief statement of career goals and what they bring to the role..."
+                  value={profile.summary}
+                  onChange={(e) => updateField('summary', e.target.value)}
+                  className={TEXTAREA_CLS}
+                />
               </div>
 
               {/* Experience */}
@@ -850,6 +1043,10 @@ export default function UpdateProfileClient({
                           className={TEXTAREA_CLS}
                         />
                       </div>
+                      <ProjectSkillsInput
+                        skills={proj.skills ?? []}
+                        onChange={(skills) => updateProjectSkills(i, skills)}
+                      />
                     </div>
                   ))}
                   <button
@@ -924,37 +1121,11 @@ export default function UpdateProfileClient({
                 </div>
               </div>
 
-              {/* Actions */}
-              <div className="pt-4 border-t border-slate-100">
-                {saveError && (
-                  <div className="mb-4 flex items-center gap-2 text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200/60 rounded-lg px-3 py-2">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    {saveError}
-                  </div>
-                )}
-                <div className="flex items-center justify-end">
-                  <button
-                    type="submit"
-                    disabled={isSaving}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-sans text-xs font-black uppercase tracking-wider px-6 py-3.5 rounded-xl shadow-md shadow-indigo-600/10 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-                  >
-                    {isSaving ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Saving...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Save className="w-4 h-4" />
-                        <span>Save Changes</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
+              </EmployeeDetailTabs>
             </form>
           </div>
-        </div>
+          </div>
+        </>
       )}
     </PageWrapper>
   );

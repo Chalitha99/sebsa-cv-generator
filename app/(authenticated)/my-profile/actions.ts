@@ -1,16 +1,25 @@
 'use server';
 
+import { normalizeEmployeeDetails, type EmployeeDetails } from '@/lib/employeeDetails';
+
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { getCurrentUser } from '@/lib/auth';
-import type { CreateEmployeeInput } from '@/types/domain';
+import { notifyReviewers } from '@/lib/notifications';
+import { emailReviewers } from '@/lib/email/notify';
+import { renderEmailHtml } from '@/lib/email/templates';
+import type { UpdateEmployeeInput } from '@/types/domain';
 import type { CvExperienceEntry, CvAcademicEntry, CvProjectEntry, CvCertificationEntry } from '@/lib/cvTypes';
+import { profileChanges, recordAuditLog } from '@/services/audit-service';
+import { getEmployeeById } from '@/services/employee-service';
 
-/** Everything an employee may propose changing about their own profile — all fields except the
- *  mandatory, locked ones (name, work email), which the server fills in itself below. */
-export interface ProfileChangeSubmission {
+/** Employees may propose detailed profile changes; account work email stays locked. */
+export interface ProfileChangeSubmission extends EmployeeDetails {
+  name: string;
   role: string;
   department: string;
+  summary: string;
   skills: string[];
   cvExperience: CvExperienceEntry[];
   cvAcademic: CvAcademicEntry[];
@@ -27,16 +36,14 @@ export interface ProfileChangeSubmission {
  * RLS-bound client: profiles_self_propose_change (0020) is the real enforcement — it only allows
  * touching the caller's own row, and only while status='published'.
  *
- * name/email are deliberately NOT accepted from the client — they're read from the current row
- * server-side so `pending_change` is always a complete, valid CreateEmployeeInput ready for
- * updateEmployee() at approval time, and so an employee can never smuggle a name/email change
- * through this path (docs/04-rbac-security.md's "mandatory fields stay locked" requirement).
+ * Full name and optional details are reviewed with the CV changes.
+ * Account email is always read server-side from the existing profile.
  */
 export async function proposeProfileChangeAction(change: ProfileChangeSubmission): Promise<void> {
   const user = await getCurrentUser();
   if (!user) throw new Error('Not authenticated.');
   if (user.role !== 'employee') throw new Error('Only Employee accounts propose changes this way.');
-  if (!user.hasLinkedProfile || !user.employeeCode) throw new Error('You do not have a profile yet.');
+  if (!user.hasLinkedProfile || !user.profileId) throw new Error('You do not have a profile yet.');
 
   const supabase = await createClient();
 
@@ -47,11 +54,13 @@ export async function proposeProfileChangeAction(change: ProfileChangeSubmission
     .single();
   if (currentError) throw currentError;
 
-  const fullChange: CreateEmployeeInput = {
-    name: current.full_name as string,
+  const fullChange: UpdateEmployeeInput = {
+    ...normalizeEmployeeDetails(change),
+    name: change.name?.trim() || current.full_name as string,
     email: current.email as string,
     role: change.role,
     department: change.department,
+    summary: change.summary,
     skills: change.skills,
     currentPosition: change.role,
     cvExperience: change.cvExperience,
@@ -60,6 +69,11 @@ export async function proposeProfileChangeAction(change: ProfileChangeSubmission
     cvCertifications: change.cvCertifications,
     avatarUrl: change.avatarUrl,
   };
+
+  const adminClient = createAdminClient();
+  const liveProfile = await getEmployeeById(adminClient, user.profileId);
+  if (!liveProfile) throw new Error('Your profile could not be loaded.');
+  const changes = profileChanges(liveProfile, fullChange);
 
   const { error } = await supabase
     .from('profiles')
@@ -71,7 +85,30 @@ export async function proposeProfileChangeAction(change: ProfileChangeSubmission
     .eq('status', 'published');
 
   if (error) throw error;
+  await recordAuditLog({
+    actorId: user.id,
+    action: 'UPDATE',
+    entityType: 'employee_profile',
+    entityId: user.profileId,
+    metadata: { operation: 'change_requested', target_name: current.full_name, changes },
+  });
 
-  revalidatePath(`/repository/${user.employeeCode}`);
+  await notifyReviewers(adminClient, {
+    type: 'change_requested',
+    title: 'Profile update requested',
+    message: `${current.full_name} proposed changes to their profile.`,
+    link: '/review',
+  });
+  await emailReviewers(adminClient, {
+    subject: `Profile update requested — ${current.full_name}`,
+    html: renderEmailHtml({
+      heading: 'Profile update requested',
+      body: `${current.full_name} proposed changes to their profile. Review and approve or reject the request.`,
+      ctaLabel: 'Review request',
+      ctaPath: '/review',
+    }),
+  });
+
+  revalidatePath(`/repository/${user.profileId}`);
   revalidatePath('/my-profile');
 }

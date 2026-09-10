@@ -7,7 +7,7 @@ export default async function ReviewPage() {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
 
-  if (user.role === 'employee') redirect(`/repository/${user.employeeCode}`);
+  if (user.role === 'employee') redirect(`/repository/${user.profileId}`);
   if (!isReviewerOrAbove(user.role)) redirect('/repository');
 
   const items = await listPendingItemsAction();

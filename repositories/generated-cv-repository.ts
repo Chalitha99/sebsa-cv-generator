@@ -3,15 +3,11 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 export interface GeneratedCvRow {
   id: string;
   profile_id: string;
-  opportunity_id: string | null;
-  template_id: string;
   status: 'draft' | 'in_review' | 'approved' | 'exported';
   content: Record<string, any>;
-  ai_highlights: Record<string, any>;
   ai_provider: string | null;
   ai_model: string | null;
   version: number;
-  parent_generated_cv_id: string | null;
   created_by: string | null;
   updated_by: string | null;
   created_at: string;
@@ -20,14 +16,12 @@ export interface GeneratedCvRow {
 
 export async function getLatestGeneratedCvRow(
   supabase: SupabaseClient,
-  profileId: string,
-  templateId: string
+  profileId: string
 ): Promise<GeneratedCvRow | null> {
   const { data, error } = await supabase
     .from('generated_cvs')
     .select('*')
     .eq('profile_id', profileId)
-    .eq('template_id', templateId)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();

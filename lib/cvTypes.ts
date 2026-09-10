@@ -20,6 +20,7 @@ export interface CvAcademicEntry {
 export interface CvProjectEntry {
   title: string;
   brief: string;
+  skills: string[];
 }
 
 export interface CvCertificationEntry {
@@ -31,6 +32,9 @@ export interface CvCertificationEntry {
 export interface CvProfile {
   name: string;
   currentPosition: string;
+  /** Objective / professional summary — freeform, shown as the "Objective" section in the CV
+   *  template. Optional: profiles created before this field existed simply have none. */
+  summary: string;
   experience: CvExperienceEntry[];
   academic: CvAcademicEntry[];
   specialProjects: CvProjectEntry[];
@@ -42,6 +46,7 @@ export function emptyCvProfile(): CvProfile {
   return {
     name: '',
     currentPosition: '',
+    summary: '',
     experience: [],
     academic: [],
     specialProjects: [],

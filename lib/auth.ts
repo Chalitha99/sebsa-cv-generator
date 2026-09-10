@@ -14,7 +14,7 @@ export interface CurrentUser {
   /** True once a `profiles` row exists with `user_id` = this user's id — any status. */
   hasLinkedProfile: boolean;
   /** Set only when hasLinkedProfile — lets pages redirect an Employee straight to their own profile. */
-  employeeCode: string | null;
+  profileId: string | null;
 }
 
 /**
@@ -39,7 +39,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
 
   const { data: profileRow } = await supabase
     .from('profiles')
-    .select('full_name, avatar_url, employee_code')
+    .select('id, full_name, avatar_url')
     .eq('user_id', user.id)
     .maybeSingle();
 
@@ -52,6 +52,6 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     fullName: profileRow?.full_name ?? user.email ?? 'Unnamed User',
     avatarUrl,
     hasLinkedProfile: profileRow != null,
-    employeeCode: profileRow?.employee_code ?? null,
+    profileId: profileRow?.id ?? null,
   };
 }

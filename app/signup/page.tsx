@@ -5,8 +5,15 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { PageWrapper } from '../components/PageWrapper';
+import PasswordRequirementsList from '../components/PasswordRequirementsList';
 import { createClient } from '@/lib/supabase/client';
+import { isPasswordValid } from '@/lib/passwordValidation';
 import { Mail, Eye, EyeOff, UserPlus, CheckCircle2 } from 'lucide-react';
+
+// Until Microsoft SSO is wired in (docs/04-rbac-security.md §8), self-signup is restricted to
+// real SEBSA work emails in firstname.lastname@sebsaworld.com form — keeps the employee directory
+// consistent and prevents junk/duplicate accounts.
+const SEBSA_WORK_EMAIL = /^[a-z]+\.[a-z]+@sebsaworld\.com$/i;
 
 export default function SignupPage() {
   const router = useRouter();
@@ -23,12 +30,16 @@ export default function SignupPage() {
     e.preventDefault();
     setError(null);
 
-    if (password !== confirmPassword) {
-      setError('Passwords do not match.');
+    if (!SEBSA_WORK_EMAIL.test(email.trim())) {
+      setError('Please use your SEBSA work email, in firstname.lastname@sebsaworld.com format.');
       return;
     }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters.');
+    if (!isPasswordValid(password)) {
+      setError('Password does not meet all requirements — check the checklist below.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.');
       return;
     }
 
@@ -119,7 +130,7 @@ export default function SignupPage() {
               <input
                 type="email"
                 required
-                placeholder="Work Email Address"
+                placeholder="firstname.lastname@sebsaworld.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full h-14 px-4 border border-slate-200 hover:border-slate-300 rounded-xl bg-slate-50/50 text-slate-800 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-500/10 focus:border-slate-500 transition-all font-sans"
@@ -133,7 +144,7 @@ export default function SignupPage() {
               <input
                 type={showPassword ? 'text' : 'password'}
                 required
-                placeholder="Password (min. 6 characters)"
+                placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full h-14 px-4 border border-slate-200 hover:border-slate-300 rounded-xl bg-slate-50/50 text-slate-800 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-500/10 focus:border-slate-500 transition-all font-sans"
@@ -146,6 +157,8 @@ export default function SignupPage() {
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
             </div>
+
+            {password.length > 0 && <PasswordRequirementsList password={password} />}
 
             <div className="relative group">
               <input

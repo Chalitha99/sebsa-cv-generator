@@ -1,7 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-export const DEFAULT_AVATAR =
-  'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=120';
+// Deliberately empty, not a stock photo — profile pictures are now mandatory on every new
+// profile (createEmployeeAction / onboarding actions), so a real photo should always exist. This
+// only still gets hit for the handful of legacy pre-mandatory profiles with no photo on file;
+// every render site already falls back to a plain UserCircle icon when this is falsy, and the CV
+// template's `{{#if avatar}}` check treats '' as absent too — so leaving it empty means "no
+// photo" renders as an icon/placeholder box instead of a fake stock photo baked into the UI/PDF.
+export const DEFAULT_AVATAR = '';
 
 /**
  * Resolves an avatar URL for display.

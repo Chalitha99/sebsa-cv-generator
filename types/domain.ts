@@ -1,3 +1,4 @@
+import type { EmployeeDetails } from '@/lib/employeeDetails';
 import type {
   CvExperienceEntry,
   CvAcademicEntry,
@@ -7,15 +8,17 @@ import type {
 
 /**
  * UI-facing employee shape. Deliberately mirrors the original DataContext `Employee` type so the
- * existing pages/JSX don't need restructuring — only their data source changes. `id` stays the
- * "#EMP-00124" display form used throughout the UI; `employeeCode` (no "#") is what routes/lookups
- * use. Real row identity (the profiles.id uuid) is a separate `rowId`, used only for mutations.
+ * existing pages/JSX don't need restructuring — only their data source changes. `rowId` (the
+ * profiles.id uuid) is the sole identifier — used for routing, list keys, and mutations alike.
+ * Profiles previously also had a human-readable `employee_code` (e.g. "EMP-00124") used for
+ * routing/display, but it was pure redundancy alongside `id` and has been removed (migration
+ * 0022_remove_employee_code.sql).
  *
  * Structured CV fields (experience, academic, specialProjects, certifications) are added to
  * support the Gemini parsing pipeline introduced in Phase 5.
  */
 
-// Legacy experience shape — still used by getEmployeeByCode for database-fetched profiles
+// Legacy experience shape — still used by getEmployeeById for database-fetched profiles
 export interface EmployeeExperience {
   role: string;
   company: string;
@@ -24,25 +27,20 @@ export interface EmployeeExperience {
   desc: string;
 }
 
-// Legacy project shape — still used by getEmployeeByCode for database-fetched profiles
+// Legacy project shape — still used by getEmployeeById for database-fetched profiles
 export interface EmployeeProject {
   name: string;
   desc: string;
-  tags: string[];
 }
 
 // Re-export CV types for convenience in service / repository layers
 export type { CvExperienceEntry, CvAcademicEntry, CvProjectEntry, CvCertificationEntry };
 
-export interface Employee {
+export interface Employee extends EmployeeDetails {
   rowId: string;
-  id: string;
-  employeeCode: string;
   name: string;
   email: string;
   role: string;
-  specialty?: string;
-  location?: string;
   experienceYears?: string;
   department: string;
   skills: string[];
@@ -50,7 +48,7 @@ export interface Employee {
   avatar: string;
   /** True once this profile is linked to a real login (self-claimed or self-registered). */
   isAccountLinked: boolean;
-  /** Only populated by getEmployeeByCode (detail view) — listEmployees always returns 'published'. */
+  /** Only populated by getEmployeeById (detail view) — listEmployees always returns 'published'. */
   status?: 'draft' | 'published' | 'archived';
   hasPendingChange?: boolean;
 
@@ -66,9 +64,11 @@ export interface Employee {
   specialProjects?: CvProjectEntry[];
   cvCertifications?: CvCertificationEntry[];
   currentPosition?: string;
+  /** Objective / professional summary — profiles.summary column. */
+  summary?: string;
 }
 
-export interface CreateEmployeeInput {
+export interface CreateEmployeeInput extends EmployeeDetails {
   name: string;
   email: string;
   role: string;
@@ -77,6 +77,8 @@ export interface CreateEmployeeInput {
 
   // Optional structured CV fields — populated from Gemini parsing pipeline
   currentPosition?: string;
+  /** Objective / professional summary — profiles.summary column. */
+  summary?: string;
   cvExperience?: CvExperienceEntry[];
   cvAcademic?: CvAcademicEntry[];
   specialProjects?: CvProjectEntry[];
@@ -96,3 +98,5 @@ export interface CreateEmployeeInput {
   // force status='draft' — an Admin adding someone doesn't need to self-approve their own action.
   linkedUserId?: string;
 }
+
+export type UpdateEmployeeInput = CreateEmployeeInput & EmployeeDetails;

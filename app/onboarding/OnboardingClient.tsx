@@ -1,7 +1,13 @@
 'use client';
 
+import { pickEmployeeDetails, type EmployeeDetails } from '@/lib/employeeDetails';
+import EmployeeDetailTabs from '@/app/components/EmployeeDetailTabs';
+
+
 import React, { useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { PageWrapper } from '../components/PageWrapper';
+import { createClient } from '@/lib/supabase/client';
 import { extractText } from '@/lib/parsing/extractClientText';
 import type { CvProfile } from '@/lib/cvTypes';
 import ProfileFieldsEditor, { emptyProfileFieldsValue, type ProfileFieldsValue } from '../components/ProfileFieldsEditor';
@@ -31,13 +37,38 @@ interface OnboardingClientProps {
   userEmail: string;
   departments: { id: string; name: string }[];
   claimableProfile: ClaimableProfile | null;
-  pendingClaim: { employeeCode: string } | null;
+  pendingClaim: boolean;
 }
 
 export default function OnboardingClient({ userEmail, departments, claimableProfile, pendingClaim }: OnboardingClientProps) {
+  const router = useRouter();
   const [mode, setMode] = useState<Mode>(pendingClaim ? 'pending-claim' : claimableProfile ? 'claim' : 'choose');
   const [isClaiming, setIsClaiming] = useState(false);
   const [claimError, setClaimError] = useState<string | null>(null);
+
+  // There's nowhere else in the app an Employee without a profile can land — every other page
+  // either requires one or redirects back here — so "not now" means signing out. Logging back in
+  // later re-enters this same flow at whatever state was already in progress (server-derived on
+  // every load), so nothing is lost.
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const handleSkipForNow = async () => {
+    setIsSigningOut(true);
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push('/login');
+    router.refresh();
+  };
+
+  const SkipForNowLink = (
+    <button
+      type="button"
+      onClick={handleSkipForNow}
+      disabled={isSigningOut}
+      className="text-[11px] font-bold text-slate-400 hover:text-slate-600 underline underline-offset-2 disabled:opacity-40 transition-colors"
+    >
+      {isSigningOut ? 'Signing out...' : "Not now — I'll finish this later"}
+    </button>
+  );
 
   const handleClaim = async () => {
     if (!claimableProfile) return;
@@ -70,6 +101,7 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   // ── The profile being built — shared shape for both upload-parsed and manual entry ──
+  const [details, setDetails] = useState<EmployeeDetails>({});
   const [profileValue, setProfileValue] = useState<ProfileFieldsValue>(
     emptyProfileFieldsValue({ department: departments[0]?.name ?? '' })
   );
@@ -127,6 +159,7 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
         ...prev,
         name: parsed.name || prev.name,
         role: parsed.currentPosition || prev.role,
+        summary: parsed.summary || prev.summary,
         experience: parsed.experience,
         academic: parsed.academic,
         specialProjects: parsed.specialProjects,
@@ -164,11 +197,13 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
 
     try {
       await createOwnProfileAction({
+        ...details,
         name: profileValue.name,
         role: profileValue.role,
         department: profileValue.department,
         skills: profileValue.skills,
         currentPosition: profileValue.role,
+        summary: profileValue.summary,
         cvExperience: profileValue.experience,
         cvAcademic: profileValue.academic,
         specialProjects: profileValue.specialProjects,
@@ -195,9 +230,12 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
         )}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-bold text-slate-700">Profile Picture</p>
+        <p className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+          Profile Picture
+          <span className="text-rose-500 font-bold normal-case tracking-normal text-[10px] bg-rose-50 border border-rose-100/60 px-2 py-0.5 rounded-full">Required</span>
+        </p>
         <p className="text-[11px] text-slate-400 mt-0.5">
-          {avatarUploading ? 'Uploading...' : avatarUrl ? 'Uploaded' : "Not extracted from your CV — add one now (optional)."}
+          {avatarUploading ? 'Uploading...' : avatarUrl ? 'Uploaded' : 'Not extracted from your CV — add one now.'}
         </p>
         {avatarError && <p className="text-[11px] text-rose-600 mt-1">{avatarError}</p>}
       </div>
@@ -221,7 +259,6 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
 
   // ── Pending claim (already requested) ──────────────────────────────────────
   if (mode === 'pending-claim') {
-    const code = claimableProfile?.employeeCode ?? pendingClaim?.employeeCode;
     return (
       <PageWrapper className="min-h-screen w-full flex items-center justify-center bg-[#fbf9fb] p-8">
         <div className="w-full max-w-md">
@@ -236,8 +273,8 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
               We've asked a Super Admin or CV Reviewer to confirm this profile is yours. You'll
               get access as soon as it's approved.
             </p>
-            {code && <p className="text-[10px] font-mono text-slate-400 mt-3">{code}</p>}
           </div>
+          <div className="text-center mt-5">{SkipForNowLink}</div>
         </div>
       </PageWrapper>
     );
@@ -263,7 +300,6 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
               <p className="text-sm font-black text-slate-800">{claimableProfile.name}</p>
               <p className="text-xs text-slate-500">{claimableProfile.role || 'Role not specified'}</p>
               <p className="text-xs text-slate-500">{claimableProfile.department}</p>
-              <p className="text-[10px] font-mono text-slate-400 mt-2">{claimableProfile.employeeCode}</p>
             </div>
 
             {claimError && (
@@ -293,6 +329,7 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
               </button>
             </div>
           </div>
+          <div className="text-center mt-5">{SkipForNowLink}</div>
         </div>
       </PageWrapper>
     );
@@ -339,6 +376,7 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
               </p>
             </button>
           </div>
+          <div className="text-center mt-8">{SkipForNowLink}</div>
         </div>
       </PageWrapper>
     );
@@ -366,7 +404,10 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
           </div>
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             {AvatarPicker}
-            <ProfileFieldsEditor value={profileValue} onChange={setProfileValue} departments={departments} nameEditable />
+            <EmployeeDetailTabs value={{ ...details, name: profileValue.name, role: profileValue.role, department: profileValue.department, email: userEmail }} departments={departments} emailEditable={false}
+              onChange={next => { setDetails(pickEmployeeDetails(next)); setProfileValue({ ...profileValue, name: next.name, role: next.role, department: next.department }); }}>
+              <ProfileFieldsEditor value={profileValue} onChange={setProfileValue} departments={departments} profileOnly />
+            </EmployeeDetailTabs>
             {submitError && (
               <p className="text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200/60 rounded-lg px-3 py-2">
                 {submitError}
@@ -374,7 +415,8 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
             )}
             <button
               type="submit"
-              disabled={isSubmitting || !profileValue.name || !profileValue.role}
+              disabled={isSubmitting || !profileValue.name || !profileValue.role || !avatarUrl}
+              title={!avatarUrl ? 'A profile photo is required' : undefined}
               className="bg-indigo-600 hover:bg-indigo-700 text-white font-sans text-xs font-black uppercase tracking-wider px-6 py-3.5 rounded-xl shadow-md active:scale-95 transition-transform flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <span>{isSubmitting ? 'Submitting...' : 'Submit for Review'}</span>
@@ -473,12 +515,11 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
 
               {AvatarPicker}
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Work Email</label>
-                <input type="email" disabled value={userEmail} className="w-full bg-slate-100 border border-slate-200/80 rounded-xl px-4 py-2.5 text-xs font-semibold text-slate-400" />
-              </div>
 
-              <ProfileFieldsEditor value={profileValue} onChange={setProfileValue} departments={departments} nameEditable />
+              <EmployeeDetailTabs value={{ ...details, name: profileValue.name, role: profileValue.role, department: profileValue.department, email: userEmail }} departments={departments} emailEditable={false}
+              onChange={next => { setDetails(pickEmployeeDetails(next)); setProfileValue({ ...profileValue, name: next.name, role: next.role, department: next.department }); }}>
+              <ProfileFieldsEditor value={profileValue} onChange={setProfileValue} departments={departments} profileOnly />
+            </EmployeeDetailTabs>
 
               {submitError && (
                 <p className="text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200/60 rounded-lg px-3 py-2">
@@ -488,7 +529,8 @@ export default function OnboardingClient({ userEmail, departments, claimableProf
 
               <button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting || !avatarUrl}
+                title={!avatarUrl ? 'A profile photo is required' : undefined}
                 className="mt-2 bg-indigo-600 hover:bg-indigo-700 text-white font-sans text-xs font-black uppercase tracking-wider px-6 py-3.5 rounded-xl shadow-md active:scale-95 transition-transform flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <span>{isSubmitting ? 'Submitting...' : 'Submit for Review'}</span>

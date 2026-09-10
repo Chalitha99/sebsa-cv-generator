@@ -1,3 +1,5 @@
+import { employeeDetailFields, normalizeEmployeeDetails } from '@/lib/employeeDetails';
+import type { UpdateEmployeeInput } from '@/types/domain';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { CreateEmployeeInput } from '@/types/domain';
 import type { CvExperienceEntry, CvAcademicEntry, CvProjectEntry, CvCertificationEntry } from '@/lib/cvTypes';
@@ -12,17 +14,17 @@ import type { CvExperienceEntry, CvAcademicEntry, CvProjectEntry, CvCertificatio
  */
 
 const LIST_SELECT = `
-  id, employee_code, full_name, email, role_title, specialty, location, years_experience,
+  id, full_name, email, role_title, years_experience,
   avatar_url, updated_at, user_id,
-  departments ( name ),
-  profile_skills ( skills ( name ) )
+  departments ( name )
 `;
 
 const DETAIL_SELECT = `
   ${LIST_SELECT},
-  education, status, pending_change, pending_change_submitted_at,
+  ${employeeDetailFields.map(f => f.column).join(', ')},
+  education, summary, status, pending_change, pending_change_submitted_at,
   experiences ( company, role_title, employment_type, start_date, end_date, is_current, description, display_order ),
-  projects ( name, description, tags, display_order ),
+  projects ( name, description, skills, display_order ),
   certifications ( name, issuer, issued_date )
 `;
 
@@ -37,23 +39,16 @@ export async function listEmployeeRows(supabase: SupabaseClient) {
   return data ?? [];
 }
 
-export async function getEmployeeRowByCode(supabase: SupabaseClient, employeeCode: string) {
+export async function getEmployeeRowById(supabase: SupabaseClient, profileId: string) {
   const { data, error } = await supabase
     .from('profiles')
     .select(DETAIL_SELECT)
-    .eq('employee_code', employeeCode)
+    .eq('id', profileId)
     .maybeSingle();
 
   if (error) throw error;
   return data;
 }
-
-function generateEmployeeCode(): string {
-  const suffix = Math.floor(10000 + Math.random() * 90000);
-  return `EMP-${suffix}`;
-}
-
-const UNIQUE_VIOLATION = '23505';
 
 /**
  * Attempts to parse a period string like "Jan 2020 – Present" or "2018 – 2021" into
@@ -93,6 +88,10 @@ export async function createEmployeeRow(
   input: CreateEmployeeInput,
   createdBy: string
 ): Promise<string> {
+  const details = normalizeEmployeeDetails(input);
+  const detailColumns = Object.fromEntries(employeeDetailFields
+    .filter(field => details[field.key] !== undefined)
+    .map(field => [field.column, details[field.key]]));
   const { data: dept } = await supabase
     .from('departments')
     .select('id')
@@ -104,44 +103,31 @@ export async function createEmployeeRow(
     ? JSON.stringify(input.cvAcademic)
     : null;
 
-  let profileId: string | null = null;
-  let lastError: { code?: string; message: string } | null = null;
+  const { data, error } = await supabase
+    .from('profiles')
+    .insert({
+      ...detailColumns,
+      full_name: input.name,
+      email: input.email,
+      role_title: input.currentPosition ?? input.role,
+      department_id: dept?.id ?? null,
+      // Self-service submissions start as 'draft' (not searchable/usable) until an Admin
+      // reviews them — see docs/04-rbac-security.md §0. Admin/Reviewer-created profiles keep
+      // today's behavior of going straight to 'published', whether or not an account was
+      // linked (linkedUserId, §14) — the Admin's own action doesn't need self-approval.
+      status: input.selfServiceUserId ? 'draft' : 'published',
+      user_id: input.selfServiceUserId ?? input.linkedUserId ?? null,
+      education: educationJson,
+      summary: input.summary ?? null,
+      avatar_url: input.avatarUrl ?? null,
+      created_by: createdBy,
+      updated_by: createdBy,
+    })
+    .select('id')
+    .single();
 
-  for (let attempt = 0; attempt < 5 && !profileId; attempt++) {
-    const { data, error } = await supabase
-      .from('profiles')
-      .insert({
-        employee_code: generateEmployeeCode(),
-        full_name: input.name,
-        email: input.email,
-        role_title: input.currentPosition ?? input.role,
-        department_id: dept?.id ?? null,
-        // Self-service submissions start as 'draft' (not searchable/usable) until an Admin
-        // reviews them — see docs/04-rbac-security.md §0. Admin/Reviewer-created profiles keep
-        // today's behavior of going straight to 'published', whether or not an account was
-        // linked (linkedUserId, §14) — the Admin's own action doesn't need self-approval.
-        status: input.selfServiceUserId ? 'draft' : 'published',
-        user_id: input.selfServiceUserId ?? input.linkedUserId ?? null,
-        education: educationJson,
-        avatar_url: input.avatarUrl ?? null,
-        created_by: createdBy,
-        updated_by: createdBy,
-      })
-      .select('id')
-      .single();
-
-    if (!error) {
-      profileId = data.id as string;
-      break;
-    }
-
-    lastError = error;
-    if (error.code !== UNIQUE_VIOLATION) throw error;
-  }
-
-  if (!profileId) {
-    throw new Error(lastError?.message ?? 'Failed to generate a unique employee code.');
-  }
+  if (error) throw error;
+  const profileId = data.id as string;
 
   // ── Insert structured experience entries ──────────────────────────────────
   if (input.cvExperience && input.cvExperience.length > 0) {
@@ -158,10 +144,7 @@ export async function createEmployeeRow(
     await insertCertifications(supabase, profileId, input.cvCertifications);
   }
 
-  // ── Link skills ───────────────────────────────────────────────────────────
-  if (input.skills.length > 0) {
-    await linkSkills(supabase, profileId, input.skills);
-  }
+
 
   return profileId;
 }
@@ -200,7 +183,7 @@ async function insertProjects(
     profile_id: profileId,
     name: p.title,
     description: p.brief,
-    tags: [],
+    skills: p.skills ?? [],
     display_order: i,
   }));
 
@@ -224,32 +207,7 @@ async function insertCertifications(
   if (error) throw error;
 }
 
-async function linkSkills(supabase: SupabaseClient, profileId: string, skillNames: string[]) {
-  const { data: existing, error: fetchError } = await supabase
-    .from('skills')
-    .select('id, name')
-    .in('name', skillNames);
-  if (fetchError) throw fetchError;
 
-  const existingByName = new Map((existing ?? []).map((s: { id: string; name: string }) => [s.name, s.id]));
-  const missingNames = skillNames.filter((name) => !existingByName.has(name));
-
-  if (missingNames.length > 0) {
-    const { data: inserted, error: insertError } = await supabase
-      .from('skills')
-      .insert(missingNames.map((name) => ({ name })))
-      .select('id, name');
-    if (insertError) throw insertError;
-    (inserted ?? []).forEach((s: { id: string; name: string }) => existingByName.set(s.name, s.id));
-  }
-
-  const skillIds = skillNames.map((name) => existingByName.get(name)).filter((id): id is string => Boolean(id));
-
-  const { error: linkError } = await supabase
-    .from('profile_skills')
-    .insert(skillIds.map((skill_id) => ({ profile_id: profileId, skill_id })));
-  if (linkError) throw linkError;
-}
 
 export async function deleteEmployeeRow(supabase: SupabaseClient, rowId: string) {
   const { error } = await supabase.from('profiles').delete().eq('id', rowId);
@@ -259,7 +217,7 @@ export async function deleteEmployeeRow(supabase: SupabaseClient, rowId: string)
 export async function updateEmployeeRow(
   supabase: SupabaseClient,
   profileId: string,
-  input: CreateEmployeeInput,
+  input: UpdateEmployeeInput,
   updatedBy: string
 ): Promise<void> {
   const { data: dept } = await supabase
@@ -279,10 +237,15 @@ export async function updateEmployeeRow(
     role_title: input.currentPosition ?? input.role,
     department_id: dept?.id ?? null,
     education: educationJson,
+    summary: input.summary ?? null,
     updated_by: updatedBy,
     updated_at: new Date().toISOString(),
   };
 
+  const details = normalizeEmployeeDetails(input);
+  for (const field of employeeDetailFields) {
+    if (details[field.key] !== undefined) updateFields[field.column] = details[field.key];
+  }
   // Only update avatar_url if a new one was uploaded
   if (input.avatarUrl !== undefined && input.avatarUrl !== null) {
     updateFields.avatar_url = input.avatarUrl;
@@ -305,9 +268,6 @@ export async function updateEmployeeRow(
   const { error: clearCertError } = await supabase.from('certifications').delete().eq('profile_id', profileId);
   if (clearCertError) throw clearCertError;
 
-  const { error: clearSkillError } = await supabase.from('profile_skills').delete().eq('profile_id', profileId);
-  if (clearSkillError) throw clearSkillError;
-
   // Insert new related records
   if (input.cvExperience && input.cvExperience.length > 0) {
     await insertExperiences(supabase, profileId, input.cvExperience);
@@ -319,9 +279,5 @@ export async function updateEmployeeRow(
 
   if (input.cvCertifications && input.cvCertifications.length > 0) {
     await insertCertifications(supabase, profileId, input.cvCertifications);
-  }
-
-  if (input.skills.length > 0) {
-    await linkSkills(supabase, profileId, input.skills);
   }
 }

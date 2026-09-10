@@ -4,12 +4,21 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getCurrentUser, canAssignRole, isAdminOrAbove, type UserRole } from '@/lib/auth';
+import { getSignedAvatarUrl } from '@/lib/avatar';
+import { recordAuditLog } from '@/services/audit-service';
 
 export interface ManagedUser {
   id: string;
   email: string;
   role: UserRole;
   createdAt: string;
+  /** Null for accounts with no `profiles` row — not every user is an "employee" with a CV
+   *  (Admin/Super Admin/CV Reviewer accounts often have none). */
+  name: string | null;
+  /** Null when there's no real uploaded photo — deliberately NOT the generic stock-photo
+   *  fallback other Employee-facing views use, since showing a fake photo for an Admin who
+   *  never uploaded one would be misleading here. */
+  avatarUrl: string | null;
 }
 
 /**
@@ -35,12 +44,32 @@ export async function listUsersAction(): Promise<ManagedUser[]> {
     authData.users.map((u): [string, string] => [u.id, u.email ?? '(no email)'])
   );
 
-  const managedUsers: ManagedUser[] = (roleRows ?? []).map(
-    (row: { user_id: string; role: string; created_at: string }): ManagedUser => ({
-      id: row.user_id,
-      email: emailById.get(row.user_id) ?? '(unknown)',
-      role: row.role as UserRole,
-      createdAt: row.created_at,
+  // Not every account has a profiles row — Admin/Super Admin/CV Reviewer accounts often don't,
+  // since profiles represent employees specifically. Left-join in whatever's there.
+  const { data: profileRows, error: profileError } = await adminClient
+    .from('profiles')
+    .select('user_id, full_name, avatar_url')
+    .not('user_id', 'is', null);
+  if (profileError) throw profileError;
+
+  const profileByUserId = new Map(
+    (profileRows ?? []).map((p: { user_id: string; full_name: string; avatar_url: string | null }) => [
+      p.user_id,
+      p,
+    ])
+  );
+
+  const managedUsers: ManagedUser[] = await Promise.all(
+    (roleRows ?? []).map(async (row: { user_id: string; role: string; created_at: string }): Promise<ManagedUser> => {
+      const profile = profileByUserId.get(row.user_id);
+      return {
+        id: row.user_id,
+        email: emailById.get(row.user_id) ?? '(unknown)',
+        role: row.role as UserRole,
+        createdAt: row.created_at,
+        name: profile?.full_name ?? null,
+        avatarUrl: profile?.avatar_url ? await getSignedAvatarUrl(adminClient, profile.avatar_url) : null,
+      };
     })
   );
 
@@ -63,11 +92,37 @@ export async function updateUserRoleAction(targetUserId: string, newRole: UserRo
   }
 
   const supabase = await createClient();
+  const { data: existingRole, error: roleLookupError } = await supabase
+    .from('user_roles')
+    .select('role')
+    .eq('user_id', targetUserId)
+    .single();
+  if (roleLookupError) throw roleLookupError;
+
+  const adminClient = createAdminClient();
+  const { data: targetProfile } = await adminClient
+    .from('profiles')
+    .select('full_name')
+    .eq('user_id', targetUserId)
+    .maybeSingle();
+  const { data: targetAuth } = await adminClient.auth.admin.getUserById(targetUserId);
+  const targetName = targetProfile?.full_name || targetAuth.user?.email || 'Unknown User';
+
   const { error } = await supabase
     .from('user_roles')
     .update({ role: newRole, updated_at: new Date().toISOString() })
     .eq('user_id', targetUserId);
 
   if (error) throw error;
+  await recordAuditLog({
+    actorId: currentUser.id,
+    action: 'UPDATE',
+    entityType: 'user_role',
+    entityId: targetUserId,
+    metadata: {
+      target_name: targetName,
+      changes: [{ field: 'Role', old_value: existingRole.role, new_value: newRole }],
+    },
+  });
   revalidatePath('/settings');
 }
